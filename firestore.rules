@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAgent() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'agent';
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if request.auth.uid == userId;
+      allow update: if isAdmin() || request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // Clients collection
+    match /clients/{clientId} {
+      allow read: if isAuthenticated() &&
+        (isAdmin() || resource.data.assignedAgent == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() ||
+        (isAgent() && resource.data.assignedAgent == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Summaries collection
+    match /summaries/{summaryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false; // Read-only after creation
+      allow delete: if isAdmin();
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Activity Logs collection
+    match /activityLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
