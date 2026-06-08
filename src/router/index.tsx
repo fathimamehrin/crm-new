@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import AppLayout from '../components/Layout/AppLayout';
+import AdminLayout from '../components/Layout/AdminLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 // Pages
@@ -32,9 +33,14 @@ const router = createBrowserRouter([
           {
             element: <ProtectedRoute requiredRole="admin" />,
             children: [
-              { path: '/admin/admins', element: <AdminManagementPage /> },
-              { path: '/admin/agents', element: <AgentManagementPage /> },
-              { path: '/admin/activity', element: <ActivityLogPage /> },
+              {
+                element: <AdminLayout />,
+                children: [
+                  { path: '/admin/admins', element: <AdminManagementPage /> },
+                  { path: '/admin/agents', element: <AgentManagementPage /> },
+                  { path: '/admin/activity', element: <ActivityLogPage /> },
+                ],
+              },
             ],
           },
         ],
