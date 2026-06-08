@@ -12,6 +12,7 @@ import ClientDetailsPage from '../pages/ClientDetailsPage';
 import AddSummaryPage from '../pages/AddSummaryPage';
 import AdminManagementPage from '../pages/admin/AdminManagementPage';
 import AgentManagementPage from '../pages/admin/AgentManagementPage';
+import AgentDetailsPage from '../pages/admin/AgentDetailsPage';
 import ActivityLogPage from '../pages/admin/ActivityLogPage';
 
 const router = createBrowserRouter([
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
                 children: [
                   { path: '/admin/admins', element: <AdminManagementPage /> },
                   { path: '/admin/agents', element: <AgentManagementPage /> },
+                  { path: '/admin/agents/:id', element: <AgentDetailsPage /> },
                   { path: '/admin/activity', element: <ActivityLogPage /> },
                 ],
               },

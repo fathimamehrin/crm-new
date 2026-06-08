@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
@@ -177,7 +178,9 @@ const AgentManagementPage: React.FC = () => {
                             <button type="button" className="btn btn-sm btn-secondary" style={{ padding: '4px 8px' }} onClick={() => setEditingId(null)}><X size={12} /></button>
                           </form>
                         ) : (
-                          <span className="font-medium text-sm">{agent.name}</span>
+                          <Link to={`/admin/agents/${agent.id}`} className="font-semibold text-sm text-accent hover:underline">
+                            {agent.name}
+                          </Link>
                         )}
                       </div>
                     </td>
