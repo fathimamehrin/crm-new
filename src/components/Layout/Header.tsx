@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Menu, LogOut } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Bell, Menu, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationPanel from '../NotificationPanel';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -14,6 +15,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const { notifications, unreadCount, markAllRead } = useNotifications();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminPage = location.pathname.startsWith('/admin');
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -83,6 +87,21 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
       {/* User badge */}
       {userProfile && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => navigate(isAdminPage ? '/' : '/admin/agents')}
+              className={`btn ${isAdminPage ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <Settings size={16} />
+              <span>{isAdminPage ? 'Dashboard' : 'Admin Panel'}</span>
+            </button>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
               <span className="text-sm font-semibold">{userProfile.name}</span>
@@ -110,3 +129,4 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
 };
 
 export default Header;
+
