@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
+import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search, Filter, TrendingUp, UserCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -23,6 +23,13 @@ const STATS_COLORS = {
 
 const DashboardPage: React.FC = () => {
   const { userRole, currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      navigate('/admin/agents', { replace: true });
+    }
+  }, [userRole, navigate]);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<User[]>([]);

@@ -87,10 +87,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
       {/* User badge */}
       {userProfile && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
-          {userRole === 'admin' && (
+          {userRole === 'admin' && !isAdminPage && (
             <button
-              onClick={() => navigate(isAdminPage ? '/' : '/admin/agents')}
-              className={`btn ${isAdminPage ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+              onClick={() => navigate('/admin/agents')}
+              className="btn btn-primary btn-sm"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -98,7 +98,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
               }}
             >
               <Settings size={16} />
-              <span>{isAdminPage ? 'Dashboard' : 'Admin Panel'}</span>
+              <span>Admin Panel</span>
             </button>
           )}
 
