@@ -172,8 +172,9 @@ const AddSummaryPage: React.FC = () => {
 
       setSubmitted(true);
       toast.success('Summary added successfully!');
-    } catch (err) {
-      toast.error('Failed to save summary');
+    } catch (err: any) {
+      console.error("Failed to save summary:", err);
+      toast.error(err?.message || 'Failed to save summary');
       setUploading(false);
     }
   };
