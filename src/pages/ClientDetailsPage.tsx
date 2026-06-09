@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, Clock,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink,
+  MessageCircle, ExternalLink, X,
 } from 'lucide-react';
 import { getClientById, getSummariesByClient, getUsers, updateClient, updateSummary } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
@@ -36,6 +36,7 @@ const ClientDetailsPage: React.FC = () => {
   const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
   const [editSummaryText, setEditSummaryText] = useState('');
   const [savingSummary, setSavingSummary] = useState(false);
+  const [selectedSummary, setSelectedSummary] = useState<Summary | null>(null);
 
   const handleStartEditSummary = (summary: Summary) => {
     setEditingSummaryId(summary.id);
@@ -295,7 +296,16 @@ const ClientDetailsPage: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               {summaries.map((s) => (
-                <div key={s.id} className="card" style={{ animation: 'slideUp 0.3s ease' }}>
+                <div 
+                  key={s.id} 
+                  className="card" 
+                  style={{ animation: 'slideUp 0.3s ease', cursor: 'pointer' }}
+                  onClick={() => {
+                    if (editingSummaryId !== s.id) {
+                      setSelectedSummary(s);
+                    }
+                  }}
+                >
                   {/* Summary header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -318,7 +328,10 @@ const ClientDetailsPage: React.FC = () => {
                         <button
                           className="btn btn-ghost btn-icon"
                           style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
-                          onClick={() => handleStartEditSummary(s)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEditSummary(s);
+                          }}
                           title="Edit Summary"
                         >
                           <Edit3 size={12} />
@@ -328,7 +341,10 @@ const ClientDetailsPage: React.FC = () => {
                   </div>
 
                   {editingSummaryId === s.id ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}
+                    >
                       <textarea
                         className="form-input text-sm"
                         style={{ minHeight: 100, width: '100%', resize: 'vertical', lineHeight: 1.5 }}
@@ -362,14 +378,14 @@ const ClientDetailsPage: React.FC = () => {
 
                       {/* Voice player */}
                       {s.voiceUrl && (
-                        <div style={{ marginTop: 'var(--space-4)' }}>
+                        <div style={{ marginTop: 'var(--space-4)' }} onClick={(e) => e.stopPropagation()}>
                           <audio controls src={s.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
                         </div>
                       )}
 
                       {/* Documents */}
                       {s.documents?.length > 0 && (
-                        <div className="file-preview-list" style={{ marginTop: 'var(--space-3)' }}>
+                        <div className="file-preview-list" style={{ marginTop: 'var(--space-3)' }} onClick={(e) => e.stopPropagation()}>
                           {s.documents.map((doc, i) => (
                             <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
                               <div className="file-preview-icon"><FileText size={16} /></div>
@@ -405,6 +421,148 @@ const ClientDetailsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Summary Detail Modal */}
+      {selectedSummary && (
+        <div className="modal-overlay" onClick={() => setSelectedSummary(null)}>
+          <div className="modal" style={{ maxWidth: 600, width: '90%', animation: 'fadeIn 0.2s ease' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Summary Details</h2>
+              <button className="btn btn-ghost btn-icon" onClick={() => setSelectedSummary(null)}><X size={20} /></button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
+              {/* Creator details */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <div className="avatar avatar-md">
+                  {selectedSummary.createdByName?.charAt(0) || 'A'}
+                </div>
+                <div>
+                  <div className="font-semibold text-sm">Added by {selectedSummary.createdByName || 'Unknown'}</div>
+                  <div className="text-xs text-muted">
+                    {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status badges */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                {selectedSummary.paymentDetails?.status && (
+                  <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`}>
+                    <DollarSign size={11} />
+                    Payment: {selectedSummary.paymentDetails.status}
+                  </span>
+                )}
+                {selectedSummary.voiceUrl && <span className="badge badge-accent"><Mic size={11} /> Has Voice</span>}
+                {selectedSummary.documents?.length > 0 && (
+                  <span className="badge badge-muted"><FileText size={11} /> {selectedSummary.documents.length} Document{selectedSummary.documents.length > 1 ? 's' : ''}</span>
+                )}
+              </div>
+
+              {/* Summary text */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Call Notes
+                </h3>
+                <div style={{ 
+                  background: 'var(--color-bg-elevated)', 
+                  padding: 'var(--space-4)', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: '1px solid var(--color-border)',
+                  fontSize: 'var(--font-size-sm)',
+                  lineHeight: 1.75,
+                  color: 'var(--color-text-secondary)',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {selectedSummary.summaryText}
+                </div>
+              </div>
+
+              {/* Voice player */}
+              {selectedSummary.voiceUrl && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Voice Recording
+                  </h3>
+                  <audio controls src={selectedSummary.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
+                </div>
+              )}
+
+              {/* Documents */}
+              {selectedSummary.documents?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Attached Documents ({selectedSummary.documents.length})
+                  </h3>
+                  <div className="file-preview-list">
+                    {selectedSummary.documents.map((doc, i) => (
+                      <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
+                        <div className="file-preview-icon"><FileText size={16} /></div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="text-sm font-medium truncate">{doc.name}</div>
+                          <div className="text-xs text-muted">{(doc.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <ExternalLink size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Details */}
+              {selectedSummary.paymentDetails && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 0 }}>
+                    Payment Information
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                    <div>
+                      <div className="text-xs text-muted">Amount</div>
+                      <div className="text-sm font-semibold">
+                        {selectedSummary.paymentDetails.amount ? `₹${selectedSummary.paymentDetails.amount}` : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted">Status</div>
+                      <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
+                        {selectedSummary.paymentDetails.status}
+                      </span>
+                    </div>
+                    {selectedSummary.paymentDetails.transactionId && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="text-xs text-muted">Transaction ID</div>
+                        <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>
+                          {selectedSummary.paymentDetails.transactionId}
+                        </div>
+                      </div>
+                    )}
+                    {selectedSummary.paymentDetails.notes && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="text-xs text-muted">Payment Notes</div>
+                        <div className="text-sm text-secondary">
+                          {selectedSummary.paymentDetails.notes}
+                        </div>
+                      </div>
+                    )}
+                    {selectedSummary.paymentDetails.screenshotUrl && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Payment Screenshot</div>
+                        <a href={selectedSummary.paymentDetails.screenshotUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', maxWidth: 200 }}>
+                          <img 
+                            src={selectedSummary.paymentDetails.screenshotUrl} 
+                            alt="Screenshot" 
+                            style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+                          />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @media (max-width: 768px) {
