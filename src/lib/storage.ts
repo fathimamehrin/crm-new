@@ -21,16 +21,29 @@ export const uploadFile = (
     const storageRef = ref(storage, path);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
+    const timeout = setTimeout(() => {
+      uploadTask.cancel();
+      reject(new Error("Upload timed out. Please check if Firebase Storage is enabled in your Firebase Console, your storage rules allow write access, and your CORS configuration is set up correctly."));
+    }, 15000);
+
     uploadTask.on(
       'state_changed',
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         onProgress?.(progress);
       },
-      (error) => reject(error),
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
       async () => {
-        const url = await getDownloadURL(uploadTask.snapshot.ref);
-        resolve(url);
+        clearTimeout(timeout);
+        try {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(url);
+        } catch (err) {
+          reject(err);
+        }
       }
     );
   });
