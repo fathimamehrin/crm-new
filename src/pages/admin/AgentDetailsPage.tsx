@@ -175,7 +175,7 @@ const AgentDetailsPage: React.FC = () => {
                   <tr
                     key={client.id}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/clients/${client.id}`)}
+                    onClick={() => navigate(`/admin/clients/${client.id}`)}
                   >
                     {/* Avatar + Name */}
                     <td>
@@ -231,7 +231,7 @@ const AgentDetailsPage: React.FC = () => {
                       <button
                         className="btn btn-ghost btn-icon"
                         style={{ width: 32, height: 32 }}
-                        onClick={() => navigate(`/clients/${client.id}`)}
+                        onClick={() => navigate(`/admin/clients/${client.id}`)}
                         aria-label="View client"
                       >
                         <ExternalLink size={14} />

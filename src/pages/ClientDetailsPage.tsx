@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, Clock,
@@ -22,6 +22,8 @@ const PAYMENT_BADGE: Record<string, string> = {
 const ClientDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminPath = location.pathname.startsWith('/admin');
   const { userRole, currentUser, userProfile } = useAuth();
 
   const [client, setClient] = useState<Client | null>(null);
@@ -107,7 +109,7 @@ const ClientDetailsPage: React.FC = () => {
         <button
           id="add-summary-btn"
           className="btn btn-primary"
-          onClick={() => navigate(`/clients/${id}/summary`)}
+          onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}
         >
           <Plus size={18} />
           Add Summary
@@ -248,7 +250,7 @@ const ClientDetailsPage: React.FC = () => {
               <div className="empty-state-icon"><FileText size={28} /></div>
               <h3 className="empty-state-title">No Summaries Yet</h3>
               <p className="empty-state-desc">Add a call summary to start tracking this client's interactions.</p>
-              <button className="btn btn-primary" onClick={() => navigate(`/clients/${id}/summary`)}>
+              <button className="btn btn-primary" onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}>
                 <Plus size={16} /> Add First Summary
               </button>
             </div>

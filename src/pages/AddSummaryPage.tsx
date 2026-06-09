@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,6 +24,8 @@ type FormData = z.infer<typeof schema>;
 const AddSummaryPage: React.FC = () => {
   const { id: clientId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminPath = location.pathname.startsWith('/admin');
   const { currentUser, userProfile } = useAuth();
 
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
@@ -173,11 +175,11 @@ const AddSummaryPage: React.FC = () => {
             The call summary has been attached to this client's history.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
-            <button className="btn btn-secondary" onClick={() => navigate(`/clients/${clientId}`)}>
+            <button className="btn btn-secondary" onClick={() => navigate(isAdminPath ? `/admin/clients/${clientId}` : `/clients/${clientId}`)}>
               View Client
             </button>
-            <button className="btn btn-primary" onClick={() => navigate('/')}>
-              Dashboard
+            <button className="btn btn-primary" onClick={() => navigate(isAdminPath ? '/admin/agents' : '/')}>
+              {isAdminPath ? 'Admin Panel' : 'Dashboard'}
             </button>
           </div>
         </div>

@@ -40,6 +40,8 @@ const router = createBrowserRouter([
                   { path: '/admin/admins', element: <AdminManagementPage /> },
                   { path: '/admin/agents', element: <AgentManagementPage /> },
                   { path: '/admin/agents/:id', element: <AgentDetailsPage /> },
+                  { path: '/admin/clients/:id', element: <ClientDetailsPage /> },
+                  { path: '/admin/clients/:id/summary', element: <AddSummaryPage /> },
                   { path: '/admin/activity', element: <ActivityLogPage /> },
                 ],
               },
