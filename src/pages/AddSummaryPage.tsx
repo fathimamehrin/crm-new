@@ -68,33 +68,53 @@ const AddSummaryPage: React.FC = () => {
     try {
       let voiceUrl = '';
       let screenshotUrl = '';
-      const uploadedDocs = [];
-      let totalSteps = (voiceFile ? 1 : 0) + documents.length + (paymentScreenshot ? 1 : 0);
-      let done = 0;
+      const uploadedDocs: { name: string; url: string; type: string; size: number }[] = [];
 
-      // Upload voice
+      interface UploadItem {
+        key: string;
+        file: File;
+        path: string;
+      }
+      const uploads: UploadItem[] = [];
       if (voiceFile) {
-        voiceUrl = await uploadFile(voiceFile, generateStoragePath('voice', voiceFile.name), (p) => {
-          setUploadProgress(((done + p / 100) / totalSteps) * 100);
-        });
-        done++;
+        uploads.push({ key: 'voice', file: voiceFile, path: generateStoragePath('voice', voiceFile.name) });
       }
-
-      // Upload documents
-      for (const doc of documents) {
-        const url = await uploadFile(doc, generateStoragePath('documents', doc.name), (p) => {
-          setUploadProgress(((done + p / 100) / totalSteps) * 100);
-        });
-        uploadedDocs.push({ name: doc.name, url, type: doc.type, size: doc.size });
-        done++;
-      }
-
-      // Upload payment screenshot
       if (paymentScreenshot) {
-        screenshotUrl = await uploadFile(paymentScreenshot, generateStoragePath('payments', paymentScreenshot.name), (p) => {
-          setUploadProgress(((done + p / 100) / totalSteps) * 100);
+        uploads.push({ key: 'screenshot', file: paymentScreenshot, path: generateStoragePath('payments', paymentScreenshot.name) });
+      }
+      documents.forEach((doc, index) => {
+        uploads.push({ key: `doc_${index}`, file: doc, path: generateStoragePath('documents', doc.name) });
+      });
+
+      if (uploads.length > 0) {
+        const totalUploads = uploads.length;
+        const progressTracker = new Array(totalUploads).fill(0);
+
+        const uploadPromises = uploads.map(async (item, index) => {
+          const url = await uploadFile(item.file, item.path, (p) => {
+            progressTracker[index] = p;
+            const totalProgress = progressTracker.reduce((sum, val) => sum + val, 0) / totalUploads;
+            setUploadProgress(totalProgress);
+          });
+          return { ...item, url };
         });
-        done++;
+
+        const results = await Promise.all(uploadPromises);
+
+        results.forEach((res) => {
+          if (res.key === 'voice') {
+            voiceUrl = res.url;
+          } else if (res.key === 'screenshot') {
+            screenshotUrl = res.url;
+          } else if (res.key.startsWith('doc_')) {
+            uploadedDocs.push({
+              name: res.file.name,
+              url: res.url,
+              type: res.file.type,
+              size: res.file.size,
+            });
+          }
+        });
       }
 
       setUploading(false);
