@@ -161,6 +161,10 @@ export const createSummary = async (data: Omit<Summary, 'id' | 'createdAt'>): Pr
   return ref.id;
 };
 
+export const updateSummary = async (id: string, data: Partial<Summary>): Promise<void> => {
+  await updateDoc(doc(db, 'summaries', id), cleanObject(data));
+};
+
 // ─── Payments ────────────────────────────────────────────────────────────────
 export const createPayment = async (data: Omit<Payment, 'id' | 'createdAt'>): Promise<string> => {
   const ref = await addDoc(paymentsColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));

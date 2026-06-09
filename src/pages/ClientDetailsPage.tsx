@@ -6,7 +6,7 @@ import {
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink,
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, getUsers, updateClient } from '../lib/firestore';
+import { getClientById, getSummariesByClient, getUsers, updateClient, updateSummary } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import type { Client, Summary, User as UserType } from '../types';
@@ -32,6 +32,44 @@ const ClientDetailsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [reassigning, setReassigning] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
+
+  const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
+  const [editSummaryText, setEditSummaryText] = useState('');
+  const [savingSummary, setSavingSummary] = useState(false);
+
+  const handleStartEditSummary = (summary: Summary) => {
+    setEditingSummaryId(summary.id);
+    setEditSummaryText(summary.summaryText);
+  };
+
+  const handleSaveSummary = async (summaryId: string) => {
+    if (!editSummaryText.trim()) return;
+    setSavingSummary(true);
+    try {
+      await updateSummary(summaryId, { summaryText: editSummaryText });
+      
+      // Update local state
+      setSummaries((prev) =>
+        prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText } : s))
+      );
+
+      await logActivity({
+        userId: currentUser!.uid,
+        userName: userProfile?.name,
+        action: 'summary_updated',
+        entityType: 'summary',
+        entityId: summaryId,
+        entityName: `Edited summary for client`,
+      });
+
+      setEditingSummaryId(null);
+      toast.success('Summary updated successfully');
+    } catch {
+      toast.error('Failed to update summary');
+    } finally {
+      setSavingSummary(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -272,53 +310,95 @@ const ClientDetailsPage: React.FC = () => {
                         <span className="badge badge-muted"><FileText size={11} /> {s.documents.length} doc{s.documents.length > 1 ? 's' : ''}</span>
                       )}
                     </div>
-                    <div className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
-                      {format(s.createdAt, 'dd MMM yyyy, hh:mm a')}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                      <div className="text-xs text-muted" style={{ whiteSpace: 'nowrap' }}>
+                        {format(s.createdAt, 'dd MMM yyyy, hh:mm a')}
+                      </div>
+                      {userRole === 'admin' && editingSummaryId !== s.id && (
+                        <button
+                          className="btn btn-ghost btn-icon"
+                          style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
+                          onClick={() => handleStartEditSummary(s)}
+                          title="Edit Summary"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Summary text */}
-                  <p className="text-sm" style={{ lineHeight: 1.75, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
-                    {s.summaryText}
-                  </p>
-
-                  {/* Voice player */}
-                  {s.voiceUrl && (
-                    <div style={{ marginTop: 'var(--space-4)' }}>
-                      <audio controls src={s.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
+                  {editingSummaryId === s.id ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                      <textarea
+                        className="form-input text-sm"
+                        style={{ minHeight: 100, width: '100%', resize: 'vertical', lineHeight: 1.5 }}
+                        value={editSummaryText}
+                        onChange={(e) => setEditSummaryText(e.target.value)}
+                        placeholder="Edit call summary..."
+                      />
+                      <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setEditingSummaryId(null)}
+                          disabled={savingSummary}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleSaveSummary(s.id)}
+                          disabled={savingSummary || !editSummaryText.trim()}
+                        >
+                          {savingSummary ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* Summary text */}
+                      <p className="text-sm" style={{ lineHeight: 1.75, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
+                        {s.summaryText}
+                      </p>
+
+                      {/* Voice player */}
+                      {s.voiceUrl && (
+                        <div style={{ marginTop: 'var(--space-4)' }}>
+                          <audio controls src={s.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
+                        </div>
+                      )}
+
+                      {/* Documents */}
+                      {s.documents?.length > 0 && (
+                        <div className="file-preview-list" style={{ marginTop: 'var(--space-3)' }}>
+                          {s.documents.map((doc, i) => (
+                            <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
+                              <div className="file-preview-icon"><FileText size={16} /></div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="text-sm font-medium truncate">{doc.name}</div>
+                                <div className="text-xs text-muted">{(doc.size / 1024).toFixed(1)} KB</div>
+                              </div>
+                              <ExternalLink size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Payment details */}
+                      {s.paymentDetails?.transactionId && (
+                        <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-md)' }}>
+                          <div className="text-xs text-muted">Transaction ID</div>
+                          <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>{s.paymentDetails.transactionId}</div>
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <div className="avatar avatar-sm">
+                          {s.createdByName?.charAt(0) || 'A'}
+                        </div>
+                        <span className="text-xs text-muted">Added by {s.createdByName || 'Unknown'}</span>
+                      </div>
+                    </>
                   )}
-
-                  {/* Documents */}
-                  {s.documents?.length > 0 && (
-                    <div className="file-preview-list" style={{ marginTop: 'var(--space-3)' }}>
-                      {s.documents.map((doc, i) => (
-                        <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
-                          <div className="file-preview-icon"><FileText size={16} /></div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="text-sm font-medium truncate">{doc.name}</div>
-                            <div className="text-xs text-muted">{(doc.size / 1024).toFixed(1)} KB</div>
-                          </div>
-                          <ExternalLink size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Payment details */}
-                  {s.paymentDetails?.transactionId && (
-                    <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                      <div className="text-xs text-muted">Transaction ID</div>
-                      <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>{s.paymentDetails.transactionId}</div>
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <div className="avatar avatar-sm">
-                      {s.createdByName?.charAt(0) || 'A'}
-                    </div>
-                    <span className="text-xs text-muted">Added by {s.createdByName || 'Unknown'}</span>
-                  </div>
                 </div>
               ))}
             </div>

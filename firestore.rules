@@ -38,7 +38,7 @@ service cloud.firestore {
     match /summaries/{summaryId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if false; // Read-only after creation
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
