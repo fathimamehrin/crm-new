@@ -400,10 +400,65 @@ const ClientDetailsPage: React.FC = () => {
                       )}
 
                       {/* Payment details */}
-                      {s.paymentDetails?.transactionId && (
-                        <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                          <div className="text-xs text-muted">Transaction ID</div>
-                          <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>{s.paymentDetails.transactionId}</div>
+                      {s.paymentDetails && (s.paymentDetails.amount !== undefined || s.paymentDetails.status || s.paymentDetails.transactionId) && (
+                        <div 
+                          style={{ 
+                            marginTop: 'var(--space-3)', 
+                            padding: 'var(--space-3)', 
+                            background: 'var(--color-bg-elevated)', 
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--color-border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-2)'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              Payment Information
+                            </span>
+                            {s.paymentDetails.status && (
+                              <span className={`badge ${PAYMENT_BADGE[s.paymentDetails.status] || 'badge-muted'}`} style={{ textTransform: 'uppercase', fontSize: '9px', padding: '2px 6px' }}>
+                                {s.paymentDetails.status}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
+                            {s.paymentDetails.amount !== undefined && (
+                              <div>
+                                <div className="text-xs text-muted">Amount</div>
+                                <div className="text-sm font-semibold">₹{s.paymentDetails.amount}</div>
+                              </div>
+                            )}
+                            {s.paymentDetails.transactionId && (
+                              <div>
+                                <div className="text-xs text-muted">Transaction ID</div>
+                                <div className="text-sm font-medium" style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{s.paymentDetails.transactionId}</div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {s.paymentDetails.notes && (
+                            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                              <div className="text-xs text-muted">Payment Notes</div>
+                              <div className="text-sm text-secondary">{s.paymentDetails.notes}</div>
+                            </div>
+                          )}
+
+                          {s.paymentDetails.screenshotUrl && (
+                            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                              <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Screenshot</div>
+                              <a href={s.paymentDetails.screenshotUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: 120 }}>
+                                <img 
+                                  src={s.paymentDetails.screenshotUrl} 
+                                  alt="Screenshot" 
+                                  style={{ width: '100%', maxHeight: 80, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}
+                                />
+                              </a>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -510,7 +565,7 @@ const ClientDetailsPage: React.FC = () => {
               )}
 
               {/* Payment Details */}
-              {selectedSummary.paymentDetails && (
+              {selectedSummary.paymentDetails && (selectedSummary.paymentDetails.amount !== undefined || selectedSummary.paymentDetails.status || selectedSummary.paymentDetails.transactionId) && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                   <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 0 }}>
                     Payment Information
@@ -519,7 +574,7 @@ const ClientDetailsPage: React.FC = () => {
                     <div>
                       <div className="text-xs text-muted">Amount</div>
                       <div className="text-sm font-semibold">
-                        {selectedSummary.paymentDetails.amount ? `₹${selectedSummary.paymentDetails.amount}` : '—'}
+                        {selectedSummary.paymentDetails.amount !== undefined ? `₹${selectedSummary.paymentDetails.amount}` : '—'}
                       </div>
                     </div>
                     <div>
