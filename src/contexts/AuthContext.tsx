@@ -29,16 +29,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setCurrentUser(firebaseUser);
-      if (firebaseUser) {
-        const profile = await getUserById(firebaseUser.uid);
-        setUserProfile(profile);
-        setUserRole(profile?.role ?? null);
-      } else {
+      try {
+        setCurrentUser(firebaseUser);
+        if (firebaseUser) {
+          const profile = await getUserById(firebaseUser.uid);
+          setUserProfile(profile);
+          setUserRole(profile?.role ?? null);
+        } else {
+          setUserProfile(null);
+          setUserRole(null);
+        }
+      } catch (error) {
+        console.error("AuthContext initialization error:", error);
         setUserProfile(null);
         setUserRole(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsub;
   }, []);

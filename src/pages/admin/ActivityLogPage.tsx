@@ -47,7 +47,7 @@ const ActivityLogPage: React.FC = () => {
   };
 
   useEffect(() => { loadLogs(); }, [agentFilter]);
-  useEffect(() => { getUsers('agent').then(setAgents); }, []);
+  useEffect(() => { getUsers('agent').then(setAgents).catch(() => {}); }, []);
 
   const filtered = logs.filter((log) => {
     const q = search.toLowerCase();

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { onSnapshot, query, orderBy, limit, where, Timestamp, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { ActivityLog } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 const ACTION_LABELS: Record<string, string> = {
   client_created: 'New client added',
@@ -29,9 +30,10 @@ export interface NotificationItem {
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const { currentUser } = useAuth();
 
   useEffect(() => {
-    if (!db) return; // Firebase not configured
+    if (!db || !currentUser) return; // Firebase not configured or user not logged in
     // Listen to last 20 activity logs in real-time
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
     const q = query(
@@ -55,10 +57,12 @@ export const useNotifications = () => {
         };
       });
       setNotifications(items);
+    }, (error) => {
+      console.error("Notifications snapshot error:", error);
     });
 
     return unsub;
-  }, [readIds]);
+  }, [readIds, currentUser]);
 
   const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
 
