@@ -5,7 +5,8 @@ import {
   signOut,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { getUserById } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import type { User, UserRole } from '../types';
@@ -21,6 +22,29 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const ensureUserProfile = async (firebaseUser: FirebaseUser): Promise<User> => {
+  const profile = await getUserById(firebaseUser.uid);
+  if (profile) return profile;
+
+  const email = firebaseUser.email || '';
+  const isAgentEmail = email.toLowerCase().includes('agent');
+  const defaultRole = isAgentEmail ? 'agent' : 'admin';
+  const defaultName = email ? email.split('@')[0] : 'User';
+  const capitalizedName = defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
+
+  const newProfile = {
+    name: capitalizedName,
+    email: email,
+    role: defaultRole,
+    status: 'active' as const,
+    phone: '',
+    createdAt: new Date(),
+  };
+
+  await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
+  return { id: firebaseUser.uid, ...newProfile };
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
@@ -32,9 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setCurrentUser(firebaseUser);
         if (firebaseUser) {
-          const profile = await getUserById(firebaseUser.uid);
+          const profile = await ensureUserProfile(firebaseUser);
           setUserProfile(profile);
-          setUserRole(profile?.role ?? null);
+          setUserRole(profile.role);
         } else {
           setUserProfile(null);
           setUserRole(null);
@@ -52,17 +76,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    const profile = await getUserById(cred.user.uid);
-    if (profile) {
-      await logActivity({
-        userId: cred.user.uid,
-        userName: profile.name,
-        action: 'user_login',
-        entityType: 'user',
-        entityId: cred.user.uid,
-        entityName: profile.name,
-      });
-    }
+    const profile = await ensureUserProfile(cred.user);
+    await logActivity({
+      userId: cred.user.uid,
+      userName: profile.name,
+      action: 'user_login',
+      entityType: 'user',
+      entityId: cred.user.uid,
+      entityName: profile.name,
+    });
   };
 
   const logout = async () => {
