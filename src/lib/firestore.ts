@@ -115,8 +115,12 @@ export const updateUser = async (id: string, data: Partial<User>): Promise<void>
 };
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
-export const getClientByWhatsApp = async (number: string): Promise<Client | null> => {
-  const snap = await getDocs(query(clientsColRef(), where('whatsappNumber', '==', number)));
+export const getClientByWhatsApp = async (number: string, agentId?: string): Promise<Client | null> => {
+  const constraints = [where('whatsappNumber', '==', number)];
+  if (agentId) {
+    constraints.push(where('assignedAgent', '==', agentId));
+  }
+  const snap = await getDocs(query(clientsColRef(), ...constraints));
   if (snap.empty) return null;
   return clientFromDoc(snap.docs[0] as AnySnap);
 };

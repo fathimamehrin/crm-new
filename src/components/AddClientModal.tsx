@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X, Phone } from 'lucide-react';
 import { getClientByWhatsApp } from '../lib/firestore';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
@@ -21,6 +22,7 @@ interface AddClientModalProps {
 const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const { currentUser, userRole } = useAuth();
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -29,7 +31,10 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
-      const existing = await getClientByWhatsApp(data.whatsappNumber);
+      const existing = await getClientByWhatsApp(
+        data.whatsappNumber,
+        userRole === 'agent' && currentUser ? currentUser.uid : undefined
+      );
       if (existing) {
         toast.success('Client found! Redirecting…');
         navigate(`/clients/${existing.id}`);
