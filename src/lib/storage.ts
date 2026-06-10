@@ -1,4 +1,4 @@
-import { storage } from './firebase';
+// firebase storage import removed to fix unused import warning
 
 export interface UploadProgress {
   progress: number;
@@ -8,7 +8,7 @@ export interface UploadProgress {
 
 export const uploadFile = (
   file: File,
-  path: string,
+  _path: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -38,7 +38,7 @@ export const uploadFile = (
   });
 };
 
-export const deleteFile = async (url: string): Promise<void> => {
+export const deleteFile = async (_url: string): Promise<void> => {
   // Local Base64 strings are deleted automatically when the database record is updated or deleted
 };
 

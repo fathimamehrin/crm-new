@@ -132,7 +132,7 @@ const ActivityLogPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
+            <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
               <table className="table">
                 <thead>
                   <tr>
@@ -147,22 +147,22 @@ const ActivityLogPage: React.FC = () => {
                     const meta = ACTION_LABELS[log.action] || { label: log.action, badge: 'badge-muted' };
                     return (
                       <tr key={log.id}>
-                        <td>
+                        <td data-label="Action">
                           <span className={`badge ${meta.badge}`}>{meta.label}</span>
                         </td>
-                        <td>
+                        <td data-label="User">
                           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             <div className="avatar avatar-sm">{log.userName?.charAt(0) || '?'}</div>
                             <span className="text-sm">{log.userName || log.userId.slice(0, 8)}</span>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Entity">
                           <div>
                             <div className="text-sm">{log.entityName || '—'}</div>
                             <div className="text-xs text-muted">{log.entityType}</div>
                           </div>
                         </td>
-                        <td className="text-sm text-muted">
+                        <td className="text-sm text-muted" data-label="Date & Time">
                           <div>{format(log.createdAt, 'dd MMM yyyy')}</div>
                           <div className="text-xs">{format(log.createdAt, 'hh:mm:ss a')}</div>
                         </td>

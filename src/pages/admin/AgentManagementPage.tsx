@@ -153,7 +153,7 @@ const AgentManagementPage: React.FC = () => {
             <p className="empty-state-desc">Add agents to assign clients and track their activity.</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
+          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
             <table className="table">
               <thead>
                 <tr>
@@ -168,7 +168,7 @@ const AgentManagementPage: React.FC = () => {
               <tbody>
                 {agents.map((agent) => (
                   <tr key={agent.id}>
-                    <td>
+                    <td data-label="Agent">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
                         {editingId === agent.id ? (
@@ -184,17 +184,17 @@ const AgentManagementPage: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="text-sm text-secondary">{agent.email}</td>
-                    <td className="text-sm text-secondary">{agent.phone || '—'}</td>
-                    <td>
+                    <td className="text-sm text-secondary" data-label="Email">{agent.email}</td>
+                    <td className="text-sm text-secondary" data-label="Phone">{agent.phone || '—'}</td>
+                    <td data-label="Status">
                       <span className={`badge ${agent.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
                         {agent.status}
                       </span>
                     </td>
-                    <td className="text-sm text-muted">{format(agent.createdAt, 'dd MMM yyyy')}</td>
-                    <td>
+                    <td className="text-sm text-muted" data-label="Created">{format(agent.createdAt, 'dd MMM yyyy')}</td>
+                    <td data-label="Actions">
                       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
                           <Edit3 size={14} />
                         </button>
                         <button

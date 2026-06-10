@@ -103,7 +103,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+            <div className="header-user-info" style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
               <span className="text-sm font-semibold">{userProfile.name}</span>
               <span style={{ fontSize: '0.7rem', color: roleColor, fontWeight: 600, textTransform: 'uppercase' }}>
                 {roleLabel}

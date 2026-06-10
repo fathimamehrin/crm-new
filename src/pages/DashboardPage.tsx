@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Search, Filter, TrendingUp, UserCheck } from 'lucide-react';
+import { Plus, Search, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getClients, getUsers,
@@ -13,13 +13,6 @@ import ClientFilters from '../components/ClientTable/ClientFilters';
 import Pagination from '../components/Pagination';
 import AddClientModal from '../components/AddClientModal';
 import toast from 'react-hot-toast';
-
-const STATS_COLORS = {
-  total:   { bg: 'rgba(99,102,241,0.15)',  color: '#818cf8'  },
-  active:  { bg: 'rgba(16,185,129,0.15)',  color: '#10b981'  },
-  paid:    { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b'  },
-  agents:  { bg: 'rgba(59,130,246,0.15)',  color: '#3b82f6'  },
-};
 
 const DashboardPage: React.FC = () => {
   const { userRole, currentUser } = useAuth();
@@ -96,11 +89,7 @@ const DashboardPage: React.FC = () => {
     getUsers('agent').then(setAgents).catch(() => {});
   }, []);
 
-  const stats = [
-    { label: 'Total Clients', value: totalClients, icon: Users, color: STATS_COLORS.total },
-    { label: 'Active Clients', value: clients.filter((c) => c.status === 'active').length, icon: TrendingUp, color: STATS_COLORS.active },
-    { label: 'Agents', value: agents.length, icon: UserCheck, color: STATS_COLORS.agents },
-  ];
+
 
   return (
     <div>
@@ -119,6 +108,8 @@ const DashboardPage: React.FC = () => {
           Add Client
         </button>
       </div>
+
+
 
       {/* Table Card */}
       <div className="card" style={{ padding: 0 }}>
@@ -169,6 +160,10 @@ const DashboardPage: React.FC = () => {
           loading={loading}
           agents={agents}
           onRefresh={loadClients}
+          onClearFilters={() => {
+            setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
+            setPage(1);
+          }}
         />
 
         {/* Pagination */}

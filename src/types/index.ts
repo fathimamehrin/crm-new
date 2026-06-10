@@ -73,6 +73,7 @@ export type ActivityAction =
   | 'client_updated'
   | 'client_assigned'
   | 'summary_added'
+  | 'summary_updated'
   | 'payment_updated'
   | 'agent_created'
   | 'agent_updated'

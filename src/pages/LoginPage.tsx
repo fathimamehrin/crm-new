@@ -68,7 +68,6 @@ const LoginPage: React.FC = () => {
         flex: 1, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(29,78,216,0.01))',
-        borderRight: '1px solid var(--color-border)',
         padding: 'var(--space-12)',
       }} className="login-left-panel">
         <div style={{ maxWidth: 420, width: '100%' }}>
@@ -169,70 +168,6 @@ const LoginPage: React.FC = () => {
           </p>
         </div>
       </div>
-
-      {/* Right decorative panel (desktop only) */}
-      <div style={{
-        width: '40%', minWidth: 360,
-        background: 'linear-gradient(135deg, #1e1b4b, #0b0f1a)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: 'var(--space-12)',
-        position: 'relative', overflow: 'hidden',
-      }} className="login-right-panel">
-        <div style={{
-          position: 'absolute', top: '10%', right: '-20%',
-          width: 300, height: 300,
-          background: 'radial-gradient(circle, rgba(37,99,235,0.15), transparent 70%)',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: '10%', left: '-20%',
-          width: 250, height: 250,
-          background: 'radial-gradient(circle, rgba(29,78,216,0.10), transparent 70%)',
-        }} />
-
-        <div style={{ position: 'relative', maxWidth: 300, textAlign: 'center' }}>
-          <div style={{
-            width: 80, height: 80,
-            background: 'rgba(37,99,235,0.15)',
-            borderRadius: 'var(--radius-xl)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto var(--space-6)',
-            border: '1px solid rgba(37,99,235,0.25)',
-          }}>
-            <Shield size={40} style={{ color: '#60a5fa' }} />
-          </div>
-          <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>
-            Powerful CRM
-          </h2>
-          <p style={{ color: '#94a3b8', lineHeight: 1.8, fontSize: 'var(--font-size-sm)' }}>
-            Manage clients, track summaries, monitor payments, and coordinate your entire team — all in one place.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-8)', textAlign: 'left' }}>
-            {['Role-based access control', 'Real-time Firestore updates', 'Secure file storage', 'Activity audit logs'].map((feat) => (
-              <div key={feat} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', color: '#94a3b8', fontSize: 'var(--font-size-sm)' }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: '50%',
-                  background: 'rgba(37,99,235,0.1)',
-                  border: '1px solid rgba(37,99,235,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent)' }} />
-                </div>
-                {feat}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .login-right-panel { display: none !important; }
-          .login-left-panel { border-right: none !important; }
-        }
-      `}</style>
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, Clock,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink, X,
+  MessageCircle, ExternalLink, X, Copy, Check
 } from 'lucide-react';
 import { getClientById, getSummariesByClient, getUsers, updateClient, updateSummary } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
@@ -37,6 +37,16 @@ const ClientDetailsPage: React.FC = () => {
   const [editSummaryText, setEditSummaryText] = useState('');
   const [savingSummary, setSavingSummary] = useState(false);
   const [selectedSummary, setSelectedSummary] = useState<Summary | null>(null);
+
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyWhatsApp = () => {
+    if (!client) return;
+    navigator.clipboard.writeText(client.whatsappNumber);
+    setCopied(true);
+    toast.success('WhatsApp number copied');
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const [isEditingInModal, setIsEditingInModal] = useState(false);
   const [modalEditSummaryText, setModalEditSummaryText] = useState('');
@@ -248,23 +258,25 @@ const ClientDetailsPage: React.FC = () => {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* Back */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="page-title">Client Details</h1>
-        <div style={{ flex: 1 }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)} aria-label="Go back">
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="page-title" style={{ fontSize: 'var(--font-size-xl)' }}>Client Details</h1>
+        </div>
         <button
           id="add-summary-btn"
           className="btn btn-primary"
           onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}
+          style={{ minHeight: 38 }}
         >
           <Plus size={18} />
           Add Summary
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 'var(--space-5)', alignItems: 'start' }}>
+      <div className="client-details-grid">
         {/* Left: Basic Info */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div className="card" style={{ textAlign: 'center' }}>
@@ -288,10 +300,20 @@ const ClientDetailsPage: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <MessageCircle size={16} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                <a href={`https://wa.me/${client.whatsappNumber}`} target="_blank" rel="noopener noreferrer"
-                  style={{ color: 'var(--color-success)', fontSize: 'var(--font-size-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {client.whatsappNumber} <ExternalLink size={12} />
-                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <a href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--color-success)', fontSize: 'var(--font-size-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {client.whatsappNumber} <ExternalLink size={12} />
+                  </a>
+                  <button 
+                    onClick={handleCopyWhatsApp}
+                    className="btn btn-ghost"
+                    style={{ padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', border: 'none', background: 'none', minHeight: 'auto', width: 'auto' }}
+                    title="Copy WhatsApp Number"
+                  >
+                    {copied ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
+                  </button>
+                </div>
               </div>
 
               {client.email && (
@@ -589,11 +611,16 @@ const ClientDetailsPage: React.FC = () => {
                         </div>
                       )}
 
-                      <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        <div className="avatar avatar-sm">
-                          {s.createdByName?.charAt(0) || 'A'}
+                      <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                          <div className="avatar avatar-sm">
+                            {s.createdByName?.charAt(0) || 'A'}
+                          </div>
+                          <span className="text-xs text-muted">Added by {s.createdByName || 'Unknown'}</span>
                         </div>
-                        <span className="text-xs text-muted">Added by {s.createdByName || 'Unknown'}</span>
+                        <span className="text-xs text-accent font-medium hover:underline">
+                          View Details →
+                        </span>
                       </div>
                     </>
                   )}
@@ -607,9 +634,21 @@ const ClientDetailsPage: React.FC = () => {
       {/* Summary Detail Modal */}
       {selectedSummary && (
         <div className="modal-overlay" onClick={() => { if (!savingModalEdit) setSelectedSummary(null); }}>
-          <div className="modal" style={{ maxWidth: 600, width: '90%', animation: 'fadeIn 0.2s ease' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h2 className="modal-title">{isEditingInModal ? 'Edit Summary Details' : 'Summary Details'}</h2>
+          <div 
+            className="modal" 
+            style={{ 
+              maxWidth: 600, 
+              width: '95%', 
+              maxHeight: '90vh', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              padding: 'var(--space-5)',
+              animation: 'fadeIn 0.2s ease' 
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', flexShrink: 0 }}>
+              <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>{isEditingInModal ? 'Edit Summary Details' : 'Summary Details'}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 {userRole === 'admin' && !isEditingInModal && (
                   <button 
@@ -625,7 +664,7 @@ const ClientDetailsPage: React.FC = () => {
             </div>
             
             {isEditingInModal ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1, overflowY: 'auto', paddingRight: 'var(--space-1)' }}>
                 {/* Creator details (read-only) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                   <div className="avatar avatar-md">
@@ -662,7 +701,7 @@ const ClientDetailsPage: React.FC = () => {
                   </h3>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
                       <div className="form-group">
                         <label className="form-label" htmlFor="modal-edit-status">Payment Status</label>
                         <select
@@ -743,7 +782,7 @@ const ClientDetailsPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', flex: 1, overflowY: 'auto', paddingRight: 'var(--space-1)' }}>
                 {/* Creator details */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                   <div className="avatar avatar-md">
@@ -846,7 +885,7 @@ const ClientDetailsPage: React.FC = () => {
                       </div>
                       <div>
                         <div className="text-xs text-muted">Status</div>
-                        <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
+                        <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status || ''] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
                           {selectedSummary.paymentDetails.status}
                         </span>
                       </div>
@@ -894,14 +933,6 @@ const ClientDetailsPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 768px) {
-          div[style*="grid-template-columns: 320px"] {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };

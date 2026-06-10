@@ -1,21 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { UserCheck, UserCog, Activity, ArrowLeft } from 'lucide-react';
+import { UserCheck, UserCog, Activity, ArrowLeft, Menu } from 'lucide-react';
 
 const AdminLayout: React.FC = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div style={{ display: 'flex', width: '100%', minHeight: 'calc(100vh - var(--header-height))', background: 'var(--color-bg-primary)' }}>
+    <div className="admin-layout-container">
+      {/* Admin Sidebar Backdrop Overlay for Mobile */}
+      {sidebarOpen && (
+        <div 
+          className="admin-sidebar-overlay" 
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Admin Sidebar */}
-      <aside style={{
-        width: 240,
-        background: 'var(--color-bg-secondary)',
-        borderRight: '1px solid var(--color-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: 'var(--space-4)',
-        gap: 'var(--space-2)',
-        flexShrink: 0,
-      }}>
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div style={{ 
           fontSize: 'var(--font-size-xs)', 
           fontWeight: 700, 
@@ -31,6 +32,7 @@ const AdminLayout: React.FC = () => {
         <NavLink
           to="/admin/agents"
           className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+          onClick={() => setSidebarOpen(false)}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -48,6 +50,7 @@ const AdminLayout: React.FC = () => {
         <NavLink
           to="/admin/admins"
           className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+          onClick={() => setSidebarOpen(false)}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -65,6 +68,7 @@ const AdminLayout: React.FC = () => {
         <NavLink
           to="/admin/activity"
           className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+          onClick={() => setSidebarOpen(false)}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -80,10 +84,40 @@ const AdminLayout: React.FC = () => {
         </NavLink>
 
         <div style={{ flex: 1 }} />
+
+        <NavLink
+          to="/"
+          className="sidebar-link"
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 'var(--space-3)', 
+            padding: '0.75rem var(--space-4)', 
+            borderRadius: 'var(--radius-md)', 
+            fontSize: 'var(--font-size-sm)', 
+            fontWeight: 500,
+            color: 'var(--color-danger)',
+            marginTop: 'auto'
+          }}
+        >
+          <ArrowLeft size={18} />
+          <span>Exit Admin</span>
+        </NavLink>
       </aside>
 
       {/* Admin Content Area */}
-      <main style={{ flex: 1, padding: 'var(--space-6)', overflowY: 'auto' }}>
+      <main className="admin-main">
+        {/* Mobile menu toggle bar */}
+        <div className="admin-mobile-toggle">
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={() => setSidebarOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Menu size={16} /> Admin Menu
+          </button>
+        </div>
+
         <Outlet />
       </main>
     </div>

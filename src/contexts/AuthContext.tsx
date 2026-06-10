@@ -35,7 +35,7 @@ const ensureUserProfile = async (firebaseUser: FirebaseUser): Promise<User> => {
   const newProfile = {
     name: capitalizedName,
     email: email,
-    role: defaultRole,
+    role: defaultRole as UserRole,
     status: 'active' as const,
     phone: '',
     createdAt: new Date(),

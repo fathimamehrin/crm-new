@@ -9,7 +9,6 @@ import {
   where,
   orderBy,
   limit,
-  startAfter,
   Timestamp,
   QueryDocumentSnapshot,
   QueryConstraint,
@@ -127,8 +126,8 @@ export const getClientByWhatsApp = async (number: string, agentId?: string): Pro
 
 export const getClients = async (
   constraints: QueryConstraint[] = [],
-  pageSize = 25,
-  lastDoc?: AnySnap
+  _pageSize = 25,
+  _lastDoc?: AnySnap
 ): Promise<{ clients: Client[]; lastDoc: AnySnap | null }> => {
   const snap = await getDocs(query(clientsColRef(), ...constraints));
   const clients = snap.docs.map(clientFromDoc);

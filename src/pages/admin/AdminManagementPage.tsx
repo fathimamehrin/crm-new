@@ -118,7 +118,7 @@ const AdminManagementPage: React.FC = () => {
             <p className="empty-state-desc">Create the first admin account.</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
+          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
             <table className="table">
               <thead>
                 <tr>
@@ -132,20 +132,20 @@ const AdminManagementPage: React.FC = () => {
               <tbody>
                 {admins.map((admin) => (
                   <tr key={admin.id}>
-                    <td>
+                    <td data-label="Admin">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <div className="avatar avatar-sm">{admin.name.charAt(0)}</div>
                         <span className="font-medium text-sm">{admin.name}</span>
                       </div>
                     </td>
-                    <td className="text-sm text-secondary">{admin.email}</td>
-                    <td>
+                    <td className="text-sm text-secondary" data-label="Email">{admin.email}</td>
+                    <td data-label="Status">
                       <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
                         {admin.status}
                       </span>
                     </td>
-                    <td className="text-sm text-muted">{format(admin.createdAt, 'dd MMM yyyy')}</td>
-                    <td>
+                    <td className="text-sm text-muted" data-label="Created">{format(admin.createdAt, 'dd MMM yyyy')}</td>
+                    <td data-label="Actions">
                       <button
                         className={`btn btn-sm ${admin.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
                         onClick={() => toggleStatus(admin)}
