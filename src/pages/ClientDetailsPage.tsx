@@ -9,7 +9,7 @@ import {
 import { getClientById, getSummariesByClient, getUsers, updateClient, updateSummary } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, User as UserType } from '../types';
+import type { Client, Summary, User as UserType, PaymentStatus } from '../types';
 import toast from 'react-hot-toast';
 
 const PAYMENT_BADGE: Record<string, string> = {
@@ -37,6 +37,25 @@ const ClientDetailsPage: React.FC = () => {
   const [editSummaryText, setEditSummaryText] = useState('');
   const [savingSummary, setSavingSummary] = useState(false);
   const [selectedSummary, setSelectedSummary] = useState<Summary | null>(null);
+
+  const [isEditingInModal, setIsEditingInModal] = useState(false);
+  const [modalEditSummaryText, setModalEditSummaryText] = useState('');
+  const [modalEditAmount, setModalEditAmount] = useState('');
+  const [modalEditStatus, setModalEditStatus] = useState<PaymentStatus | ''>('');
+  const [modalEditTransactionId, setModalEditTransactionId] = useState('');
+  const [modalEditPaymentNotes, setModalEditPaymentNotes] = useState('');
+  const [savingModalEdit, setSavingModalEdit] = useState(false);
+
+  useEffect(() => {
+    if (selectedSummary) {
+      setModalEditSummaryText(selectedSummary.summaryText);
+      setModalEditAmount(selectedSummary.paymentDetails?.amount?.toString() || '');
+      setModalEditStatus(selectedSummary.paymentDetails?.status || '');
+      setModalEditTransactionId(selectedSummary.paymentDetails?.transactionId || '');
+      setModalEditPaymentNotes(selectedSummary.paymentDetails?.notes || '');
+      setIsEditingInModal(false);
+    }
+  }, [selectedSummary]);
 
   const handleStartEditSummary = (summary: Summary) => {
     setEditingSummaryId(summary.id);
@@ -69,6 +88,55 @@ const ClientDetailsPage: React.FC = () => {
       toast.error('Failed to update summary');
     } finally {
       setSavingSummary(false);
+    }
+  };
+
+  const handleSaveModalEdit = async () => {
+    if (!selectedSummary) return;
+    if (!modalEditSummaryText.trim()) {
+      toast.error('Call notes cannot be empty');
+      return;
+    }
+
+    setSavingModalEdit(true);
+    try {
+      const updatedPaymentDetails = modalEditStatus ? {
+        amount: modalEditAmount ? parseFloat(modalEditAmount) : undefined,
+        status: modalEditStatus as PaymentStatus,
+        transactionId: modalEditTransactionId || undefined,
+        notes: modalEditPaymentNotes || undefined,
+        screenshotUrl: selectedSummary.paymentDetails?.screenshotUrl, // preserve existing screenshot
+      } : undefined;
+
+      const updatedFields = {
+        summaryText: modalEditSummaryText,
+        paymentDetails: updatedPaymentDetails,
+      };
+
+      await updateSummary(selectedSummary.id, updatedFields);
+
+      // Log activity
+      await logActivity({
+        userId: currentUser!.uid,
+        userName: userProfile?.name,
+        action: 'summary_updated',
+        entityType: 'summary',
+        entityId: selectedSummary.id,
+        entityName: `Edited summary details in modal`,
+      });
+
+      // Update local state
+      setSummaries((prev) =>
+        prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields } : s))
+      );
+      setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields } : null);
+      setIsEditingInModal(false);
+      toast.success('Summary details updated successfully');
+    } catch (err) {
+      console.error("Failed to update summary in modal:", err);
+      toast.error('Failed to update summary details');
+    } finally {
+      setSavingModalEdit(false);
     }
   };
 
@@ -538,160 +606,291 @@ const ClientDetailsPage: React.FC = () => {
 
       {/* Summary Detail Modal */}
       {selectedSummary && (
-        <div className="modal-overlay" onClick={() => setSelectedSummary(null)}>
+        <div className="modal-overlay" onClick={() => { if (!savingModalEdit) setSelectedSummary(null); }}>
           <div className="modal" style={{ maxWidth: 600, width: '90%', animation: 'fadeIn 0.2s ease' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Summary Details</h2>
-              <button className="btn btn-ghost btn-icon" onClick={() => setSelectedSummary(null)}><X size={20} /></button>
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 className="modal-title">{isEditingInModal ? 'Edit Summary Details' : 'Summary Details'}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                {userRole === 'admin' && !isEditingInModal && (
+                  <button 
+                    className="btn btn-ghost btn-sm" 
+                    onClick={() => setIsEditingInModal(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
+                  >
+                    <Edit3 size={12} /> Edit Details
+                  </button>
+                )}
+                <button className="btn btn-ghost btn-icon" onClick={() => setSelectedSummary(null)} disabled={savingModalEdit}><X size={20} /></button>
+              </div>
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
-              {/* Creator details */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div className="avatar avatar-md">
-                  {selectedSummary.createdByName?.charAt(0) || 'A'}
+            {isEditingInModal ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
+                {/* Creator details (read-only) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                  <div className="avatar avatar-md">
+                    {selectedSummary.createdByName?.charAt(0) || 'A'}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">Editing summary by {selectedSummary.createdByName || 'Unknown'}</div>
+                    <div className="text-xs text-muted">
+                      {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Call Notes input */}
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="modal-edit-notes">Call Notes</label>
+                  <textarea
+                    id="modal-edit-notes"
+                    className="form-input"
+                    style={{ minHeight: 120, resize: 'vertical' }}
+                    value={modalEditSummaryText}
+                    onChange={(e) => setModalEditSummaryText(e.target.value)}
+                    placeholder="Enter call notes..."
+                  />
+                </div>
+
+                {/* Divider */}
+                <hr className="divider" style={{ margin: 'var(--space-2) 0' }} />
+
+                {/* Payment Details inputs */}
                 <div>
-                  <div className="font-semibold text-sm">Added by {selectedSummary.createdByName || 'Unknown'}</div>
-                  <div className="text-xs text-muted">
-                    {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
-                  </div>
-                </div>
-              </div>
-
-              {/* Status badges */}
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                {selectedSummary.paymentDetails?.status && (
-                  <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`}>
-                    <DollarSign size={11} />
-                    Payment: {selectedSummary.paymentDetails.status}
-                  </span>
-                )}
-                {selectedSummary.voiceUrl && <span className="badge badge-accent"><Mic size={11} /> Has Voice</span>}
-                {selectedSummary.documents?.length > 0 && (
-                  <span className="badge badge-muted"><FileText size={11} /> {selectedSummary.documents.length} Document{selectedSummary.documents.length > 1 ? 's' : ''}</span>
-                )}
-              </div>
-
-              {/* Summary text */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Call Notes
-                </h3>
-                <div style={{ 
-                  background: 'var(--color-bg-elevated)', 
-                  padding: 'var(--space-4)', 
-                  borderRadius: 'var(--radius-md)', 
-                  border: '1px solid var(--color-border)',
-                  fontSize: 'var(--font-size-sm)',
-                  lineHeight: 1.75,
-                  color: 'var(--color-text-secondary)',
-                  whiteSpace: 'pre-wrap'
-                }}>
-                  {selectedSummary.summaryText}
-                </div>
-              </div>
-
-              {/* Voice player */}
-              {selectedSummary.voiceUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Voice Recording
-                  </h3>
-                  <audio controls src={selectedSummary.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
-                </div>
-              )}
-
-              {/* Documents */}
-              {selectedSummary.documents?.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Attached Documents ({selectedSummary.documents.length})
-                  </h3>
-                  <div className="file-preview-list">
-                    {selectedSummary.documents.map((doc, i) => (
-                      <a 
-                        key={i} 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          downloadBase64File(doc.url, doc.name);
-                        }} 
-                        className="file-preview-item" 
-                        style={{ textDecoration: 'none' }}
-                      >
-                        <div className="file-preview-icon"><FileText size={16} /></div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="text-sm font-medium truncate">{doc.name}</div>
-                          <div className="text-xs text-muted">{(doc.size / 1024).toFixed(1)} KB</div>
-                        </div>
-                        <ExternalLink size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Payment Details */}
-              {selectedSummary.paymentDetails && (selectedSummary.paymentDetails.amount !== undefined || selectedSummary.paymentDetails.status || selectedSummary.paymentDetails.transactionId) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 0 }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
                     Payment Information
                   </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                    <div>
-                      <div className="text-xs text-muted">Amount</div>
-                      <div className="text-sm font-semibold">
-                        {selectedSummary.paymentDetails.amount !== undefined ? `₹${selectedSummary.paymentDetails.amount}` : '—'}
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="modal-edit-status">Payment Status</label>
+                        <select
+                          id="modal-edit-status"
+                          className="form-input form-select"
+                          value={modalEditStatus}
+                          onChange={(e) => setModalEditStatus(e.target.value as PaymentStatus | '')}
+                        >
+                          <option value="">No Payment</option>
+                          <option value="pending">Pending</option>
+                          <option value="partial">Partial</option>
+                          <option value="paid">Paid</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="modal-edit-amount">Amount (₹)</label>
+                        <input
+                          id="modal-edit-amount"
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          placeholder="e.g. 1000"
+                          value={modalEditAmount}
+                          onChange={(e) => setModalEditAmount(e.target.value)}
+                          disabled={!modalEditStatus}
+                        />
                       </div>
                     </div>
-                    <div>
-                      <div className="text-xs text-muted">Status</div>
-                      <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
-                        {selectedSummary.paymentDetails.status}
-                      </span>
+
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="modal-edit-txid">Transaction ID</label>
+                      <input
+                        id="modal-edit-txid"
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. TXN12345678"
+                        value={modalEditTransactionId}
+                        onChange={(e) => setModalEditTransactionId(e.target.value)}
+                        disabled={!modalEditStatus}
+                      />
                     </div>
-                    {selectedSummary.paymentDetails.transactionId && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="text-xs text-muted">Transaction ID</div>
-                        <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>
-                          {selectedSummary.paymentDetails.transactionId}
-                        </div>
-                      </div>
-                    )}
-                    {selectedSummary.paymentDetails.notes && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="text-xs text-muted">Payment Notes</div>
-                        <div className="text-sm text-secondary">
-                          {selectedSummary.paymentDetails.notes}
-                        </div>
-                      </div>
-                    )}
-                    {selectedSummary.paymentDetails.screenshotUrl && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Payment Screenshot</div>
+
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="modal-edit-paynotes">Payment Notes</label>
+                      <textarea
+                        id="modal-edit-paynotes"
+                        className="form-input"
+                        style={{ minHeight: 60, resize: 'vertical' }}
+                        placeholder="Add payment notes..."
+                        value={modalEditPaymentNotes}
+                        onChange={(e) => setModalEditPaymentNotes(e.target.value)}
+                        disabled={!modalEditStatus}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Edit Form Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setIsEditingInModal(false)}
+                    disabled={savingModalEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    onClick={handleSaveModalEdit}
+                    disabled={savingModalEdit || !modalEditSummaryText.trim()}
+                  >
+                    {savingModalEdit ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxHeight: '70vh', overflowY: 'auto', paddingRight: 'var(--space-2)' }}>
+                {/* Creator details */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                  <div className="avatar avatar-md">
+                    {selectedSummary.createdByName?.charAt(0) || 'A'}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">Added by {selectedSummary.createdByName || 'Unknown'}</div>
+                    <div className="text-xs text-muted">
+                      {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status badges */}
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                  {selectedSummary.paymentDetails?.status && (
+                    <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`}>
+                      <DollarSign size={11} />
+                      Payment: {selectedSummary.paymentDetails.status}
+                    </span>
+                  )}
+                  {selectedSummary.voiceUrl && <span className="badge badge-accent"><Mic size={11} /> Has Voice</span>}
+                  {selectedSummary.documents?.length > 0 && (
+                    <span className="badge badge-muted"><FileText size={11} /> {selectedSummary.documents.length} Document{selectedSummary.documents.length > 1 ? 's' : ''}</span>
+                  )}
+                </div>
+
+                {/* Summary text */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Call Notes
+                  </h3>
+                  <div style={{ 
+                    background: 'var(--color-bg-elevated)', 
+                    padding: 'var(--space-4)', 
+                    borderRadius: 'var(--radius-md)', 
+                    border: '1px solid var(--color-border)',
+                    fontSize: 'var(--font-size-sm)',
+                    lineHeight: 1.75,
+                    color: 'var(--color-text-secondary)',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {selectedSummary.summaryText}
+                  </div>
+                </div>
+
+                {/* Voice player */}
+                {selectedSummary.voiceUrl && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Voice Recording
+                    </h3>
+                    <audio controls src={selectedSummary.voiceUrl} style={{ width: '100%', accentColor: 'var(--color-accent)' }} />
+                  </div>
+                )}
+
+                {/* Documents */}
+                {selectedSummary.documents?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Attached Documents ({selectedSummary.documents.length})
+                    </h3>
+                    <div className="file-preview-list">
+                      {selectedSummary.documents.map((doc, i) => (
                         <a 
+                          key={i} 
                           href="#" 
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            downloadBase64File(selectedSummary.paymentDetails!.screenshotUrl!, 'screenshot.png');
+                            downloadBase64File(doc.url, doc.name);
                           }} 
-                          style={{ display: 'block', maxWidth: 200 }}
+                          className="file-preview-item" 
+                          style={{ textDecoration: 'none' }}
                         >
-                          <img 
-                            src={selectedSummary.paymentDetails.screenshotUrl} 
-                            alt="Screenshot" 
-                            style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
-                          />
+                          <div className="file-preview-icon"><FileText size={16} /></div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="text-sm font-medium truncate">{doc.name}</div>
+                            <div className="text-xs text-muted">{(doc.size / 1024).toFixed(1)} KB</div>
+                          </div>
+                          <ExternalLink size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                         </a>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {/* Payment Details */}
+                {selectedSummary.paymentDetails && (selectedSummary.paymentDetails.amount !== undefined || selectedSummary.paymentDetails.status || selectedSummary.paymentDetails.transactionId) && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 0 }}>
+                      Payment Information
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                      <div>
+                        <div className="text-xs text-muted">Amount</div>
+                        <div className="text-sm font-semibold">
+                          {selectedSummary.paymentDetails.amount !== undefined ? `₹${selectedSummary.paymentDetails.amount}` : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted">Status</div>
+                        <span className={`badge ${PAYMENT_BADGE[selectedSummary.paymentDetails.status] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
+                          {selectedSummary.paymentDetails.status}
+                        </span>
+                      </div>
+                      {selectedSummary.paymentDetails.transactionId && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div className="text-xs text-muted">Transaction ID</div>
+                          <div className="text-sm font-medium" style={{ fontFamily: 'monospace' }}>
+                            {selectedSummary.paymentDetails.transactionId}
+                          </div>
+                        </div>
+                      )}
+                      {selectedSummary.paymentDetails.notes && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div className="text-xs text-muted">Payment Notes</div>
+                          <div className="text-sm text-secondary">
+                            {selectedSummary.paymentDetails.notes}
+                          </div>
+                        </div>
+                      )}
+                      {selectedSummary.paymentDetails.screenshotUrl && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Payment Screenshot</div>
+                          <a 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              downloadBase64File(selectedSummary.paymentDetails!.screenshotUrl!, 'screenshot.png');
+                            }} 
+                            style={{ display: 'block', maxWidth: 200 }}
+                          >
+                            <img 
+                              src={selectedSummary.paymentDetails.screenshotUrl} 
+                              alt="Screenshot" 
+                              style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+                            />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
