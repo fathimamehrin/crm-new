@@ -387,7 +387,7 @@ const ClientDetailsPage: React.FC = () => {
                       {s.documents?.length > 0 && (
                         <div className="file-preview-list" style={{ marginTop: 'var(--space-3)' }} onClick={(e) => e.stopPropagation()}>
                           {s.documents.map((doc, i) => (
-                            <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
+                            <a key={i} href={doc.url} download={doc.name} className="file-preview-item" style={{ textDecoration: 'none' }}>
                               <div className="file-preview-icon"><FileText size={16} /></div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="text-sm font-medium truncate">{doc.name}</div>
@@ -450,7 +450,7 @@ const ClientDetailsPage: React.FC = () => {
                           {s.paymentDetails.screenshotUrl && (
                             <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
                               <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Screenshot</div>
-                              <a href={s.paymentDetails.screenshotUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', maxWidth: 120 }}>
+                              <a href={s.paymentDetails.screenshotUrl} download="screenshot.png" style={{ display: 'inline-block', maxWidth: 120 }}>
                                 <img 
                                   src={s.paymentDetails.screenshotUrl} 
                                   alt="Screenshot" 
@@ -551,7 +551,7 @@ const ClientDetailsPage: React.FC = () => {
                   </h3>
                   <div className="file-preview-list">
                     {selectedSummary.documents.map((doc, i) => (
-                      <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="file-preview-item" style={{ textDecoration: 'none' }}>
+                      <a key={i} href={doc.url} download={doc.name} className="file-preview-item" style={{ textDecoration: 'none' }}>
                         <div className="file-preview-icon"><FileText size={16} /></div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div className="text-sm font-medium truncate">{doc.name}</div>
@@ -602,7 +602,7 @@ const ClientDetailsPage: React.FC = () => {
                     {selectedSummary.paymentDetails.screenshotUrl && (
                       <div style={{ gridColumn: '1 / -1' }}>
                         <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Payment Screenshot</div>
-                        <a href={selectedSummary.paymentDetails.screenshotUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', maxWidth: 200 }}>
+                        <a href={selectedSummary.paymentDetails.screenshotUrl} download="screenshot.png" style={{ display: 'block', maxWidth: 200 }}>
                           <img 
                             src={selectedSummary.paymentDetails.screenshotUrl} 
                             alt="Screenshot" 
