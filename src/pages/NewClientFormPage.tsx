@@ -95,7 +95,7 @@ const NewClientFormPage: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', width: '100%', padding: '16px 24px', boxSizing: 'border-box' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)} aria-label="Go back">

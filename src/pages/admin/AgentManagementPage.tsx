@@ -133,11 +133,11 @@ const AgentManagementPage: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">Agent Management</h1>
+          <h1 className="page-title ">Agent Management</h1>
           <p className="page-subtitle">Manage your sales agents</p>
         </div>
         <button id="add-agent-btn" className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={18} /> Add Agent
+          <Plus size={18} /> <span className="desktop-only">Add Agent</span>
         </button>
       </div>
 

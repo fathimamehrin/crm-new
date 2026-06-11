@@ -79,20 +79,21 @@ const AgentDetailsPage: React.FC = () => {
   if (!agent) return null;
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', boxSizing: 'border-box' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
         <button className="btn btn-ghost btn-icon" onClick={() => navigate('/admin/agents')} aria-label="Back to Agents">
           <ArrowLeft size={20} />
         </button>
-        <div className="page-header" style={{ marginBottom: 0 }}>
+        <div className="page-header" style={{ marginBottom: 0 , marginTop:'10px' }}>
           <h1 className="page-title">Agent Profile</h1>
           <p className="page-subtitle">View agent details and assigned clients</p>
         </div>
       </div>
 
       {/* Agent Card */}
-      <div className="card" style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card" style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' , 
+      boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)'}}>
         <div className="avatar avatar-xl" style={{ fontSize: 'var(--font-size-3xl)', width: 72, height: 72 }}>
           {agent.name.charAt(0).toUpperCase()}
         </div>
@@ -124,7 +125,7 @@ const AgentDetailsPage: React.FC = () => {
       </div>
 
       {/* Client List Card */}
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card" style={{ padding: 0 , boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)'}}>
         {/* Toolbar */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
@@ -134,11 +135,11 @@ const AgentDetailsPage: React.FC = () => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1, minWidth: 200 }}>
             <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600 }}>Assigned Clients</h3>
-            <span className="badge badge-accent text-xs">{clients.length}</span>
+            <span className="badge badge-accent text-md">{clients.length}</span>
           </div>
 
           {/* Search */}
-          <div className="search-wrapper" style={{ width: 280 }}>
+          <div className="search-wrapper" style={{ flex: '1 1 300px', maxWidth: 380 }}>
             <Search className="search-icon" size={16} />
             <input
               id="client-search"

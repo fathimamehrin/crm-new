@@ -105,7 +105,7 @@ const DashboardPage: React.FC = () => {
           onClick={() => setShowAddModal(true)}
         >
           <Plus size={18} />
-          Add Client
+          <span className="desktop-only">Add Client</span>
         </button>
       </div>
 

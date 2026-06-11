@@ -102,7 +102,7 @@ const AdminManagementPage: React.FC = () => {
           <p className="page-subtitle">Manage system administrators</p>
         </div>
         <button id="add-admin-btn" className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={18} /> Add Admin
+          <Plus size={18} /> <span className="desktop-only">Add Admin</span>
         </button>
       </div>
 

@@ -1,13 +1,21 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserCog, Activity, ChevronLeft,
-  ChevronRight, LogOut, Shield, UserCheck,
+  LayoutDashboard, Users, UserCog, Activity, Menu,
+  LogOut, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ collapsed, onToggle }) => {
-  const { userRole, logout, userProfile } = useAuth();
+
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCloseMobile }) => {
+  const { userRole, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -22,69 +30,70 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ colla
       to={to}
       className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
       title={collapsed ? label : undefined}
+      onClick={onCloseMobile}
     >
-      <Icon className="link-icon" size={18} />
+      <Icon className="link-icon" size={20} />
       {!collapsed && <span>{label}</span>}
     </NavLink>
   );
 
   return (
-    <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Shield size={18} />
+    <>
+      {/* Mobile Sidebar Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="admin-sidebar-overlay"
+          style={{ display: 'block', zIndex: 140 }}
+          onClick={onCloseMobile}
+        />
+      )}
+
+      <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+
+        {/* Toggle button at top */}
+        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px ' }}>
+          <button className="sidebar-toggle" onClick={() => mobileOpen ? onCloseMobile() : onToggle()} aria-label="Toggle sidebar">
+            <Menu size={20} />
+          </button>
+          {!collapsed && (
+            <span style={{
+              fontWeight: 600,
+              color: '#ffffff',
+              whiteSpace: 'nowrap',
+              fontSize: '1rem',
+              opacity: 0.9
+            }}>
+              Admin Control
+            </span>
+          )}
         </div>
-        {!collapsed && <span className="sidebar-logo-text">VN CRM</span>}
-      </div>
 
-      {/* Toggle button */}
-      <button className="sidebar-toggle" onClick={onToggle} aria-label="Toggle sidebar">
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
+        {/* Nav */}
+        <nav className="sidebar-nav">
 
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        {!collapsed && <span className="sidebar-section-label">Main</span>}
-        <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-        <NavItem to="/clients" icon={Users} label="Clients" />
 
-        {userRole === 'admin' && (
-          <>
-            {!collapsed && <span className="sidebar-section-label" style={{ marginTop: 'var(--space-3)' }}>Admin</span>}
-            <NavItem to="/admin/agents" icon={UserCheck} label="Agents" />
-            <NavItem to="/admin/admins" icon={UserCog} label="Admins" />
-            <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" />
-          </>
-        )}
-      </nav>
+          {userRole === 'admin' && (
+            <>
+              <NavItem to="/admin/agents" icon={UserCheck} label="Agents" />
+              <NavItem to="/admin/admins" icon={UserCog} label="Admins" />
+              <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" />
+            </>
+          )}
+        </nav>
 
-      {/* Footer */}
-      <div className="sidebar-footer">
-        {!collapsed && userProfile && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-            padding: 'var(--space-3)', marginBottom: 'var(--space-2)',
-          }}>
-            <div className="avatar avatar-sm">
-              {userProfile.name.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ overflow: 'hidden' }}>
-              <div className="text-sm font-semibold truncate">{userProfile.name}</div>
-              <div className="text-xs text-muted truncate">{userProfile.role}</div>
-            </div>
-          </div>
-        )}
-        <button
-          className="sidebar-link"
-          onClick={handleLogout}
-          title={collapsed ? 'Logout' : undefined}
-        >
-          <LogOut className="link-icon" size={18} />
-          {!collapsed && <span>Logout</span>}
-        </button>
-      </div>
-    </aside>
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-link"
+            onClick={handleLogout}
+            title={collapsed ? 'Logout' : undefined}
+          >
+            <LogOut className="link-icon" size={20} />
+            {!collapsed && <span>Logout</span>}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
 

@@ -256,7 +256,7 @@ const ClientDetailsPage: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div className="page-container" style={{ maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       {/* Back */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -272,7 +272,7 @@ const ClientDetailsPage: React.FC = () => {
           style={{ minHeight: 38 }}
         >
           <Plus size={18} />
-          Add Summary
+          <span className="desktop-only">Add Summary</span>
         </button>
       </div>
 

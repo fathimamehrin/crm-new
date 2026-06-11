@@ -3,24 +3,24 @@ import { getActivityLogs, getUsers } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
 import type { ActivityLog, User } from '../../types';
 import { format } from 'date-fns';
-import { Activity, Search } from 'lucide-react';
+import { Activity, Search, Calendar, X } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 
 const ACTION_LABELS: Record<string, { label: string; badge: string }> = {
-  client_created:  { label: 'Client Created',    badge: 'badge-success' },
-  client_updated:  { label: 'Client Updated',    badge: 'badge-info'    },
-  client_assigned: { label: 'Client Assigned',   badge: 'badge-accent'  },
-  summary_added:   { label: 'Summary Added',     badge: 'badge-success' },
-  payment_updated: { label: 'Payment Updated',   badge: 'badge-warning' },
-  agent_created:   { label: 'Agent Created',     badge: 'badge-success' },
-  agent_updated:   { label: 'Agent Updated',     badge: 'badge-info'    },
-  agent_enabled:   { label: 'Agent Enabled',     badge: 'badge-success' },
-  agent_disabled:  { label: 'Agent Disabled',    badge: 'badge-danger'  },
-  admin_created:   { label: 'Admin Created',     badge: 'badge-accent'  },
-  admin_enabled:   { label: 'Admin Enabled',     badge: 'badge-success' },
-  admin_disabled:  { label: 'Admin Disabled',    badge: 'badge-danger'  },
-  user_login:      { label: 'User Login',        badge: 'badge-muted'   },
-  user_logout:     { label: 'User Logout',       badge: 'badge-muted'   },
+  client_created: { label: 'Client Created', badge: 'badge-success' },
+  client_updated: { label: 'Client Updated', badge: 'badge-info' },
+  client_assigned: { label: 'Client Assigned', badge: 'badge-accent' },
+  summary_added: { label: 'Summary Added', badge: 'badge-success' },
+  payment_updated: { label: 'Payment Updated', badge: 'badge-warning' },
+  agent_created: { label: 'Agent Created', badge: 'badge-success' },
+  agent_updated: { label: 'Agent Updated', badge: 'badge-info' },
+  agent_enabled: { label: 'Agent Enabled', badge: 'badge-success' },
+  agent_disabled: { label: 'Agent Disabled', badge: 'badge-danger' },
+  admin_created: { label: 'Admin Created', badge: 'badge-accent' },
+  admin_enabled: { label: 'Admin Enabled', badge: 'badge-success' },
+  admin_disabled: { label: 'Admin Disabled', badge: 'badge-danger' },
+  user_login: { label: 'User Login', badge: 'badge-muted' },
+  user_logout: { label: 'User Logout', badge: 'badge-muted' },
 };
 
 const ActivityLogPage: React.FC = () => {
@@ -32,6 +32,7 @@ const ActivityLogPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const PAGE_SIZE = 30;
 
   const loadLogs = async () => {
@@ -47,7 +48,7 @@ const ActivityLogPage: React.FC = () => {
   };
 
   useEffect(() => { loadLogs(); }, [agentFilter]);
-  useEffect(() => { getUsers('agent').then(setAgents).catch(() => {}); }, []);
+  useEffect(() => { getUsers('agent').then(setAgents).catch(() => { }); }, []);
 
   const filtered = logs.filter((log) => {
     const q = search.toLowerCase();
@@ -72,49 +73,72 @@ const ActivityLogPage: React.FC = () => {
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-4) var(--space-5)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-wrapper" style={{ flex: 1, minWidth: 200 }}>
-            <Search className="search-icon" size={16} />
-            <input
-              id="activity-search"
-              type="search"
-              className="form-input"
-              placeholder="Search by user, entity, action…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
-          </div>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'nowrap', alignItems: 'center', overflowX: 'auto', paddingBottom: '4px' }}>
+          
+          {isSearchExpanded ? (
+            <div className="search-wrapper" style={{ flex: '1 1 auto', minWidth: 200, display: 'flex', alignItems: 'center', position: 'relative' }}>
+              <Search className="search-icon" size={16} />
+              <input
+                id="activity-search"
+                type="search"
+                className="form-input"
+                placeholder="Search by user, entity, action…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                autoFocus
+                style={{ paddingRight: 32, width: '100%' }}
+              />
+              <button 
+                className="btn btn-ghost btn-icon" 
+                style={{ position: 'absolute', right: 8, height: 24, width: 24, minHeight: 0, padding: 0 }} 
+                onClick={() => { setIsSearchExpanded(false); setSearch(''); setPage(1); }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-ghost btn-icon" onClick={() => setIsSearchExpanded(true)} aria-label="Search" style={{ flexShrink: 0 }}>
+              <Search size={18} />
+            </button>
+          )}
 
           <select
             id="activity-agent-filter"
             className="form-input form-select"
-            style={{ width: 180 }}
+            style={{ width: 'auto', flexShrink: 0 }}
             value={agentFilter}
             onChange={(e) => { setAgentFilter(e.target.value); setPage(1); }}
           >
-            <option value="">All Users</option>
+            <option value="">All</option>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
 
-          <input
-            id="activity-date-from"
-            type="date"
-            className="form-input"
-            style={{ width: 160 }}
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-          />
-          <input
-            id="activity-date-to"
-            type="date"
-            className="form-input"
-            style={{ width: 160 }}
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-          />
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Calendar size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', pointerEvents: 'none' }} />
+            <input
+              id="activity-date-from"
+              type="date"
+              className="form-input mobile-icon-date"
+              style={{ paddingLeft: 30 }}
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            />
+          </div>
 
-          <span className="text-sm text-muted">
-            {filtered.length} record{filtered.length !== 1 ? 's' : ''}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Calendar size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', pointerEvents: 'none' }} />
+            <input
+              id="activity-date-to"
+              type="date"
+              className="form-input mobile-icon-date"
+              style={{ paddingLeft: 30 }}
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            />
+          </div>
+
+          <span className="text-sm text-muted mobile-record-badge" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {filtered.length} <span className="desktop-only">record{filtered.length !== 1 ? 's' : ''}</span>
           </span>
         </div>
       </div>

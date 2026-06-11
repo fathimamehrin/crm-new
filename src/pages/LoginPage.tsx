@@ -44,60 +44,68 @@ const LoginPage: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh',
+      width: '100%',
       display: 'flex',
-      background: 'var(--color-bg-primary)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--color-bg-secondary)',
       position: 'relative',
       overflow: 'hidden',
+      padding: 'var(--space-4)',
     }}>
       {/* Background gradient orbs */}
       <div style={{
-        position: 'absolute', top: '-20%', left: '-10%',
+        position: 'absolute', top: '-10%', left: '-10%',
+        width: 600, height: 600,
+        background: 'radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-10%', right: '-10%',
         width: 600, height: 600,
         background: 'radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
-      <div style={{
-        position: 'absolute', bottom: '-20%', right: '-10%',
-        width: 500, height: 500,
-        background: 'radial-gradient(circle, rgba(29,78,216,0.05) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
 
-      {/* Left Panel */}
+      {/* Login Card */}
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(29,78,216,0.01))',
-        padding: 'var(--space-12)',
-      }} className="login-left-panel">
-        <div style={{ maxWidth: 420, width: '100%' }}>
+        maxWidth: 460,
+        width: '100%',
+        background: 'var(--color-bg-card)',
+        borderRadius: 'var(--radius-xl)',
+        padding: 'var(--space-8) var(--space-6)',
+        boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.05), 0 10px 10px -5px rgba(15, 23, 42, 0.02), 0 0 0 1px var(--color-border)',
+        zIndex: 1,
+        position: 'relative',
+      }} className="login-card-container">
+        <div>
           {/* Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-10)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>
             <div style={{
-              width: 48, height: 48,
+              width: 44, height: 44,
               background: 'linear-gradient(135deg, var(--color-accent), #1d4ed8)',
               borderRadius: 'var(--radius-md)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: 'var(--shadow-accent)',
             }}>
-              <Shield size={24} color="#fff" />
+              <Shield size={22} color="#fff" />
             </div>
             <div>
-              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>VN CRM</div>
+              <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, letterSpacing: '-0.02em' }}>VN CRM</div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
                 Client Relationship Manager
               </div>
             </div>
           </div>
 
-          <h1 style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, marginBottom: 'var(--space-2)' }}>
+          <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, marginBottom: 'var(--space-2)', textAlign: 'center' }}>
             Welcome back
           </h1>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-8)' }}>
+          <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)', textAlign: 'center', fontSize: 'var(--font-size-sm)' }}>
             Sign in to your account to continue
           </p>
 
-          <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* Email */}
             <div className="form-group">
               <label className="form-label required" htmlFor="login-email">Email Address</label>
@@ -159,7 +167,7 @@ const LoginPage: React.FC = () => {
           </form>
 
           <p style={{
-            marginTop: 'var(--space-8)',
+            marginTop: 'var(--space-6)',
             fontSize: 'var(--font-size-xs)',
             color: 'var(--color-text-muted)',
             textAlign: 'center',
