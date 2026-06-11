@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserCog, Activity, Menu,
+  UserCog, Activity, Menu,
   LogOut, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCl
 
         {/* Toggle button at top */}
         <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px ' }}>
-          <button className="sidebar-toggle" onClick={() => mobileOpen ? onCloseMobile() : onToggle()} aria-label="Toggle sidebar">
+          <button className="sidebar-toggle" onClick={() => mobileOpen ? onCloseMobile?.() : onToggle()} aria-label="Toggle sidebar">
             <Menu size={20} />
           </button>
           {!collapsed && (

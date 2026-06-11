@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import SessionWarningModal from '../SessionWarningModal';
@@ -10,8 +10,7 @@ const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSessionWarning, setShowSessionWarning] = useState(false);
-  const { logout, currentUser, userProfile } = useAuth();
-  const location = useLocation();
+  const { logout, currentUser, userProfile, userRole } = useAuth();
 
   const { reset } = useInactivity({
     warningMs: 9 * 60 * 1000,
@@ -35,13 +34,15 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="app-layout">
-      <Sidebar
-        collapsed={collapsed && !mobileOpen}
-        onToggle={() => setCollapsed(!collapsed)}
-        mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
-      />
-      <main className={`app-main ${collapsed && !mobileOpen ? 'sidebar-collapsed' : ''}`}>
+      {userRole === 'admin' && (
+        <Sidebar
+          collapsed={collapsed && !mobileOpen}
+          onToggle={() => setCollapsed(!collapsed)}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+      )}
+      <main className={`app-main ${userRole === 'admin' && collapsed && !mobileOpen ? 'sidebar-collapsed' : ''}`}>
         <Header
           onMenuClick={() => setMobileOpen(!mobileOpen)}
         />

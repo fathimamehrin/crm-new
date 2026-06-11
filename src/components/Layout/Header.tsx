@@ -46,10 +46,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
   return (
     <header className={`app-header ${isScrolled ? 'scrolled' : ''}`}>
       {/* Mobile menu toggle */}
-      <button className="btn btn-ghost btn-icon mobile-only-flex" onClick={onMenuClick}
-        id="mobile-menu-btn" style={{ color: 'var(--color-accent)' }}>
-        <Menu size={24} />
-      </button>
+      {userRole === 'admin' && (
+        <button className="btn btn-ghost btn-icon mobile-only-flex" onClick={onMenuClick}
+          id="mobile-menu-btn" style={{ color: 'var(--color-accent)' }}>
+          <Menu size={24} />
+        </button>
+      )}
 
       {/* Logo */}
       <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
