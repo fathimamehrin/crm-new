@@ -80,22 +80,7 @@ const LoginPage: React.FC = () => {
       }} className="login-card-container">
         <div>
           {/* Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>
-            <div style={{
-              width: 44, height: 44,
-              background: 'linear-gradient(135deg, var(--color-accent), #1d4ed8)',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: 'var(--shadow-accent)',
-            }}>
-              <Shield size={22} color="#fff" />
-            </div>
-            <div>
-              <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, letterSpacing: '-0.02em' }}>VN CRM</div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                Client Relationship Manager
-              </div>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>  
           </div>
 
           <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, marginBottom: 'var(--space-2)', textAlign: 'center' }}>
