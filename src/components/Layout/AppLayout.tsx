@@ -7,10 +7,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useInactivity } from '../../hooks/useInactivity';
 
 const AppLayout: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSessionWarning, setShowSessionWarning] = useState(false);
   const { logout, currentUser, userProfile, userRole } = useAuth();
+
+  const handleMenuClick = () => {
+    setSidebarOpen((prev) => !prev);
+  };
 
   const { reset } = useInactivity({
     warningMs: 9 * 60 * 1000,
@@ -36,15 +40,14 @@ const AppLayout: React.FC = () => {
     <div className="app-layout">
       {userRole === 'admin' && (
         <Sidebar
-          collapsed={collapsed && !mobileOpen}
-          onToggle={() => setCollapsed(!collapsed)}
+          collapsed={!sidebarOpen && !mobileOpen}
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}
         />
       )}
-      <main className={`app-main ${userRole === 'admin' && collapsed && !mobileOpen ? 'sidebar-collapsed' : ''}`}>
+      <main className={`app-main ${userRole === 'admin' && !sidebarOpen && !mobileOpen ? 'sidebar-collapsed' : ''}`}>
         <Header
-          onMenuClick={() => setMobileOpen(!mobileOpen)}
+          onMenuClick={handleMenuClick}
         />
         <div className="app-content">
           {currentUser && !userProfile && (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  UserCog, Activity, Menu,
+  UserCog, Activity,
   LogOut, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,12 +9,15 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   collapsed: boolean;
-  onToggle: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCloseMobile }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  collapsed,
+  mobileOpen,
+  onCloseMobile,
+}) => {
   const { userRole, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -33,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCl
       onClick={onCloseMobile}
     >
       <Icon className="link-icon" size={20} />
-      {!collapsed && <span>{label}</span>}
+      <span className="link-text">{label}</span>
     </NavLink>
   );
 
@@ -48,15 +51,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCl
         />
       )}
 
-      <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-
-        {/* Toggle button at top */}
-        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px ' }}>
-          <button className="sidebar-toggle" onClick={() => mobileOpen ? onCloseMobile?.() : onToggle()} aria-label="Toggle sidebar">
-            <Menu size={20} />
-          </button>
-          {!collapsed && (
-            <span style={{
+      <aside
+        className={`app-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
+      >
+        <div className="sidebar-inner">
+          {/* Title at top */}
+          <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px ' }}>
+            <span className="sidebar-title" style={{
               fontWeight: 600,
               color: '#ffffff',
               whiteSpace: 'nowrap',
@@ -65,32 +66,32 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onCl
             }}>
               Admin Control
             </span>
-          )}
-        </div>
+          </div>
 
-        {/* Nav */}
-        <nav className="sidebar-nav">
+          {/* Nav */}
+          <nav className="sidebar-nav">
 
 
-          {userRole === 'admin' && (
-            <>
-              <NavItem to="/admin/agents" icon={UserCheck} label="Agents" />
-              <NavItem to="/admin/admins" icon={UserCog} label="Admins" />
-              <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" />
-            </>
-          )}
-        </nav>
+            {userRole === 'admin' && (
+              <>
+                <NavItem to="/admin/agents" icon={UserCheck} label="Agents" />
+                <NavItem to="/admin/admins" icon={UserCog} label="Admins" />
+                <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" />
+              </>
+            )}
+          </nav>
 
-        {/* Footer */}
-        <div className="sidebar-footer">
-          <button
-            className="sidebar-link"
-            onClick={handleLogout}
-            title={collapsed ? 'Logout' : undefined}
-          >
-            <LogOut className="link-icon" size={20} />
-            {!collapsed && <span>Logout</span>}
-          </button>
+          {/* Footer */}
+          <div className="sidebar-footer">
+            <button
+              className="sidebar-link"
+              onClick={handleLogout}
+              title={collapsed ? 'Logout' : undefined}
+            >
+              <LogOut className="link-icon" size={20} />
+              <span className="link-text">Logout</span>
+            </button>
+          </div>
         </div>
       </aside>
     </>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
@@ -32,6 +32,7 @@ const editSchema = z.object({
 type EditData = z.infer<typeof editSchema>;
 
 const AgentManagementPage: React.FC = () => {
+  const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const [agents, setAgents] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,7 +168,16 @@ const AgentManagementPage: React.FC = () => {
               </thead>
               <tbody>
                 {agents.map((agent) => (
-                  <tr key={agent.id}>
+                  <tr 
+                    key={agent.id}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input')) {
+                        navigate(`/admin/agents/${agent.id}`);
+                      }
+                    }}
+                    style={{ cursor: editingId === agent.id ? 'default' : 'pointer' }}
+                  >
                     <td data-label="Agent">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>

@@ -152,8 +152,8 @@ const AgentDetailsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Client Table */}
-        <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
+        {/* Client Table - Desktop Only */}
+        <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
           {filteredClients.length === 0 ? (
             <div className="empty-state" style={{ padding: 'var(--space-10)' }}>
               <div className="empty-state-icon"><UserCheck size={28} /></div>
@@ -244,6 +244,94 @@ const AgentDetailsPage: React.FC = () => {
             </table>
           )}
         </div>
+
+        {/* Client Cards - Mobile Only */}
+        {filteredClients.length === 0 ? (
+          <div className="empty-state mobile-only" style={{ padding: 'var(--space-10)' }}>
+            <div className="empty-state-icon"><UserCheck size={28} /></div>
+            <h3 className="empty-state-title">No Clients Found</h3>
+            <p className="empty-state-desc">No clients match your search criteria or are assigned to this agent.</p>
+          </div>
+        ) : (
+          <div className="mobile-client-list mobile-only-flex" style={{ flexDirection: 'column', gap: '12px', padding: '16px', width: '100%', boxSizing: 'border-box' }}>
+            {filteredClients.map((client) => (
+              <div
+                key={client.id}
+                className="client-card"
+                onClick={() => navigate(`/admin/clients/${client.id}`)}
+                style={{
+                  background: 'var(--color-bg-card)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  boxShadow: 'var(--shadow-sm)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                }}
+              >
+                {/* Header: Avatar, Name, Email, Status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div className="avatar avatar-md" style={{ width: 44, height: 44, flexShrink: 0 }}>
+                    {client.profileImage ? (
+                      <img src={client.profileImage} alt={client.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ) : (
+                      client.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--font-size-base)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {client.name}
+                    </div>
+                    {client.email && (
+                      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                        {client.email}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize' }}>
+                    {client.status}
+                  </span>
+                </div>
+
+                {/* Info Row: Date and WhatsApp Action */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: '12px', marginTop: '4px' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                    <div style={{ fontWeight: 500 }}>Created</div>
+                    <div style={{ marginTop: '2px' }}>{format(client.createdAt, 'dd MMM yyyy')} • {format(client.createdAt, 'hh:mm a')}</div>
+                  </div>
+
+                  <a
+                    href={`https://wa.me/${client.whatsappNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm"
+                    style={{
+                      background: 'var(--color-success-light)',
+                      color: 'var(--color-success)',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      fontSize: 'var(--font-size-xs)',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageCircle size={14} />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

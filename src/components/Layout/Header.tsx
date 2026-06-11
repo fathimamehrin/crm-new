@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, Menu, LogOut, Settings } from 'lucide-react';
+import { Bell, LogOut, Settings, Menu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationPanel from '../NotificationPanel';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -45,11 +45,15 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
 
   return (
     <header className={`app-header ${isScrolled ? 'scrolled' : ''}`}>
-      {/* Mobile menu toggle */}
+      {/* Menu Toggle Button for Desktop */}
       {userRole === 'admin' && (
-        <button className="btn btn-ghost btn-icon mobile-only-flex" onClick={onMenuClick}
-          id="mobile-menu-btn" style={{ color: 'var(--color-accent)' }}>
-          <Menu size={24} />
+        <button
+          className="btn btn-ghost btn-icon menu-toggle-btn desktop-only"
+          onClick={onMenuClick}
+          style={{ marginRight: '8px' }}
+          aria-label="Toggle Sidebar"
+        >
+          <Menu size={20} />
         </button>
       )}
 

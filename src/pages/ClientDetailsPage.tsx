@@ -6,10 +6,10 @@ import {
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, getUsers, updateClient, updateSummary } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, User as UserType, PaymentStatus } from '../types';
+import type { Client, Summary, PaymentStatus } from '../types';
 import toast from 'react-hot-toast';
 
 const PAYMENT_BADGE: Record<string, string> = {
@@ -28,10 +28,7 @@ const ClientDetailsPage: React.FC = () => {
 
   const [client, setClient] = useState<Client | null>(null);
   const [summaries, setSummaries] = useState<Summary[]>([]);
-  const [agents, setAgents] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reassigning, setReassigning] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState('');
 
   const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
   const [editSummaryText, setEditSummaryText] = useState('');
@@ -157,15 +154,12 @@ const ClientDetailsPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const [c, s, a] = await Promise.all([
+        const [c, s] = await Promise.all([
           getClientById(id),
           getSummariesByClient(id),
-          getUsers('agent'),
         ]);
         setClient(c);
         setSummaries(s);
-        setAgents(a);
-        setSelectedAgent(c?.assignedAgent || '');
       } catch {
         toast.error('Failed to load client');
       } finally {
@@ -174,30 +168,6 @@ const ClientDetailsPage: React.FC = () => {
     };
     load();
   }, [id]);
-
-  const handleReassign = async () => {
-    if (!id || !client) return;
-    const agent = agents.find((a) => a.id === selectedAgent);
-    try {
-      await updateClient(id, {
-        assignedAgent: selectedAgent,
-        assignedAgentName: agent?.name || '',
-      });
-      await logActivity({
-        userId: currentUser!.uid,
-        userName: userProfile?.name,
-        action: 'client_assigned',
-        entityType: 'client',
-        entityId: id,
-        entityName: client.name,
-      });
-      setClient((c) => c ? { ...c, assignedAgent: selectedAgent, assignedAgentName: agent?.name } : c);
-      setReassigning(false);
-      toast.success('Agent reassigned');
-    } catch {
-      toast.error('Failed to reassign agent');
-    }
-  };
 
   const downloadBase64File = (dataUrl: string, fileName: string) => {
     try {
@@ -278,194 +248,123 @@ const ClientDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Instagram Profile Header */}
-      <div className="ig-profile-header">
-        <div className="ig-avatar-col">
-          <div className="ig-profile-avatar-outer">
-            <div className="ig-profile-avatar-inner">
+      {/* Client Profile Header Card */}
+      <div className="client-profile-card">
+        <div className="client-header-row">
+          <div className="client-header-info">
+            <div className="client-avatar">
               {client.profileImage ? (
                 <img src={client.profileImage} alt={client.name} />
               ) : (
                 client.name.charAt(0).toUpperCase()
               )}
             </div>
+            <div className="client-name-status">
+              <h2 className="client-title">{client.name}</h2>
+            </div>
+          </div>
+          <div className="client-actions">
+            <button
+              id="add-summary-btn"
+              className="btn btn-primary"
+              onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+            >
+              <Plus size={16} />
+              <span>Add Summary</span>
+            </button>
           </div>
         </div>
 
-        <div className="ig-info-col">
-          <div className="ig-username-row">
-            <h2 className="ig-username">{client.name}</h2>
-            <span className={`badge ${client.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
-              {client.status}
-            </span>
-            <div className="ig-action-buttons">
-              <button
-                id="add-summary-btn"
-                className="btn-ig-primary"
-                onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}
-              >
-                <Plus size={16} />
-                <span>Add Summary</span>
-              </button>
-              {userRole === 'admin' && (
-                <button 
-                  className="btn-ig-secondary" 
-                  onClick={() => setReassigning((v) => !v)}
-                >
-                  <Edit3 size={14} />
-                  <span>{reassigning ? 'Cancel' : 'Assign Agent'}</span>
-                </button>
-              )}
-            </div>
+        {/* Metadata Grid */}
+        <div className="client-meta-grid">
+          <div className="client-meta-item">
+            <MessageCircle size={16} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
+            <a 
+              href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              {client.whatsappNumber}
+            </a>
+            <button 
+              onClick={handleCopyWhatsApp}
+              className="btn btn-ghost"
+              style={{ padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', border: 'none', background: 'none', minHeight: 'auto', width: 'auto' }}
+              title="Copy WhatsApp Number"
+            >
+              {copied ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
+            </button>
           </div>
 
-          {/* Stats Row - Desktop */}
-          <ul className="ig-stats-row desktop-only">
-            <li className="ig-stat-item">
-              <span className="ig-stat-count">{summaries.length}</span> summaries
-            </li>
-            <li className="ig-stat-item">
-              <span className="ig-stat-count">
-                {summaries.filter((s) => s.paymentDetails?.status).length}
-              </span> payments
-            </li>
-            <li className="ig-stat-item">
-              <span className="ig-stat-count">
-                {allDocuments.length}
-              </span> documents
-            </li>
-          </ul>
-
-          {/* Bio Info */}
-          <div className="ig-bio">
-            <span className="ig-bio-name">{client.name}</span>
-            <div className="ig-bio-meta-list">
-              <div className="ig-bio-meta-item">
-                <MessageCircle size={14} style={{ color: 'var(--color-success)' }} />
-                <a 
-                  href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                >
-                  {client.whatsappNumber}
-                </a>
-                <button 
-                  onClick={handleCopyWhatsApp}
-                  className="btn btn-ghost"
-                  style={{ padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', border: 'none', background: 'none', minHeight: 'auto', width: 'auto' }}
-                  title="Copy WhatsApp Number"
-                >
-                  {copied ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
-                </button>
-              </div>
-
-              {client.email && (
-                <div className="ig-bio-meta-item">
-                  <Mail size={14} />
-                  <span>{client.email}</span>
-                </div>
-              )}
-
-              {client.alternateContact && (
-                <div className="ig-bio-meta-item">
-                  <Phone size={14} />
-                  <span>{client.alternateContact}</span>
-                </div>
-              )}
-
-              {client.address && (
-                <div className="ig-bio-meta-item">
-                  <MapPin size={14} />
-                  <span>{client.address}</span>
-                </div>
-              )}
-
-              <div className="ig-bio-meta-item">
-                <Calendar size={14} />
-                <span>Joined {format(client.createdAt, 'dd MMM yyyy')}</span>
-              </div>
-
-              {/* Reassignment block inline inside bio on active */}
-              {reassigning ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: '8px', maxWidth: 300 }}>
-                  <select
-                    className="form-input form-select"
-                    value={selectedAgent}
-                    onChange={(e) => setSelectedAgent(e.target.value)}
-                    id="reassign-agent-select"
-                  >
-                    <option value="">Unassigned</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                  <button className="btn btn-primary btn-sm" onClick={handleReassign}>
-                    Save Assignment
-                  </button>
-                </div>
-              ) : (
-                <div className="ig-bio-meta-item">
-                  <UserCheck size={14} />
-                  <span>
-                    Assigned Agent: <strong>{client.assignedAgentName || client.assignedAgent || 'Not Assigned'}</strong>
-                  </span>
-                </div>
-              )}
+          {client.email && (
+            <div className="client-meta-item">
+              <Mail size={16} style={{ flexShrink: 0 }} />
+              <span className="truncate" title={client.email}>{client.email}</span>
             </div>
+          )}
 
-            {client.notes && (
-              <div className="ig-bio-description">
-                {client.notes}
-              </div>
-            )}
+          {client.alternateContact && (
+            <div className="client-meta-item">
+              <Phone size={16} style={{ flexShrink: 0 }} />
+              <span>{client.alternateContact}</span>
+            </div>
+          )}
+
+          {client.address && (
+            <div className="client-meta-item">
+              <MapPin size={16} style={{ flexShrink: 0 }} />
+              <span className="truncate" title={client.address}>{client.address}</span>
+            </div>
+          )}
+
+          <div className="client-meta-item">
+            <Calendar size={16} style={{ flexShrink: 0 }} />
+            <span>Joined {format(client.createdAt, 'dd MMM yyyy')}</span>
+          </div>
+
+          <div className="client-meta-item">
+            <UserCheck size={16} style={{ flexShrink: 0 }} />
+            <span className="truncate">
+              Agent: <strong>{client.assignedAgentName || client.assignedAgent || 'Not Assigned'}</strong>
+            </span>
           </div>
         </div>
+
+        {client.notes && (
+          <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: '16px' }}>
+            <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>
+              Notes / Bio
+            </span>
+            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {client.notes}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Stats Row - Mobile Only */}
-      <div className="mobile-only">
-        <ul className="ig-stats-row">
-          <li className="ig-stat-item">
-            <span className="ig-stat-count">{summaries.length}</span>
-            <span>summaries</span>
-          </li>
-          <li className="ig-stat-item">
-            <span className="ig-stat-count">
-              {summaries.filter((s) => s.paymentDetails?.status).length}
-            </span>
-            <span>payments</span>
-          </li>
-          <li className="ig-stat-item">
-            <span className="ig-stat-count">
-              {allDocuments.length}
-            </span>
-            <span>documents</span>
-          </li>
-        </ul>
-      </div>
-
-      {/* Instagram Tabs Navigation */}
-      <nav className="ig-tabs-nav">
+      {/* SaaS CRM Tabs Navigation */}
+      <nav className="client-tabs-nav">
         <button 
-          className={`ig-tab-btn ${activeTab === 'summaries' ? 'active' : ''}`}
+          className={`client-tab-btn ${activeTab === 'summaries' ? 'active' : ''}`}
           onClick={() => setActiveTab('summaries')}
         >
           <Grid size={16} />
-          <span>Summaries</span>
+          <span>Summaries ({summaries.length})</span>
         </button>
         <button 
-          className={`ig-tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
+          className={`client-tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
           onClick={() => setActiveTab('payments')}
         >
           <DollarSign size={16} />
-          <span>Payments</span>
+          <span>Payments ({summaries.filter((s) => s.paymentDetails?.status).length})</span>
         </button>
         <button 
-          className={`ig-tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          className={`client-tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => setActiveTab('documents')}
         >
           <FileText size={16} />
-          <span>Documents</span>
+          <span>Documents ({allDocuments.length})</span>
         </button>
       </nav>
 
@@ -473,16 +372,16 @@ const ClientDetailsPage: React.FC = () => {
       {activeTab === 'summaries' && (
         <>
           {summaries.length > 0 && (
-            <div className="ig-view-toggle">
+            <div className="client-view-toggle">
               <button 
-                className={`ig-view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                className={`client-view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
               >
                 <Grid size={20} />
               </button>
               <button 
-                className={`ig-view-toggle-btn ${viewMode === 'feed' ? 'active' : ''}`}
+                className={`client-view-toggle-btn ${viewMode === 'feed' ? 'active' : ''}`}
                 onClick={() => setViewMode('feed')}
                 title="Feed View"
               >
@@ -501,7 +400,7 @@ const ClientDetailsPage: React.FC = () => {
               </button>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="ig-grid-container">
+            <div className="client-log-grid">
               {summaries.map((s) => {
                 const hasPayment = !!s.paymentDetails?.status;
                 const hasVoice = !!s.voiceUrl;
@@ -509,35 +408,35 @@ const ClientDetailsPage: React.FC = () => {
                 return (
                   <div 
                     key={s.id} 
-                    className="ig-post-tile"
+                    className="client-log-card"
                     onClick={() => {
                       if (editingSummaryId !== s.id) {
                         setSelectedSummary(s);
                       }
                     }}
                   >
-                    <div className="ig-post-tile-header">
-                      <span>{s.createdByName || 'Agent'}</span>
-                      <span>{format(s.createdAt, 'dd MMM')}</span>
+                    <div className="client-log-header">
+                      <span className="client-log-author">{s.createdByName || 'Agent'}</span>
+                      <span className="client-log-date">{format(s.createdAt, 'dd MMM yyyy')}</span>
                     </div>
-                    <div className="ig-post-tile-body">
+                    <div className="client-log-body">
                       {s.summaryText}
                     </div>
-                    <div className="ig-post-tile-footer">
-                      <div className="ig-tile-badge-group">
+                    <div className="client-log-footer">
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                         {hasPayment && (
-                          <span className="ig-tile-badge" title={`Payment: ₹${s.paymentDetails?.amount}`}>
-                            <DollarSign size={10} />
+                          <span className="badge badge-success" style={{ padding: '2px 6px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`Payment: ₹${s.paymentDetails?.amount}`}>
+                            <DollarSign size={10} /> ₹{s.paymentDetails?.amount}
                           </span>
                         )}
                         {hasVoice && (
-                          <span className="ig-tile-badge" title="Voice Recording">
-                            <Mic size={10} />
+                          <span className="badge badge-accent" style={{ padding: '2px 6px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: 2 }} title="Voice Recording">
+                            <Mic size={10} /> Voice
                           </span>
                         )}
                         {docCount > 0 && (
-                          <span className="ig-tile-badge" title={`${docCount} Documents`}>
-                            <FileText size={10} />
+                          <span className="badge badge-muted" style={{ padding: '2px 6px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${docCount} Documents`}>
+                            <FileText size={10} /> {docCount} Doc{docCount > 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
@@ -548,11 +447,11 @@ const ClientDetailsPage: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="ig-feed-container">
+            <div className="client-feed-list">
               {summaries.map((s) => (
                 <div 
                   key={s.id} 
-                  className="ig-feed-post"
+                  className="client-feed-post"
                   onClick={() => {
                     if (editingSummaryId !== s.id) {
                       setSelectedSummary(s);
@@ -560,14 +459,14 @@ const ClientDetailsPage: React.FC = () => {
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <div className="ig-feed-post-header">
-                    <div className="ig-feed-post-author">
+                  <div className="client-feed-header">
+                    <div className="client-feed-author-info">
                       <div className="avatar avatar-sm">
                         {s.createdByName?.charAt(0).toUpperCase() || 'A'}
                       </div>
                       <div>
-                        <span className="ig-feed-post-author-name">{s.createdByName || 'Unknown Agent'}</span>
-                        <div className="ig-feed-post-date">{format(s.createdAt, 'dd MMM yyyy, hh:mm a')}</div>
+                        <span className="client-feed-author-name">{s.createdByName || 'Unknown Agent'}</span>
+                        <div className="client-feed-post-date">{format(s.createdAt, 'dd MMM yyyy, hh:mm a')}</div>
                       </div>
                     </div>
                     {userRole === 'admin' && editingSummaryId !== s.id && (
@@ -585,7 +484,7 @@ const ClientDetailsPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="ig-feed-post-body">
+                  <div className="client-feed-post-body">
                     {editingSummaryId === s.id ? (
                       <div 
                         onClick={(e) => e.stopPropagation()}
@@ -622,7 +521,7 @@ const ClientDetailsPage: React.FC = () => {
 
                   {/* Attachments inside Feed Card */}
                   {editingSummaryId !== s.id && (s.voiceUrl || s.documents?.length > 0 || s.paymentDetails) && (
-                    <div className="ig-feed-post-attachments" onClick={(e) => e.stopPropagation()}>
+                    <div className="client-feed-post-attachments" onClick={(e) => e.stopPropagation()}>
                       {s.voiceUrl && (
                         <div style={{ marginBottom: '12px' }}>
                           <audio controls src={s.voiceUrl} style={{ width: '100%' }} />
@@ -664,7 +563,7 @@ const ClientDetailsPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="ig-feed-post-footer">
+                  <div className="client-feed-post-footer">
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Click to open details & edits</span>
                     <span style={{ fontSize: '11px', color: 'var(--color-accent)', fontWeight: 600 }}>View Details →</span>
                   </div>
@@ -676,7 +575,7 @@ const ClientDetailsPage: React.FC = () => {
       )}
 
       {activeTab === 'payments' && (
-        <div className="ig-receipt-list">
+        <div className="client-receipt-list">
           {summaries.filter(s => s.paymentDetails?.status).length === 0 ? (
             <div className="card empty-state" style={{ padding: 'var(--space-10)' }}>
               <div className="empty-state-icon"><DollarSign size={28} /></div>
@@ -689,44 +588,44 @@ const ClientDetailsPage: React.FC = () => {
               .map((s) => {
                 const pay = s.paymentDetails!;
                 return (
-                  <div key={s.id} className="ig-receipt-card">
-                    <div className="ig-receipt-main">
-                      <div className="ig-receipt-header">
-                        <span className="ig-receipt-title">Payment Record</span>
+                  <div key={s.id} className="client-receipt-card">
+                    <div className="client-receipt-main">
+                      <div className="client-receipt-header">
+                        <span className="client-receipt-title">Payment Record</span>
                         <span className={`badge ${PAYMENT_BADGE[pay.status || ''] || 'badge-muted'}`} style={{ textTransform: 'uppercase' }}>
                           {pay.status}
                         </span>
                       </div>
                       
-                      <div className="ig-receipt-info-grid">
+                      <div className="client-receipt-info-grid">
                         {pay.amount !== undefined && (
-                          <div className="ig-receipt-info-item">
-                            <span className="ig-receipt-label">Amount</span>
-                            <span className="ig-receipt-value" style={{ color: 'var(--color-success)', fontSize: '1.1rem' }}>₹{pay.amount}</span>
+                          <div className="client-receipt-info-item">
+                            <span className="client-receipt-label">Amount</span>
+                            <span className="client-receipt-value" style={{ color: 'var(--color-success)', fontSize: '1.1rem' }}>₹{pay.amount}</span>
                           </div>
                         )}
                         
-                        <div className="ig-receipt-info-item">
-                          <span className="ig-receipt-label">Log Date</span>
-                          <span className="ig-receipt-value">{format(s.createdAt, 'dd MMM yyyy')}</span>
+                        <div className="client-receipt-info-item">
+                          <span className="client-receipt-label">Log Date</span>
+                          <span className="client-receipt-value">{format(s.createdAt, 'dd MMM yyyy')}</span>
                         </div>
 
                         {pay.transactionId && (
-                          <div className="ig-receipt-info-item">
-                            <span className="ig-receipt-label">Transaction ID</span>
-                            <span className="ig-receipt-value mono">{pay.transactionId}</span>
+                          <div className="client-receipt-info-item">
+                            <span className="client-receipt-label">Transaction ID</span>
+                            <span className="client-receipt-value mono">{pay.transactionId}</span>
                           </div>
                         )}
 
-                        <div className="ig-receipt-info-item">
-                          <span className="ig-receipt-label">Logged By</span>
-                          <span className="ig-receipt-value">{s.createdByName || 'System'}</span>
+                        <div className="client-receipt-info-item">
+                          <span className="client-receipt-label">Logged By</span>
+                          <span className="client-receipt-value">{s.createdByName || 'System'}</span>
                         </div>
                       </div>
 
                       {pay.notes && (
-                        <div className="ig-receipt-notes">
-                          <span className="ig-receipt-label" style={{ display: 'block', marginBottom: '4px' }}>Payment Notes</span>
+                        <div className="client-receipt-notes">
+                          <span className="client-receipt-label" style={{ display: 'block', marginBottom: '4px' }}>Payment Notes</span>
                           <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{pay.notes}</span>
                         </div>
                       )}
@@ -734,12 +633,12 @@ const ClientDetailsPage: React.FC = () => {
 
                     {pay.screenshotUrl && (
                       <div 
-                        className="ig-receipt-screenshot-container"
+                        className="client-receipt-screenshot-container"
                         onClick={() => downloadBase64File(pay.screenshotUrl!, 'payment_screenshot.png')}
                         title="Click to download screenshot"
                       >
                         <img src={pay.screenshotUrl} alt="Receipt Screenshot" />
-                        <div className="ig-receipt-screenshot-overlay">
+                        <div className="client-receipt-screenshot-overlay">
                           <ExternalLink size={20} />
                         </div>
                       </div>
@@ -752,7 +651,7 @@ const ClientDetailsPage: React.FC = () => {
       )}
 
       {activeTab === 'documents' && (
-        <div className="ig-doc-grid">
+        <div className="client-doc-grid">
           {allDocuments.length === 0 ?
             <div className="card empty-state" style={{ padding: 'var(--space-10)', gridColumn: '1 / -1' }}>
               <div className="empty-state-icon"><FileText size={28} /></div>
@@ -765,22 +664,22 @@ const ClientDetailsPage: React.FC = () => {
               return (
                 <div 
                   key={idx} 
-                  className="ig-doc-card"
+                  className="client-doc-card"
                   onClick={() => downloadBase64File(doc.url, doc.name)}
                   title={`Click to download: ${doc.name}`}
                 >
                   {isImage ? (
-                    <img src={doc.url} alt={doc.name} className="ig-doc-card-image" />
+                    <img src={doc.url} alt={doc.name} className="client-doc-card-image" />
                   ) : (
-                    <div className="ig-doc-card-placeholder">
-                      <div className="ig-doc-icon-wrapper">
+                    <div className="client-doc-card-placeholder">
+                      <div className="client-doc-icon-wrapper">
                         <FileText size={24} />
                       </div>
-                      <div className="ig-doc-name">{doc.name}</div>
-                      <div className="ig-doc-size">{(doc.size / 1024).toFixed(1)} KB</div>
+                      <div className="client-doc-name">{doc.name}</div>
+                      <div className="client-doc-size">{(doc.size / 1024).toFixed(1)} KB</div>
                     </div>
                   )}
-                  <div className="ig-doc-card-overlay">
+                  <div className="client-doc-card-overlay">
                     <ExternalLink size={20} />
                     <span style={{ fontSize: '11px', fontWeight: 600, wordBreak: 'break-all' }}>{doc.name}</span>
                     <span style={{ fontSize: '9px', opacity: 0.8 }}>Uploaded {format(doc.createdAt, 'dd MMM yyyy')}</span>
