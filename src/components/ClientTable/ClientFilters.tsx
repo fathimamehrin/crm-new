@@ -1,16 +1,15 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import type { FilterOptions, User } from '../../types';
+import type { FilterOptions } from '../../types';
 
 interface ClientFiltersProps {
   filters: FilterOptions;
-  agents: User[];
   onChange: (f: FilterOptions) => void;
   onClose: () => void;
   onClear: () => void;
 }
 
-const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, agents, onChange, onClose, onClear }) => {
+const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear }) => {
   const set = (key: keyof FilterOptions, value: string) =>
     onChange({ ...filters, [key]: value });
 
@@ -22,38 +21,7 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, agents, onChange
       </div>
 
       <div className="filter-drawer-body">
-        {/* Agent filter */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="filter-agent">Agent</label>
-          <select
-            id="filter-agent"
-            className="form-input form-select"
-            value={filters.agentId}
-            onChange={(e) => set('agentId', e.target.value)}
-          >
-            <option value="">All Agents</option>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
 
-        {/* Status */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="filter-status">Client Status</label>
-          <select
-            id="filter-status"
-            className="form-input form-select"
-            value={filters.status}
-            onChange={(e) => set('status', e.target.value)}
-          >
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="lead">Lead</option>
-            <option value="inactive">Inactive</option>
-            <option value="closed">Closed</option>
-          </select>
-        </div>
 
         {/* Payment Status */}
         <div className="form-group">

@@ -252,8 +252,7 @@ const AgentDetailsPage: React.FC = () => {
             <h3 className="empty-state-title">No Clients Found</h3>
             <p className="empty-state-desc">No clients match your search criteria or are assigned to this agent.</p>
           </div>
-        ) : (
-          <div className="mobile-client-list mobile-only-flex" style={{ flexDirection: 'column', gap: '12px', padding: '16px', width: '100%', boxSizing: 'border-box' }}>
+        ) : (          <div className="mobile-client-list mobile-only-flex" style={{ flexDirection: 'column', gap: '12px', padding: '16px', width: '100%', boxSizing: 'border-box' }}>
             {filteredClients.map((client) => (
               <div
                 key={client.id}
@@ -262,71 +261,62 @@ const AgentDetailsPage: React.FC = () => {
                 style={{
                   background: 'var(--color-bg-card)',
                   border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
+                  borderRadius: 'var(--radius-xl)',
+                  padding: '20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px',
+                  gap: '16px',
                   boxShadow: 'var(--shadow-sm)',
                   cursor: 'pointer',
                   position: 'relative',
                   transition: 'transform 0.2s, box-shadow 0.2s',
                 }}
               >
-                {/* Header: Avatar, Name, Email, Status */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div className="avatar avatar-md" style={{ width: 44, height: 44, flexShrink: 0 }}>
-                    {client.profileImage ? (
-                      <img src={client.profileImage} alt={client.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                    ) : (
-                      client.name.charAt(0).toUpperCase()
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--font-size-base)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {client.name}
+                {/* Header: Avatar, Name, Status Badge */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: 0, flex: 1 }}>
+                    <div className="avatar avatar-md" style={{ width: 44, height: 44, flexShrink: 0, background: 'var(--color-accent-light)', color: 'var(--color-accent)', fontWeight: 600 }}>
+                      {client.profileImage ? (
+                        <img src={client.profileImage} alt={client.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                      ) : (
+                        client.name.charAt(0).toUpperCase()
+                      )}
                     </div>
-                    {client.email && (
-                      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                        {client.email}
-                      </div>
-                    )}
+                    <h4 style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text-primary)', wordBreak: 'break-word', lineHeight: 1.25 }}>
+                      {client.name}
+                    </h4>
                   </div>
-                  <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize' }}>
+                  <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ fontSize: '0.75rem', padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize', flexShrink: 0 }}>
                     {client.status}
                   </span>
                 </div>
 
-                {/* Info Row: Date and WhatsApp Action */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: '12px', marginTop: '4px' }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                    <div style={{ fontWeight: 500 }}>Created</div>
-                    <div style={{ marginTop: '2px' }}>{format(client.createdAt, 'dd MMM yyyy')} • {format(client.createdAt, 'hh:mm a')}</div>
+                {/* Metadata List / Grid (styled like ClientDetailsPage) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                    <MessageCircle size={14} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
+                    <a
+                      href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--color-text-accent)', textDecoration: 'none', fontWeight: 500 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {client.whatsappNumber}
+                    </a>
                   </div>
 
-                  <a
-                    href={`https://wa.me/${client.whatsappNumber}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm"
-                    style={{
-                      background: 'var(--color-success-light)',
-                      color: 'var(--color-success)',
-                      border: '1px solid rgba(16, 185, 129, 0.2)',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                      fontSize: 'var(--font-size-xs)',
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MessageCircle size={14} />
-                    <span>WhatsApp</span>
-                  </a>
+                  {client.email && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--color-text-secondary)', minWidth: 0 }}>
+                      <Mail size={14} style={{ flexShrink: 0 }} />
+                      <span style={{ wordBreak: 'break-all', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.email}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                    <Calendar size={14} style={{ flexShrink: 0 }} />
+                    <span>Joined: {format(client.createdAt, 'dd MMM yyyy')}</span>
+                  </div>
                 </div>
               </div>
             ))}

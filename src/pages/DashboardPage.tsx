@@ -187,7 +187,6 @@ const DashboardPage: React.FC = () => {
           />
           <ClientFilters
             filters={filters}
-            agents={agents}
             onChange={(f) => { setFilters(f); setPage(1); }}
             onClose={() => setShowFilters(false)}
             onClear={() => {
