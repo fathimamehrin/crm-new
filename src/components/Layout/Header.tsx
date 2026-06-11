@@ -1,9 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, LogOut, Settings, Menu } from 'lucide-react';
+import { LogOut, Settings, Menu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import NotificationPanel from '../NotificationPanel';
-import { useNotifications } from '../../hooks/useNotifications';
 import logo from '../../assets/logo.png';
 
 interface HeaderProps {
@@ -13,24 +11,11 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
   const { userProfile, userRole, logout } = useAuth();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-  const { notifications, unreadCount, markAllRead } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
 
   const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,41 +62,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
 
       <div style={{ flex: 1 }} />
 
-      {/* Notification bell */}
-      <div className="dropdown" ref={notifRef}>
-        <button
-          className="btn btn-ghost btn-icon"
-          style={{ position: 'relative' }}
-          onClick={() => {
-            setShowNotifications((v) => !v);
-            if (!showNotifications) markAllRead();
-          }}
-          aria-label="Notifications"
-        >
-          <Bell size={20} />
-          {unreadCount > 0 && (
-            <span style={{
-              position: 'absolute', top: 4, right: 4,
-              width: 18, height: 18,
-              background: 'var(--color-danger)',
-              borderRadius: '50%',
-              fontSize: '0.625rem',
-              fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff',
-              border: '2px solid var(--color-bg-secondary)',
-            }}>
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
-        {showNotifications && (
-          <NotificationPanel
-            notifications={notifications}
-            onClose={() => setShowNotifications(false)}
-          />
-        )}
-      </div>
+
 
       {/* User badge */}
       {userProfile && (
