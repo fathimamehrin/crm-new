@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../lib/firebase';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { db, firebaseConfig } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { logActivity } from '../../lib/firestore';
@@ -21,7 +22,9 @@ const schema = z.object({
   name: z.string().min(2, 'Name required'),
   email: z.string().email('Invalid email'),
   phone: z.string().optional(),
-  password: z.string().min(6, 'Min 6 characters'),
+  password: z.string()
+    .min(8, 'password must be atleast 8 characters ')
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/, 'Requires uppercase, lowercase, number, and special character'),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -63,7 +66,12 @@ const AgentManagementPage: React.FC = () => {
   const onSubmit = async (data: FormData) => {
     setCreating(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const appName = 'SecondaryApp' + Date.now();
+      const secondaryApp = initializeApp(firebaseConfig, appName);
+      const secondaryAuth = getAuth(secondaryApp);
+      console.log("Email being sent:", data.email);
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
+      await secondaryAuth.signOut();
       await setDoc(doc(db, 'users', cred.user.uid), {
         name: data.name,
         email: data.email,
@@ -87,7 +95,12 @@ const AgentManagementPage: React.FC = () => {
       reset();
       loadAgents();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create agent');
+      console.error('Failed to create agent:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        toast.error('This email is already in use by another agent or admin.');
+      } else {
+        toast.error(err.message || 'Failed to create agent');
+      }
     } finally {
       setCreating(false);
     }
@@ -260,8 +273,18 @@ const AgentManagementPage: React.FC = () => {
               </div>
               <div className="form-group">
                 <label className="form-label required" htmlFor="agent-password">Temporary Password</label>
-                <input id="agent-password" type="password" className={`form-input ${errors.password ? 'error' : ''}`} placeholder="min 6 characters" {...register('password')} />
-                {errors.password && <span className="form-error">{errors.password.message}</span>}
+                <input
+                    id="agent-password"
+                    type="password"
+                    className={`form-input ${errors.password ? 'error' : ''}`}
+                    placeholder="Enter password"
+                    autoComplete="new-password"
+                    {...register('password', {
+                      required: 'Password is required',
+                    })}
+                  />
+      
+                {errors.password?.message && <span className="form-error">{errors.password.message}</span>}
               </div>
               <div className="modal-footer" style={{ marginTop: 0 }}>
                 <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); reset(); }}>Cancel</button>

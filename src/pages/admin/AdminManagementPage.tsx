@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
+  getAuth,
 } from 'firebase/auth';
-import { auth, db } from '../../lib/firebase';
+import { initializeApp } from 'firebase/app';
+import { db, firebaseConfig } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { logActivity } from '../../lib/firestore';
@@ -18,7 +20,9 @@ import toast from 'react-hot-toast';
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
   email: z.string().email('Invalid email'),
-  password: z.string().min(6, 'Min 6 characters'),
+  password: z.string()
+    .min(8, 'Min 8 characters')
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/, 'Requires uppercase, lowercase, number, and special character'),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -48,7 +52,11 @@ const AdminManagementPage: React.FC = () => {
   const onSubmit = async (data: FormData) => {
     setCreating(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const appName = 'SecondaryApp' + Date.now();
+      const secondaryApp = initializeApp(firebaseConfig, appName);
+      const secondaryAuth = getAuth(secondaryApp);
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
+      await secondaryAuth.signOut();
 
       await setDoc(doc(db, 'users', cred.user.uid), {
         name: data.name,
@@ -73,7 +81,12 @@ const AdminManagementPage: React.FC = () => {
       reset();
       loadAdmins();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create admin');
+      console.error('Failed to create admin:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        toast.error('This email is already in use by another agent or admin.');
+      } else {
+        toast.error(err.message || 'Failed to create admin');
+      }
     } finally {
       setCreating(false);
     }
@@ -195,7 +208,7 @@ const AdminManagementPage: React.FC = () => {
                 <label className="form-label required" htmlFor="admin-password">Password</label>
                 <div className="search-wrapper">
                   <Lock className="search-icon" size={16} />
-                  <input id="admin-password" type="password" className={`form-input ${errors.password ? 'error' : ''}`} style={{ paddingLeft: '2.5rem' }} placeholder="min 6 characters" {...register('password')} />
+                  <input id="admin-password" type="password" className={`form-input ${errors.password ? 'error' : ''}`} style={{ paddingLeft: '2.5rem' }} placeholder="min 8 chars, 1 upper, 1 special" {...register('password')} />
                 </div>
                 {errors.password && <span className="form-error">{errors.password.message}</span>}
               </div>

@@ -18,6 +18,18 @@ const schema = z.object({
   paymentStatus: z.enum(['pending', 'partial', 'paid', 'failed', '']).optional(),
   transactionId: z.string().optional(),
   paymentNotes: z.string().optional(),
+}).refine(data => {
+  if (data.paymentAmount && !data.paymentStatus) return false;
+  return true;
+}, {
+  message: "Select a payment status",
+  path: ["paymentStatus"]
+}).refine(data => {
+  if (data.paymentAmount && parseFloat(data.paymentAmount) < 0) return false;
+  return true;
+}, {
+  message: "Amount cannot be negative",
+  path: ["paymentAmount"]
 });
 type FormData = z.infer<typeof schema>;
 
@@ -327,17 +339,18 @@ const AddSummaryPage: React.FC = () => {
                 type="number"
                 min="0"
                 step="0.01"
-                className="form-input"
+                className={`form-input ${errors.paymentAmount ? 'error' : ''}`}
                 placeholder="0.00"
                 {...register('paymentAmount')}
               />
+              {errors.paymentAmount && <span className="form-error">{errors.paymentAmount.message}</span>}
             </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="payment-status">Payment Status</label>
               <select
                 id="payment-status"
-                className="form-input form-select"
+                className={`form-input form-select ${errors.paymentStatus ? 'error' : ''}`}
                 {...register('paymentStatus')}
               >
                 <option value="">Select status</option>
@@ -346,6 +359,7 @@ const AddSummaryPage: React.FC = () => {
                 <option value="paid">Paid</option>
                 <option value="failed">Failed</option>
               </select>
+              {errors.paymentStatus && <span className="form-error">{errors.paymentStatus.message}</span>}
             </div>
 
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>

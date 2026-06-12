@@ -94,12 +94,9 @@ export const getUsers = async (role?: 'admin' | 'agent'): Promise<User[]> => {
   if (role) constraints.push(where('role', '==', role));
   try {
     const snap = await getDocs(query(usersColRef(), ...constraints));
-    console.log("DEBUG getUsers: snap size =", snap.size);
-    snap.docs.forEach(d => console.log("DEBUG getUsers doc:", d.id, d.data()));
     const users = snap.docs.map(userFromDoc);
     return users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (err: any) {
-    console.error("DEBUG getUsers error:", err);
     throw err;
   }
 };

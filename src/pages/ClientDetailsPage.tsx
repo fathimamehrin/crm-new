@@ -76,7 +76,7 @@ const ClientDetailsPage: React.FC = () => {
     setSavingSummary(true);
     try {
       await updateSummary(summaryId, { summaryText: editSummaryText });
-      
+
       // Update local state
       setSummaries((prev) =>
         prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText } : s))
@@ -169,45 +169,8 @@ const ClientDetailsPage: React.FC = () => {
     load();
   }, [id]);
 
-  const downloadBase64File = (dataUrl: string, fileName: string) => {
-    try {
-      if (!dataUrl.startsWith('data:')) {
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = fileName;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return;
-      }
-
-      const arr = dataUrl.split(',');
-      const mime = arr[0].match(/:(.*?);/)?.[1] || '';
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      const blob = new Blob([u8arr], { type: mime });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Failed to download file:", err);
-      toast.error("Failed to download file. Opening in new tab instead.");
-      const win = window.open();
-      if (win) {
-        win.document.write(`<iframe src="${dataUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-      }
-    }
+  const openFile = (url: string) => {
+    window.open(url, '_blank');
   };
 
   if (loading) {
@@ -280,14 +243,14 @@ const ClientDetailsPage: React.FC = () => {
         <div className="client-meta-grid">
           <div className="client-meta-item">
             <MessageCircle size={16} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-            <a 
-              href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`} 
-              target="_blank" 
+            <a
+              href={`https://wa.me/${client.whatsappNumber}?text=${encodeURIComponent(`Hello ${client.name}, `)}`}
+              target="_blank"
               rel="noopener noreferrer"
             >
               {client.whatsappNumber}
             </a>
-            <button 
+            <button
               onClick={handleCopyWhatsApp}
               className="btn btn-ghost"
               style={{ padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', border: 'none', background: 'none', minHeight: 'auto', width: 'auto' }}
@@ -345,21 +308,21 @@ const ClientDetailsPage: React.FC = () => {
 
       {/* SaaS CRM Tabs Navigation */}
       <nav className="client-tabs-nav">
-        <button 
+        <button
           className={`client-tab-btn ${activeTab === 'summaries' ? 'active' : ''}`}
           onClick={() => setActiveTab('summaries')}
         >
           <Grid size={16} />
           <span>Summaries ({summaries.length})</span>
         </button>
-        <button 
+        <button
           className={`client-tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
           onClick={() => setActiveTab('payments')}
         >
           <DollarSign size={16} />
           <span>Payments ({summaries.filter((s) => s.paymentDetails?.status).length})</span>
         </button>
-        <button 
+        <button
           className={`client-tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => setActiveTab('documents')}
         >
@@ -373,14 +336,14 @@ const ClientDetailsPage: React.FC = () => {
         <>
           {summaries.length > 0 && (
             <div className="client-view-toggle">
-              <button 
+              <button
                 className={`client-view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
               >
                 <Grid size={20} />
               </button>
-              <button 
+              <button
                 className={`client-view-toggle-btn ${viewMode === 'feed' ? 'active' : ''}`}
                 onClick={() => setViewMode('feed')}
                 title="Feed View"
@@ -406,8 +369,8 @@ const ClientDetailsPage: React.FC = () => {
                 const hasVoice = !!s.voiceUrl;
                 const docCount = s.documents?.length || 0;
                 return (
-                  <div 
-                    key={s.id} 
+                  <div
+                    key={s.id}
                     className="client-log-card"
                     onClick={() => {
                       if (editingSummaryId !== s.id) {
@@ -449,8 +412,8 @@ const ClientDetailsPage: React.FC = () => {
           ) : (
             <div className="client-feed-list">
               {summaries.map((s) => (
-                <div 
-                  key={s.id} 
+                <div
+                  key={s.id}
                   className="client-feed-post"
                   onClick={() => {
                     if (editingSummaryId !== s.id) {
@@ -486,7 +449,7 @@ const ClientDetailsPage: React.FC = () => {
 
                   <div className="client-feed-post-body">
                     {editingSummaryId === s.id ? (
-                      <div 
+                      <div
                         onClick={(e) => e.stopPropagation()}
                         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
                       >
@@ -527,17 +490,17 @@ const ClientDetailsPage: React.FC = () => {
                           <audio controls src={s.voiceUrl} style={{ width: '100%' }} />
                         </div>
                       )}
-                      
+
                       {s.documents?.length > 0 && (
                         <div className="file-preview-list" style={{ gap: '8px', marginBottom: '12px', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
                           {s.documents.map((doc, i) => (
-                            <a 
-                              key={i} 
-                              href="#" 
+                            <a
+                              key={i}
+                              href="#"
                               onClick={(e) => {
                                 e.preventDefault();
-                                downloadBase64File(doc.url, doc.name);
-                              }} 
+                                openFile(doc.url);
+                              }}
                               className="file-preview-item"
                               style={{ padding: '6px 10px', background: 'var(--color-bg-secondary)', textDecoration: 'none' }}
                             >
@@ -596,7 +559,7 @@ const ClientDetailsPage: React.FC = () => {
                           {pay.status}
                         </span>
                       </div>
-                      
+
                       <div className="client-receipt-info-grid">
                         {pay.amount !== undefined && (
                           <div className="client-receipt-info-item">
@@ -604,7 +567,7 @@ const ClientDetailsPage: React.FC = () => {
                             <span className="client-receipt-value" style={{ color: 'var(--color-success)', fontSize: '1.1rem' }}>₹{pay.amount}</span>
                           </div>
                         )}
-                        
+
                         <div className="client-receipt-info-item">
                           <span className="client-receipt-label">Log Date</span>
                           <span className="client-receipt-value">{format(s.createdAt, 'dd MMM yyyy')}</span>
@@ -632,9 +595,9 @@ const ClientDetailsPage: React.FC = () => {
                     </div>
 
                     {pay.screenshotUrl && (
-                      <div 
+                      <div
                         className="client-receipt-screenshot-container"
-                        onClick={() => downloadBase64File(pay.screenshotUrl!, 'payment_screenshot.png')}
+                        onClick={() => openFile(pay.screenshotUrl!)}
                         title="Click to download screenshot"
                       >
                         <img src={pay.screenshotUrl} alt="Receipt Screenshot" />
@@ -658,14 +621,14 @@ const ClientDetailsPage: React.FC = () => {
               <h3 className="empty-state-title">No Documents Attached</h3>
               <p className="empty-state-desc">There are no files or screenshots uploaded for this client.</p>
             </div>
-          :
+            :
             allDocuments.map((doc, idx) => {
               const isImage = doc.url.startsWith('data:image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.name);
               return (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className="client-doc-card"
-                  onClick={() => downloadBase64File(doc.url, doc.name)}
+                  onClick={() => openFile(doc.url)}
                   title={`Click to download: ${doc.name}`}
                 >
                   {isImage ? (
@@ -694,25 +657,25 @@ const ClientDetailsPage: React.FC = () => {
       {/* Summary Detail Modal */}
       {selectedSummary && (
         <div className="modal-overlay" onClick={() => { if (!savingModalEdit) setSelectedSummary(null); }}>
-          <div 
-            className="modal" 
-            style={{ 
-              maxWidth: 600, 
-              width: '95%', 
-              maxHeight: '90vh', 
-              display: 'flex', 
-              flexDirection: 'column', 
+          <div
+            className="modal"
+            style={{
+              maxWidth: 600,
+              width: '95%',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
               padding: 'var(--space-5)',
-              animation: 'fadeIn 0.2s ease' 
-            }} 
+              animation: 'fadeIn 0.2s ease'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', flexShrink: 0 }}>
               <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>{isEditingInModal ? 'Edit Summary Details' : 'Summary Details'}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 {userRole === 'admin' && !isEditingInModal && (
-                  <button 
-                    className="btn btn-ghost btn-sm" 
+                  <button
+                    className="btn btn-ghost btn-sm"
                     onClick={() => setIsEditingInModal(true)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
                   >
@@ -722,7 +685,7 @@ const ClientDetailsPage: React.FC = () => {
                 <button className="btn btn-ghost btn-icon" onClick={() => setSelectedSummary(null)} disabled={savingModalEdit}><X size={20} /></button>
               </div>
             </div>
-            
+
             {isEditingInModal ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1, overflowY: 'auto', paddingRight: 'var(--space-1)' }}>
                 {/* Creator details (read-only) */}
@@ -759,7 +722,7 @@ const ClientDetailsPage: React.FC = () => {
                   <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
                     Payment Information
                   </h3>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
                       <div className="form-group">
@@ -823,17 +786,17 @@ const ClientDetailsPage: React.FC = () => {
 
                 {/* Edit Form Actions */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary" 
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
                     onClick={() => setIsEditingInModal(false)}
                     disabled={savingModalEdit}
                   >
                     Cancel
                   </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-primary" 
+                  <button
+                    type="button"
+                    className="btn btn-primary"
                     onClick={handleSaveModalEdit}
                     disabled={savingModalEdit || !modalEditSummaryText.trim()}
                   >
@@ -875,10 +838,10 @@ const ClientDetailsPage: React.FC = () => {
                   <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Call Notes
                   </h3>
-                  <div style={{ 
-                    background: 'var(--color-bg-elevated)', 
-                    padding: 'var(--space-4)', 
-                    borderRadius: 'var(--radius-md)', 
+                  <div style={{
+                    background: 'var(--color-bg-elevated)',
+                    padding: 'var(--space-4)',
+                    borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--color-border)',
                     fontSize: 'var(--font-size-sm)',
                     lineHeight: 1.75,
@@ -907,15 +870,15 @@ const ClientDetailsPage: React.FC = () => {
                     </h3>
                     <div className="file-preview-list">
                       {selectedSummary.documents.map((doc, i) => (
-                        <a 
-                          key={i} 
-                          href="#" 
+                        <a
+                          key={i}
+                          href="#"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            downloadBase64File(doc.url, doc.name);
-                          }} 
-                          className="file-preview-item" 
+                            openFile(doc.url);
+                          }}
+                          className="file-preview-item"
                           style={{ textDecoration: 'none' }}
                         >
                           <div className="file-preview-icon"><FileText size={16} /></div>
@@ -968,18 +931,18 @@ const ClientDetailsPage: React.FC = () => {
                       {selectedSummary.paymentDetails.screenshotUrl && (
                         <div style={{ gridColumn: '1 / -1' }}>
                           <div className="text-xs text-muted" style={{ marginBottom: 'var(--space-2)' }}>Payment Screenshot</div>
-                          <a 
-                            href="#" 
+                          <a
+                            href="#"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              downloadBase64File(selectedSummary.paymentDetails!.screenshotUrl!, 'screenshot.png');
-                            }} 
+                              openFile(selectedSummary.paymentDetails!.screenshotUrl!);
+                            }}
                             style={{ display: 'block', maxWidth: 200 }}
                           >
-                            <img 
-                              src={selectedSummary.paymentDetails.screenshotUrl} 
-                              alt="Screenshot" 
+                            <img
+                              src={selectedSummary.paymentDetails.screenshotUrl}
+                              alt="Screenshot"
                               style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
                             />
                           </a>

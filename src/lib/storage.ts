@@ -1,4 +1,5 @@
-// firebase storage import removed to fix unused import warning
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from './firebase';
 
 export interface UploadProgress {
   progress: number;
@@ -8,38 +9,41 @@ export interface UploadProgress {
 
 export const uploadFile = (
   file: File,
-  _path: string,
+  path: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
-    // Firestore has a 1MB limit per document. We limit files to 800KB for safety.
-    const MAX_SIZE = 800 * 1024; 
-    if (file.size > MAX_SIZE) {
-      reject(new Error(`File "${file.name}" is too large (${(file.size / 1024).toFixed(1)}KB). Because you are on the free plan, uploads use database storage with a maximum limit of 800KB per file.`));
+    if (!storage) {
+      reject(new Error('Storage not initialized'));
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadstart = () => onProgress?.(10);
-    reader.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const progress = (e.loaded / e.total) * 100;
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         onProgress?.(progress);
+      },
+      (error) => {
+        reject(error);
+      },
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(downloadURL);
+        } catch (error) {
+          reject(error);
+        }
       }
-    };
-    reader.onload = () => {
-      onProgress?.(100);
-      resolve(reader.result as string);
-    };
-    reader.onerror = () => {
-      reject(new Error(`Failed to read file: ${file.name}`));
-    };
-    reader.readAsDataURL(file);
+    );
   });
 };
 
 export const deleteFile = async (_url: string): Promise<void> => {
-  // Local Base64 strings are deleted automatically when the database record is updated or deleted
+  // Not implemented
 };
 
 export const generateStoragePath = (folder: string, fileName: string): string => {
