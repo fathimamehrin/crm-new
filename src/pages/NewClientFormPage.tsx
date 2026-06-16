@@ -88,7 +88,7 @@ const NewClientFormPage: React.FC = () => {
 
       toast.success('Client created successfully!');
       navigate(`/clients/${clientId}/summary`, { state: { isNew: true } });
-    } catch (err) {
+    } catch {
       toast.error('Failed to create client');
       setUploading(false);
     }

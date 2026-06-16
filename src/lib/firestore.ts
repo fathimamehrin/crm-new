@@ -35,7 +35,6 @@ export const paymentsCol = { toString: () => 'payments' };
 const toDate = (val: Timestamp | Date | undefined): Date =>
   val instanceof Timestamp ? val.toDate() : val instanceof Date ? val : new Date();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySnap = QueryDocumentSnapshot<any>;
 
 export const userFromDoc = (snap: AnySnap): User => ({
@@ -92,13 +91,9 @@ export const getUserById = async (id: string): Promise<User | null> => {
 export const getUsers = async (role?: 'admin' | 'agent'): Promise<User[]> => {
   const constraints: QueryConstraint[] = [];
   if (role) constraints.push(where('role', '==', role));
-  try {
-    const snap = await getDocs(query(usersColRef(), ...constraints));
-    const users = snap.docs.map(userFromDoc);
-    return users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  } catch (err: any) {
-    throw err;
-  }
+  const snap = await getDocs(query(usersColRef(), ...constraints));
+  const users = snap.docs.map(userFromDoc);
+  return users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 };
 
 export const createUser = async (data: Omit<User, 'id' | 'createdAt'>): Promise<string> => {

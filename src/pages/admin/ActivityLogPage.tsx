@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { getActivityLogs, getUsers } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
 import type { ActivityLog, User } from '../../types';
@@ -35,7 +35,7 @@ const ActivityLogPage: React.FC = () => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const PAGE_SIZE = 30;
 
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const constraints = [];
@@ -45,9 +45,9 @@ const ActivityLogPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [agentFilter]);
 
-  useEffect(() => { loadLogs(); }, [agentFilter]);
+  useEffect(() => { loadLogs(); }, [loadLogs]);
   useEffect(() => { getUsers('agent').then(setAgents).catch(() => { }); }, []);
 
   const filtered = logs.filter((log) => {

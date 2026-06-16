@@ -3,7 +3,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
 } from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { db, firebaseConfig } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
 import { setDoc, doc } from 'firebase/firestore';
@@ -51,9 +51,10 @@ const AdminManagementPage: React.FC = () => {
 
   const onSubmit = async (data: FormData) => {
     setCreating(true);
+    let secondaryApp;
     try {
       const appName = 'SecondaryApp' + Date.now();
-      const secondaryApp = initializeApp(firebaseConfig, appName);
+      secondaryApp = initializeApp(firebaseConfig, appName);
       const secondaryAuth = getAuth(secondaryApp);
       const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
       await secondaryAuth.signOut();
@@ -88,6 +89,13 @@ const AdminManagementPage: React.FC = () => {
         toast.error(err.message || 'Failed to create admin');
       }
     } finally {
+      if (secondaryApp) {
+        try {
+          await deleteApp(secondaryApp);
+        } catch (e) {
+          console.error('Failed to delete secondary app:', e);
+        }
+      }
       setCreating(false);
     }
   };

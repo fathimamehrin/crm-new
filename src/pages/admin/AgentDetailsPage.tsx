@@ -41,7 +41,7 @@ const AgentDetailsPage: React.FC = () => {
       const { clients: data } = await getClients([where('assignedAgent', '==', id)], 500);
       setClients(data);
       setFilteredClients(data);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load agent information');
     } finally {
       setLoading(false);

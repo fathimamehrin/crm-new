@@ -13,6 +13,32 @@ interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
+interface NavItemProps {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  collapsed: boolean;
+  onCloseMobile?: () => void;
+}
+
+const NavItem: React.FC<NavItemProps> = ({
+  to,
+  icon: Icon,
+  label,
+  collapsed,
+  onCloseMobile,
+}) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+    title={collapsed ? label : undefined}
+    onClick={onCloseMobile}
+  >
+    <Icon className="link-icon" size={20} />
+    <span className="link-text">{label}</span>
+  </NavLink>
+);
+
 const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
   mobileOpen,
@@ -25,20 +51,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     await logout();
     navigate('/login');
   };
-
-  const NavItem = ({
-    to, icon: Icon, label,
-  }: { to: string; icon: React.ElementType; label: string }) => (
-    <NavLink
-      to={to}
-      className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-      title={collapsed ? label : undefined}
-      onClick={onCloseMobile}
-    >
-      <Icon className="link-icon" size={20} />
-      <span className="link-text">{label}</span>
-    </NavLink>
-  );
 
   return (
     <>
@@ -74,9 +86,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {userRole === 'admin' && (
               <>
-                <NavItem to="/admin/agents" icon={UserCheck} label="Agents" />
-                <NavItem to="/admin/admins" icon={UserCog} label="Admins" />
-                <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" />
+                <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" collapsed={collapsed} onCloseMobile={onCloseMobile} />
               </>
             )}
           </nav>

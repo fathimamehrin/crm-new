@@ -55,16 +55,15 @@ const ClientDetailsPage: React.FC = () => {
   const [modalEditPaymentNotes, setModalEditPaymentNotes] = useState('');
   const [savingModalEdit, setSavingModalEdit] = useState(false);
 
-  useEffect(() => {
-    if (selectedSummary) {
-      setModalEditSummaryText(selectedSummary.summaryText);
-      setModalEditAmount(selectedSummary.paymentDetails?.amount?.toString() || '');
-      setModalEditStatus(selectedSummary.paymentDetails?.status || '');
-      setModalEditTransactionId(selectedSummary.paymentDetails?.transactionId || '');
-      setModalEditPaymentNotes(selectedSummary.paymentDetails?.notes || '');
-      setIsEditingInModal(false);
-    }
-  }, [selectedSummary]);
+  const handleSelectSummary = (s: Summary) => {
+    setSelectedSummary(s);
+    setModalEditSummaryText(s.summaryText);
+    setModalEditAmount(s.paymentDetails?.amount?.toString() || '');
+    setModalEditStatus(s.paymentDetails?.status || '');
+    setModalEditTransactionId(s.paymentDetails?.transactionId || '');
+    setModalEditPaymentNotes(s.paymentDetails?.notes || '');
+    setIsEditingInModal(false);
+  };
 
   const handleStartEditSummary = (summary: Summary) => {
     setEditingSummaryId(summary.id);
@@ -107,6 +106,11 @@ const ClientDetailsPage: React.FC = () => {
       return;
     }
 
+    if (modalEditStatus && modalEditAmount && parseFloat(modalEditAmount) < 0) {
+      toast.error('Amount cannot be negative');
+      return;
+    }
+
     setSavingModalEdit(true);
     try {
       const updatedPaymentDetails = modalEditStatus ? {
@@ -139,6 +143,14 @@ const ClientDetailsPage: React.FC = () => {
         prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields } : s))
       );
       setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields } : null);
+      
+      // Update modal edit fields to match the newly saved values
+      setModalEditSummaryText(modalEditSummaryText);
+      setModalEditAmount(modalEditAmount);
+      setModalEditStatus(modalEditStatus);
+      setModalEditTransactionId(modalEditTransactionId);
+      setModalEditPaymentNotes(modalEditPaymentNotes);
+
       setIsEditingInModal(false);
       toast.success('Summary details updated successfully');
     } catch (err) {
@@ -374,7 +386,7 @@ const ClientDetailsPage: React.FC = () => {
                     className="client-log-card"
                     onClick={() => {
                       if (editingSummaryId !== s.id) {
-                        setSelectedSummary(s);
+                        handleSelectSummary(s);
                       }
                     }}
                   >
@@ -417,7 +429,7 @@ const ClientDetailsPage: React.FC = () => {
                   className="client-feed-post"
                   onClick={() => {
                     if (editingSummaryId !== s.id) {
-                      setSelectedSummary(s);
+                      handleSelectSummary(s);
                     }
                   }}
                   style={{ cursor: 'pointer' }}
