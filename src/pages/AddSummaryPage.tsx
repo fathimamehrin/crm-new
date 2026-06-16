@@ -46,11 +46,31 @@ const AddSummaryPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { paymentStatus: '' },
   });
+
+  const handleBack = () => {
+    const hasUnsavedChanges = isDirty || documents.length > 0 || voiceFile !== null || paymentScreenshot !== null;
+    if (hasUnsavedChanges) {
+      setShowConfirmModal(true);
+    } else {
+      navigate(-1);
+    }
+  };
+
+  const handleDiscard = () => {
+    setShowConfirmModal(false);
+    navigate(-1);
+  };
+
+  const handleSaveConfirm = () => {
+    setShowConfirmModal(false);
+    handleSubmit(onSubmit)();
+  };
 
   // Voice dropzone
   const { getRootProps: voiceRootProps, getInputProps: voiceInputProps, isDragActive: voiceDrag } = useDropzone({
@@ -223,14 +243,19 @@ const AddSummaryPage: React.FC = () => {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', width: '100%', padding: '16px 24px', boxSizing: 'border-box' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">Add Summary</h1>
-          <p className="page-subtitle">Record call notes, documents, and payment details</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <button type="button" className="btn btn-ghost btn-icon" onClick={handleBack} aria-label="Go back">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="page-header" style={{ marginBottom: 0 }}>
+            <h1 className="page-title">Add Summary</h1>
+            <p className="page-subtitle">Record call notes, documents, and payment details</p>
+          </div>
         </div>
+        <button type="button" className="btn btn-ghost btn-icon" onClick={handleBack} aria-label="Close form">
+          <X size={20} />
+        </button>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -422,7 +447,7 @@ const AddSummaryPage: React.FC = () => {
 
         {/* Submit */}
         <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+          <button type="button" className="btn btn-secondary" onClick={handleBack}>
             Cancel
           </button>
           <button
@@ -437,6 +462,31 @@ const AddSummaryPage: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header" style={{ marginBottom: 'var(--space-3)' }}>
+              <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>Unsaved Changes</h2>
+            </div>
+            <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-6)' }}>
+              You have unsaved changes. Do you want to save them before leaving?
+            </p>
+            <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', gap: 'var(--space-2)' }}>
+              <button type="button" className="btn btn-secondary" onClick={handleDiscard}>
+                Discard
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>
+                Keep Editing
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveConfirm}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

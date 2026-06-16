@@ -32,10 +32,31 @@ const AdminManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  const handleCloseModal = () => {
+    if (isDirty) {
+      setShowConfirmModal(true);
+    } else {
+      setShowModal(false);
+      reset();
+    }
+  };
+
+  const handleDiscardConfirm = () => {
+    setShowConfirmModal(false);
+    setShowModal(false);
+    reset();
+  };
+
+  const handleSaveConfirm = () => {
+    setShowConfirmModal(false);
+    handleSubmit(onSubmit)();
+  };
 
   const loadAdmins = async () => {
     setLoading(true);
@@ -191,7 +212,7 @@ const AdminManagementPage: React.FC = () => {
           <div className="modal">
             <div className="modal-header">
               <h2 className="modal-title">Add Admin</h2>
-              <button className="btn btn-ghost btn-icon" onClick={() => { setShowModal(false); reset(); }}>
+              <button className="btn btn-ghost btn-icon" type="button" onClick={handleCloseModal}>
                 <X size={20} />
               </button>
             </div>
@@ -221,12 +242,37 @@ const AdminManagementPage: React.FC = () => {
                 {errors.password && <span className="form-error">{errors.password.message}</span>}
               </div>
               <div className="modal-footer" style={{ marginTop: 0 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); reset(); }}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>Cancel</button>
                 <button id="create-admin-submit" type="submit" className="btn btn-primary" disabled={creating}>
                   {creating ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Creating…</> : 'Create Admin'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header" style={{ marginBottom: 'var(--space-3)' }}>
+              <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>Unsaved Changes</h2>
+            </div>
+            <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-6)' }}>
+              You have unsaved changes. Do you want to save them before leaving?
+            </p>
+            <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', gap: 'var(--space-2)' }}>
+              <button type="button" className="btn btn-secondary" onClick={handleDiscardConfirm}>
+                Discard
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>
+                Keep Editing
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveConfirm}>
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}

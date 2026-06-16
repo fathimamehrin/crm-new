@@ -54,6 +54,60 @@ const ClientDetailsPage: React.FC = () => {
   const [modalEditTransactionId, setModalEditTransactionId] = useState('');
   const [modalEditPaymentNotes, setModalEditPaymentNotes] = useState('');
   const [savingModalEdit, setSavingModalEdit] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'close_modal' | 'cancel_edit'>('close_modal');
+
+  const isEditModalDirty = () => {
+    if (!selectedSummary) return false;
+    const originalText = selectedSummary.summaryText || '';
+    const originalAmount = selectedSummary.paymentDetails?.amount?.toString() || '';
+    const originalStatus = selectedSummary.paymentDetails?.status || '';
+    const originalTxId = selectedSummary.paymentDetails?.transactionId || '';
+    const originalNotes = selectedSummary.paymentDetails?.notes || '';
+
+    return (
+      modalEditSummaryText !== originalText ||
+      modalEditAmount !== originalAmount ||
+      modalEditStatus !== originalStatus ||
+      modalEditTransactionId !== originalTxId ||
+      modalEditPaymentNotes !== originalNotes
+    );
+  };
+
+  const handleCloseModal = () => {
+    if (isEditingInModal && isEditModalDirty()) {
+      setConfirmAction('close_modal');
+      setShowConfirmModal(true);
+    } else {
+      setSelectedSummary(null);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (isEditModalDirty()) {
+      setConfirmAction('cancel_edit');
+      setShowConfirmModal(true);
+    } else {
+      setIsEditingInModal(false);
+    }
+  };
+
+  const handleDiscardConfirm = () => {
+    setShowConfirmModal(false);
+    if (confirmAction === 'close_modal') {
+      setSelectedSummary(null);
+    } else {
+      setIsEditingInModal(false);
+    }
+  };
+
+  const handleSaveConfirm = async () => {
+    setShowConfirmModal(false);
+    const success = await handleSaveModalEdit();
+    if (success && confirmAction === 'close_modal') {
+      setSelectedSummary(null);
+    }
+  };
 
   const handleSelectSummary = (s: Summary) => {
     setSelectedSummary(s);
@@ -100,15 +154,15 @@ const ClientDetailsPage: React.FC = () => {
   };
 
   const handleSaveModalEdit = async () => {
-    if (!selectedSummary) return;
+    if (!selectedSummary) return false;
     if (!modalEditSummaryText.trim()) {
       toast.error('Call notes cannot be empty');
-      return;
+      return false;
     }
 
     if (modalEditStatus && modalEditAmount && parseFloat(modalEditAmount) < 0) {
       toast.error('Amount cannot be negative');
-      return;
+      return false;
     }
 
     setSavingModalEdit(true);
@@ -153,9 +207,11 @@ const ClientDetailsPage: React.FC = () => {
 
       setIsEditingInModal(false);
       toast.success('Summary details updated successfully');
+      return true;
     } catch (err) {
       console.error("Failed to update summary in modal:", err);
       toast.error('Failed to update summary details');
+      return false;
     } finally {
       setSavingModalEdit(false);
     }
@@ -668,7 +724,7 @@ const ClientDetailsPage: React.FC = () => {
 
       {/* Summary Detail Modal */}
       {selectedSummary && (
-        <div className="modal-overlay" onClick={() => { if (!savingModalEdit) setSelectedSummary(null); }}>
+        <div className="modal-overlay" onClick={() => { if (!savingModalEdit) handleCloseModal(); }}>
           <div
             className="modal"
             style={{
@@ -694,7 +750,7 @@ const ClientDetailsPage: React.FC = () => {
                     <Edit3 size={12} /> Edit Details
                   </button>
                 )}
-                <button className="btn btn-ghost btn-icon" onClick={() => setSelectedSummary(null)} disabled={savingModalEdit}><X size={20} /></button>
+                <button className="btn btn-ghost btn-icon" onClick={handleCloseModal} disabled={savingModalEdit}><X size={20} /></button>
               </div>
             </div>
 
@@ -801,7 +857,7 @@ const ClientDetailsPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => setIsEditingInModal(false)}
+                    onClick={handleCancelEdit}
                     disabled={savingModalEdit}
                   >
                     Cancel
@@ -965,6 +1021,31 @@ const ClientDetailsPage: React.FC = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header" style={{ marginBottom: 'var(--space-3)' }}>
+              <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>Unsaved Changes</h2>
+            </div>
+            <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-6)' }}>
+              You have unsaved changes. Do you want to save them before leaving?
+            </p>
+            <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', gap: 'var(--space-2)' }}>
+              <button type="button" className="btn btn-secondary" onClick={handleDiscardConfirm}>
+                Discard
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>
+                Keep Editing
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveConfirm}>
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}

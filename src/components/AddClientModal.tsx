@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
+  countryCode: z.string(),
   whatsappNumber: z
     .string()
     .regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
@@ -26,13 +27,15 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: { countryCode: '+91' },
   });
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
+      const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
       const existing = await getClientByWhatsApp(
-        data.whatsappNumber,
+        fullWhatsAppNumber,
         userRole === 'agent' && currentUser ? currentUser.uid : undefined
       );
       if (existing) {
@@ -40,7 +43,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
         navigate(`/clients/${existing.id}`);
         onClose();
       } else {
-        navigate('/clients/new', { state: { whatsappNumber: data.whatsappNumber } });
+        navigate('/clients/new', { state: { whatsappNumber: data.whatsappNumber, countryCode: data.countryCode } });
         onClose();
       }
     } catch {
@@ -64,17 +67,37 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
         <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
           <div className="form-group">
             <label className="form-label required" htmlFor="whatsapp-check">WhatsApp Number</label>
-            <div className="search-wrapper">
-              <Phone className="search-icon" size={16} />
-              <input
-                id="whatsapp-check"
-                type="tel"
-                className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
-                style={{ paddingLeft: '2.5rem' }}
-                placeholder="10-digit number"
-                maxLength={10}
-                {...register('whatsappNumber')}
-              />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select
+                id="whatsapp-country"
+                className="form-input form-select"
+                style={{ width: '90px', paddingRight: '20px' }}
+                {...register('countryCode')}
+              >
+                <option value="+91">+91</option>
+                <option value="+1">+1</option>
+                <option value="+44">+44</option>
+                <option value="+971">+971</option>
+                <option value="+966">+966</option>
+                <option value="+61">+61</option>
+                <option value="+65">+65</option>
+                <option value="+968">+968</option>
+                <option value="+974">+974</option>
+                <option value="+965">+965</option>
+                <option value="+973">+973</option>
+              </select>
+              <div className="search-wrapper" style={{ flex: 1 }}>
+                <Phone className="search-icon" size={16} />
+                <input
+                  id="whatsapp-check"
+                  type="tel"
+                  className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
+                  style={{ paddingLeft: '2.5rem' }}
+                  placeholder="10-digit number"
+                  maxLength={10}
+                  {...register('whatsappNumber')}
+                />
+              </div>
             </div>
             {errors.whatsappNumber && (
               <span className="form-error">{errors.whatsappNumber.message}</span>
