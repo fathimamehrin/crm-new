@@ -255,7 +255,10 @@ const NewClientFormPage: React.FC = () => {
       navigate(isAdmin ? `/admin/clients/${clientId}` : `/clients/${clientId}`);
     } catch (err: any) {
       console.error(err);
-      toast.error('Failed to create client');
+      const errMsg = (err?.code?.startsWith('storage/') || err?.message?.toLowerCase().includes('storage'))
+        ? 'Upload failed: Please make sure Firebase Storage is initialized in the Console and CORS is configured.'
+        : 'Failed to create client';
+      toast.error(errMsg);
       setUploading(false);
     }
   };

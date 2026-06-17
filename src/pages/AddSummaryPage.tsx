@@ -206,7 +206,10 @@ const AddSummaryPage: React.FC = () => {
       toast.success('Summary added successfully!');
     } catch (err: any) {
       console.error("Failed to save summary:", err);
-      toast.error(err?.message || 'Failed to save summary');
+      const errMsg = (err?.code?.startsWith('storage/') || err?.message?.toLowerCase().includes('storage'))
+        ? 'Upload failed: Please make sure Firebase Storage is initialized in the Console and CORS is configured.'
+        : (err?.message || 'Failed to save summary');
+      toast.error(errMsg);
       setUploading(false);
     }
   };

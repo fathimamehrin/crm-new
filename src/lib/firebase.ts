@@ -27,4 +27,9 @@ export const auth = app ? getAuth(app) : null as any;
 export const db = app ? getFirestore(app) : null as any;
 export const storage = app ? getStorage(app) : null as any;
 
+if (storage) {
+  storage.maxUploadRetryTime = 15000; // 15 seconds
+  storage.maxOperationRetryTime = 15000; // 15 seconds
+}
+
 export default app;
