@@ -1,7 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -25,11 +24,5 @@ const app = isFirebaseConfigured
 
 export const auth = app ? getAuth(app) : null as any;
 export const db = app ? getFirestore(app) : null as any;
-export const storage = app ? getStorage(app) : null as any;
-
-if (storage) {
-  storage.maxUploadRetryTime = 15000; // 15 seconds
-  storage.maxOperationRetryTime = 15000; // 15 seconds
-}
 
 export default app;

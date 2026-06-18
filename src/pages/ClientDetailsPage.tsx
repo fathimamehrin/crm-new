@@ -10,6 +10,7 @@ import { getClientById, getSummariesByClient, updateSummary } from '../lib/fires
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import type { Client, Summary, PaymentStatus } from '../types';
+import { resolvePresignedUrls } from '../lib/storage';
 import toast from 'react-hot-toast';
 
 const PAYMENT_BADGE: Record<string, string> = {
@@ -217,6 +218,57 @@ const ClientDetailsPage: React.FC = () => {
     }
   };
 
+  const resolveSummariesUrls = async (summariesList: Summary[]): Promise<Summary[]> => {
+    const keysToResolve = new Set<string>();
+
+    summariesList.forEach((s) => {
+      if (s.voiceUrl && !s.voiceUrl.startsWith('http://') && !s.voiceUrl.startsWith('https://')) {
+        keysToResolve.add(s.voiceUrl);
+      }
+      if (s.paymentDetails?.screenshotUrl && !s.paymentDetails.screenshotUrl.startsWith('http://') && !s.paymentDetails.screenshotUrl.startsWith('https://')) {
+        keysToResolve.add(s.paymentDetails.screenshotUrl);
+      }
+      if (Array.isArray(s.documents)) {
+        s.documents.forEach((doc) => {
+          if (doc.url && !doc.url.startsWith('http://') && !doc.url.startsWith('https://')) {
+            keysToResolve.add(doc.url);
+          }
+        });
+      }
+    });
+
+    if (keysToResolve.size === 0) return summariesList;
+
+    try {
+      const resolvedUrls = await resolvePresignedUrls(Array.from(keysToResolve));
+
+      return summariesList.map((s) => {
+        const updated: Summary = { ...s };
+        if (s.voiceUrl && resolvedUrls[s.voiceUrl]) {
+          updated.voiceUrl = resolvedUrls[s.voiceUrl];
+        }
+        if (s.paymentDetails?.screenshotUrl && resolvedUrls[s.paymentDetails.screenshotUrl]) {
+          updated.paymentDetails = {
+            ...s.paymentDetails,
+            screenshotUrl: resolvedUrls[s.paymentDetails.screenshotUrl],
+          };
+        }
+        if (Array.isArray(s.documents)) {
+          updated.documents = s.documents.map((doc) => {
+            if (doc.url && resolvedUrls[doc.url]) {
+              return { ...doc, url: resolvedUrls[doc.url] };
+            }
+            return doc;
+          });
+        }
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to resolve presigned URLs:', err);
+      return summariesList;
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     const load = async () => {
@@ -227,7 +279,8 @@ const ClientDetailsPage: React.FC = () => {
           getSummariesByClient(id),
         ]);
         setClient(c);
-        setSummaries(s);
+        const resolved = await resolveSummariesUrls(s);
+        setSummaries(resolved);
       } catch {
         toast.error('Failed to load client');
       } finally {
