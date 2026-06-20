@@ -6,10 +6,10 @@ import {
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, updateEditRequestStatus } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest } from '../types';
 import { resolvePresignedUrls } from '../lib/storage';
 import toast from 'react-hot-toast';
 
@@ -30,6 +30,53 @@ const ClientDetailsPage: React.FC = () => {
   const [client, setClient] = useState<Client | null>(null);
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Edit requests tracking state
+  const [editRequests, setEditRequests] = useState<Record<string, EditRequest>>({});
+  const [requestingSummary, setRequestingSummary] = useState<Summary | null>(null);
+  const [requestReason, setRequestReason] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  const canEditSummary = (summary: Summary | null) => {
+    if (!summary) return false;
+    if (userRole === 'admin') return true;
+    if (userRole === 'agent' && summary.createdBy === currentUser?.uid) {
+      const req = editRequests[summary.id];
+      return req && req.status === 'approved';
+    }
+    return false;
+  };
+
+  const handleRequestEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestingSummary || !requestReason.trim()) return;
+    setSubmittingRequest(true);
+    try {
+      await createEditRequest(requestingSummary.id, {
+        clientId: client!.id,
+        clientName: client!.name,
+        summaryId: requestingSummary.id,
+        summaryText: requestingSummary.summaryText,
+        agentId: currentUser!.uid,
+        agentName: userProfile?.name || 'Agent',
+        reason: requestReason,
+      });
+      
+      const newReq = await getEditRequest(requestingSummary.id);
+      if (newReq) {
+        setEditRequests((prev) => ({ ...prev, [requestingSummary.id]: newReq }));
+      }
+      
+      toast.success('Edit request submitted to admin!');
+      setRequestingSummary(null);
+      setRequestReason('');
+    } catch (err) {
+      console.error('Failed to create edit request:', err);
+      toast.error('Failed to submit edit request');
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
 
   const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
   const [editSummaryText, setEditSummaryText] = useState('');
@@ -126,10 +173,21 @@ const ClientDetailsPage: React.FC = () => {
   };
 
   const handleSaveSummary = async (summaryId: string) => {
-    if (!editSummaryText.trim()) return;
     setSavingSummary(true);
     try {
       await updateSummary(summaryId, { summaryText: editSummaryText });
+
+      // Complete request if agent
+      if (userRole === 'agent') {
+        await updateEditRequestStatus(summaryId, 'completed');
+        setEditRequests((prev) => {
+          const updated = { ...prev };
+          if (updated[summaryId]) {
+            updated[summaryId] = { ...updated[summaryId], status: 'completed' };
+          }
+          return updated;
+        });
+      }
 
       // Update local state
       setSummaries((prev) =>
@@ -156,10 +214,7 @@ const ClientDetailsPage: React.FC = () => {
 
   const handleSaveModalEdit = async () => {
     if (!selectedSummary) return false;
-    if (!modalEditSummaryText.trim()) {
-      toast.error('Call notes cannot be empty');
-      return false;
-    }
+
 
     if (modalEditStatus && modalEditAmount && parseFloat(modalEditAmount) < 0) {
       toast.error('Amount cannot be negative');
@@ -182,6 +237,18 @@ const ClientDetailsPage: React.FC = () => {
       };
 
       await updateSummary(selectedSummary.id, updatedFields);
+
+      // Complete request if agent
+      if (userRole === 'agent') {
+        await updateEditRequestStatus(selectedSummary.id, 'completed');
+        setEditRequests((prev) => {
+          const updated = { ...prev };
+          if (updated[selectedSummary.id]) {
+            updated[selectedSummary.id] = { ...updated[selectedSummary.id], status: 'completed' };
+          }
+          return updated;
+        });
+      }
 
       // Log activity
       await logActivity({
@@ -279,6 +346,22 @@ const ClientDetailsPage: React.FC = () => {
           getSummariesByClient(id),
         ]);
         setClient(c);
+
+        // Load any edit requests associated with the summaries
+        const requestsMap: Record<string, EditRequest> = {};
+        const requestPromises = s.map(async (summary) => {
+          try {
+            const req = await getEditRequest(summary.id);
+            if (req) {
+              requestsMap[summary.id] = req;
+            }
+          } catch (err) {
+            console.error(`Failed to load request for ${summary.id}:`, err);
+          }
+        });
+        await Promise.all(requestPromises);
+        setEditRequests(requestsMap);
+
         const resolved = await resolveSummariesUrls(s);
         setSummaries(resolved);
       } catch {
@@ -553,18 +636,45 @@ const ClientDetailsPage: React.FC = () => {
                         <div className="client-feed-post-date">{format(s.createdAt, 'dd MMM yyyy, hh:mm a')}</div>
                       </div>
                     </div>
-                    {userRole === 'admin' && editingSummaryId !== s.id && (
-                      <button
-                        className="btn btn-ghost btn-icon"
-                        style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartEditSummary(s);
-                        }}
-                        title="Edit Summary"
-                      >
-                        <Edit3 size={12} />
-                      </button>
+                    {editingSummaryId !== s.id && (
+                      <>
+                        {canEditSummary(s) ? (
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditSummary(s);
+                            }}
+                            title="Edit Summary"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                        ) : (
+                          userRole === 'agent' && s.createdBy === currentUser?.uid && (
+                            <>
+                              {(!editRequests[s.id] || editRequests[s.id].status === 'completed' || editRequests[s.id].status === 'rejected') && (
+                                <button
+                                  className="btn btn-ghost btn-icon"
+                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-text-muted)' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRequestingSummary(s);
+                                  }}
+                                  title={editRequests[s.id]?.status === 'rejected' ? "Request Edit (Previous rejected)" : "Request Edit Permission"}
+                                >
+                                  <Edit3 size={12} />
+                                </button>
+                              )}
+                              {editRequests[s.id]?.status === 'pending' && (
+                                <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '10px' }} title={`Reason: ${editRequests[s.id].reason}`}>
+                                  ⏳ Pending
+                                </span>
+                              )}
+                            </>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -592,7 +702,7 @@ const ClientDetailsPage: React.FC = () => {
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => handleSaveSummary(s.id)}
-                            disabled={savingSummary || !editSummaryText.trim()}
+                            disabled={savingSummary}
                           >
                             {savingSummary ? 'Saving...' : 'Save'}
                           </button>
@@ -794,14 +904,37 @@ const ClientDetailsPage: React.FC = () => {
             <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', flexShrink: 0 }}>
               <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>{isEditingInModal ? 'Edit Summary Details' : 'Summary Details'}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                {userRole === 'admin' && !isEditingInModal && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setIsEditingInModal(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
-                  >
-                    <Edit3 size={12} /> Edit Details
-                  </button>
+                {!isEditingInModal && (
+                  <>
+                    {canEditSummary(selectedSummary) ? (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setIsEditingInModal(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
+                      >
+                        <Edit3 size={12} /> Edit Details
+                      </button>
+                    ) : (
+                      userRole === 'agent' && selectedSummary.createdBy === currentUser?.uid && (
+                        <>
+                          {(!editRequests[selectedSummary.id] || editRequests[selectedSummary.id].status === 'completed' || editRequests[selectedSummary.id].status === 'rejected') && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setRequestingSummary(selectedSummary)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}
+                            >
+                              <Edit3 size={12} /> Request Edit
+                            </button>
+                          )}
+                          {editRequests[selectedSummary.id]?.status === 'pending' && (
+                            <span className="badge badge-warning" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                              ⏳ Edit Request Pending
+                            </span>
+                          )}
+                        </>
+                      )
+                    )}
+                  </>
                 )}
                 <button className="btn btn-ghost btn-icon" onClick={handleCloseModal} disabled={savingModalEdit}><X size={20} /></button>
               </div>
@@ -824,7 +957,7 @@ const ClientDetailsPage: React.FC = () => {
 
                 {/* Call Notes input */}
                 <div className="form-group">
-                  <label className="form-label required" htmlFor="modal-edit-notes">Call Notes</label>
+                  <label className="form-label" htmlFor="modal-edit-notes">Call Notes</label>
                   <textarea
                     id="modal-edit-notes"
                     className="form-input"
@@ -919,7 +1052,7 @@ const ClientDetailsPage: React.FC = () => {
                     type="button"
                     className="btn btn-primary"
                     onClick={handleSaveModalEdit}
-                    disabled={savingModalEdit || !modalEditSummaryText.trim()}
+                    disabled={savingModalEdit}
                   >
                     {savingModalEdit ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -1099,6 +1232,62 @@ const ClientDetailsPage: React.FC = () => {
                 Save
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Request Edit Modal */}
+      {requestingSummary && (
+        <div className="modal-overlay" onClick={() => { if (!submittingRequest) setRequestingSummary(null); }}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Request Edit Permission</h2>
+                <p className="text-sm text-muted" style={{ marginTop: 4 }}>
+                  Explain why you need to edit this summary.
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={() => setRequestingSummary(null)}
+                disabled={submittingRequest}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRequestEdit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="form-group">
+                <label className="form-label required" htmlFor="request-reason">Reason for Request</label>
+                <textarea
+                  id="request-reason"
+                  className="form-input"
+                  style={{ minHeight: 100, resize: 'vertical' }}
+                  placeholder="e.g., Typo in financial details / updated client requirements"
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setRequestingSummary(null)}
+                  disabled={submittingRequest}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={submittingRequest || !requestReason.trim()}
+                >
+                  {submittingRequest ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

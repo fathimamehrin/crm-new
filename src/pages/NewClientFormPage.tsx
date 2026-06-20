@@ -102,10 +102,6 @@ const NewClientFormPage: React.FC = () => {
     if (!currentUser) return;
 
     if (addSummary) {
-      if (!data.summaryText || data.summaryText.trim().length < 10) {
-        toast.error('Summary notes must be at least 10 characters long');
-        return;
-      }
       if (data.paymentAmount && !data.paymentStatus) {
         toast.error('Please select a payment status');
         return;
@@ -208,7 +204,7 @@ const NewClientFormPage: React.FC = () => {
 
         summaryId = await createSummary({
           clientId: clientId,
-          summaryText: addSummary ? (data.summaryText || 'Initial summary notes') : 'Uploaded documents on client creation',
+          summaryText: addSummary ? (data.summaryText || '') : 'Uploaded documents on client creation',
           voiceUrl: voiceUrl || undefined,
           documents: uploadedDocs,
           paymentDetails,
@@ -439,7 +435,7 @@ const NewClientFormPage: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-4)', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)' }}>
               {/* Summary Text */}
               <div className="form-group">
-                <label className="form-label required" htmlFor="summary-text">Summary Text</label>
+                <label className="form-label" htmlFor="summary-text">Summary Text</label>
                 <textarea
                   id="summary-text"
                   className={`form-input ${errors.summaryText ? 'error' : ''}`}

@@ -121,3 +121,17 @@ export interface PaginationState {
   pageSize: number;
   total: number;
 }
+
+export interface EditRequest {
+  id: string; // Equals summaryId
+  clientId: string;
+  clientName: string;
+  summaryId: string;
+  summaryText: string;
+  agentId: string;
+  agentName: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  createdAt: Date;
+  updatedAt?: Date;
+}

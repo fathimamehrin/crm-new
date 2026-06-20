@@ -13,7 +13,11 @@ import AddSummaryPage from '../pages/AddSummaryPage';
 import AdminManagementPage from '../pages/admin/AdminManagementPage';
 import AgentManagementPage from '../pages/admin/AgentManagementPage';
 import AgentDetailsPage from '../pages/admin/AgentDetailsPage';
-import ActivityLogPage from '../pages/admin/ActivityLogPage';
+import AdminClientsPage from '../pages/admin/AdminClientsPage';
+import EditRequestsPage from '../pages/admin/EditRequestsPage';
+
+import StaffDurationPage from '../pages/admin/StaffDurationPage';
+import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
 
 const router = createBrowserRouter([
   {
@@ -40,9 +44,13 @@ const router = createBrowserRouter([
                   { path: '/admin/admins', element: <AdminManagementPage /> },
                   { path: '/admin/agents', element: <AgentManagementPage /> },
                   { path: '/admin/agents/:id', element: <AgentDetailsPage /> },
+                  { path: '/admin/clients', element: <AdminClientsPage /> },
                   { path: '/admin/clients/:id', element: <ClientDetailsPage /> },
                   { path: '/admin/clients/:id/summary', element: <AddSummaryPage /> },
-                  { path: '/admin/activity', element: <ActivityLogPage /> },
+                  { path: '/admin/requests', element: <EditRequestsPage /> },
+
+                  { path: '/admin/duration', element: <StaffDurationPage /> },
+                  { path: '/admin/revenue', element: <RevenueAnalyticsPage /> },
                 ],
               },
             ],

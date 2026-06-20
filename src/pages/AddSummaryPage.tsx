@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
-  summaryText: z.string().min(10, 'Summary must be at least 10 characters'),
+  summaryText: z.string().optional(),
   paymentAmount: z.string().optional(),
   paymentStatus: z.enum(['pending', 'partial', 'paid', 'failed', '']).optional(),
   transactionId: z.string().optional(),
@@ -161,7 +161,7 @@ const AddSummaryPage: React.FC = () => {
 
       const summaryId = await createSummary({
         clientId: clientId,
-        summaryText: data.summaryText,
+        summaryText: data.summaryText || '',
         voiceUrl: voiceUrl || undefined,
         documents: uploadedDocs,
         paymentDetails,
@@ -271,7 +271,7 @@ const AddSummaryPage: React.FC = () => {
             <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 600 }}>Summary Notes</h3>
           </div>
           <div className="form-group">
-            <label className="form-label required" htmlFor="summary-text">Summary Text</label>
+            <label className="form-label" htmlFor="summary-text">Summary Text</label>
             <textarea
               id="summary-text"
               className={`form-input ${errors.summaryText ? 'error' : ''}`}

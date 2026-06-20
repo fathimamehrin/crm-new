@@ -38,7 +38,26 @@ service cloud.firestore {
     match /summaries/{summaryId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAdmin();
+      allow update: if isAdmin() || (
+        isAgent() &&
+        resource.data.createdBy == request.auth.uid &&
+        exists(/databases/$(database)/documents/editRequests/$(summaryId)) &&
+        get(/databases/$(database)/documents/editRequests/$(summaryId)).data.status == 'approved'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Edit Requests collection
+    match /editRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        request.resource.data.agentId == request.auth.uid
+      );
+      allow update: if isAdmin() || (
+        isAgent() &&
+        resource.data.agentId == request.auth.uid &&
+        request.resource.data.status == 'completed'
+      );
       allow delete: if isAdmin();
     }
 

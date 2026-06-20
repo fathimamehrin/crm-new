@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   addDoc,
+  setDoc,
   updateDoc,
   query,
   where,
@@ -17,7 +18,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -26,6 +27,7 @@ const clientsColRef  = () => collection(db, 'clients');
 const summariesColRef= () => collection(db, 'summaries');
 const paymentsColRef = () => collection(db, 'payments');
 const logsColRef     = () => collection(db, 'activityLogs');
+const editRequestsColRef = () => collection(db, 'editRequests');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -58,6 +60,13 @@ export const paymentFromDoc = (snap: AnySnap): Payment => ({
 export const activityLogFromDoc = (snap: AnySnap): ActivityLog => ({
   id: snap.id, ...snap.data(), createdAt: toDate(snap.data().createdAt),
 } as ActivityLog);
+
+export const editRequestFromDoc = (snap: AnySnap): EditRequest => ({
+  id: snap.id,
+  ...snap.data(),
+  createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
+} as EditRequest);
 
 // Helper to recursively strip undefined properties so Firestore doesn't reject them
 const cleanObject = (obj: any): any => {
@@ -183,6 +192,54 @@ export const getActivityLogs = async (
   return logs.slice(0, pageSize);
 };
 
+// ─── Edit Requests ────────────────────────────────────────────────────────────
+export const createEditRequest = async (
+  summaryId: string,
+  data: Omit<EditRequest, 'id' | 'createdAt' | 'status'>
+): Promise<void> => {
+  await setDoc(doc(db, 'editRequests', summaryId), cleanObject({
+    ...data,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  }));
+};
+
+export const getEditRequest = async (summaryId: string): Promise<EditRequest | null> => {
+  const snap = await getDoc(doc(db, 'editRequests', summaryId));
+  if (!snap.exists()) return null;
+  return editRequestFromDoc(snap as AnySnap);
+};
+
+export const getAllEditRequests = async (status?: string): Promise<EditRequest[]> => {
+  const constraints: QueryConstraint[] = [];
+  if (status) constraints.push(where('status', '==', status));
+  const snap = await getDocs(query(editRequestsColRef(), ...constraints));
+  const requests = snap.docs.map(editRequestFromDoc);
+  return requests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+export const updateEditRequestStatus = async (
+  summaryId: string,
+  status: 'approved' | 'rejected' | 'completed'
+): Promise<void> => {
+  await updateDoc(doc(db, 'editRequests', summaryId), cleanObject({
+    status,
+    updatedAt: serverTimestamp(),
+  }));
+};
+
+export const getAllSummaries = async (): Promise<Summary[]> => {
+  const snap = await getDocs(summariesColRef());
+  const summaries = snap.docs.map(summaryFromDoc);
+  return summaries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+export const getAllActivityLogs = async (): Promise<ActivityLog[]> => {
+  const snap = await getDocs(logsColRef());
+  const logs = snap.docs.map(activityLogFromDoc);
+  return logs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
 // ─── Re-exports for convenience ───────────────────────────────────────────────
 export {
   doc,
@@ -195,6 +252,7 @@ export {
   serverTimestamp,
   getDocs,
   addDoc,
+  setDoc,
   updateDoc,
   getDoc,
 };

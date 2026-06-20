@@ -17,9 +17,10 @@ interface ClientTableProps {
   agents: User[];
   onRefresh?: () => void;
   onClearFilters?: () => void;
+  isAdminView?: boolean;
 }
 
-const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onClearFilters }) => {
+const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onClearFilters, isAdminView }) => {
   const navigate = useNavigate();
   const agentMap = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
@@ -75,7 +76,7 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
               <tr
                 key={client.id}
                 style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/clients/${client.id}`)}
+                onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
               >
                 {/* Avatar + Name */}
                 <td>
@@ -136,7 +137,7 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
                   <button
                     className="btn btn-ghost btn-icon"
                     style={{ width: 32, height: 32 }}
-                    onClick={() => navigate(`/clients/${client.id}`)}
+                    onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
                     aria-label="View client"
                   >
                     <ExternalLink size={14} />
@@ -154,7 +155,7 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
           <div 
             key={client.id}
             className="mobile-card"
-            onClick={() => navigate(`/clients/${client.id}`)}
+            onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -203,7 +204,7 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
                 style={{ minHeight: 38, width: 38 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/clients/${client.id}`);
+                  navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`);
                 }}
                 aria-label="View Details"
               >

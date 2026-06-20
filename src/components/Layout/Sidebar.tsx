@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  UserCog, Activity,
-  LogOut, UserCheck,
+  UserCog,
+  LogOut, UserCheck, Users, ClipboardList,
+  Clock, DollarSign, X, MoreHorizontal
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -19,6 +20,7 @@ interface NavItemProps {
   label: string;
   collapsed: boolean;
   onCloseMobile?: () => void;
+  className?: string;
 }
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -27,10 +29,11 @@ const NavItem: React.FC<NavItemProps> = ({
   label,
   collapsed,
   onCloseMobile,
+  className = '',
 }) => (
   <NavLink
     to={to}
-    className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+    className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''} ${className}`}
     title={collapsed ? label : undefined}
     onClick={onCloseMobile}
   >
@@ -46,6 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { userRole, logout } = useAuth();
   const navigate = useNavigate();
+  const [showMore, setShowMore] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -82,13 +86,26 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Nav */}
           <nav className="sidebar-nav">
-
-
             {userRole === 'admin' && (
               <>
-                <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} />
-                <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} />
-                <NavItem to="/admin/activity" icon={Activity} label="Activity Logs" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/duration" icon={Clock} label="Staff Durations" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                
+                {/* More button visible on mobile bottom nav only */}
+                <button
+                  type="button"
+                  className="sidebar-link mobile-only-nav"
+                  onClick={() => setShowMore(true)}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', width: 'auto', margin: 0 }}
+                  title="More Options"
+                >
+                  <MoreHorizontal className="link-icon" size={20} />
+                  <span className="link-text">More</span>
+                </button>
               </>
             )}
           </nav>
@@ -106,6 +123,60 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </aside>
+
+      {/* Mobile bottom drawer overlay */}
+      {showMore && (
+        <div className="mobile-drawer-overlay" onClick={() => setShowMore(false)}>
+          <div className="mobile-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-drawer-header">
+              <span className="mobile-drawer-title">More Options</span>
+              <button type="button" className="mobile-drawer-close" onClick={() => setShowMore(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mobile-drawer-body">
+              <NavLink 
+                to="/admin/agents" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <UserCheck size={18} />
+                <span>Agent Management</span>
+              </NavLink>
+              
+              <NavLink 
+                to="/admin/admins" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <UserCog size={18} />
+                <span>Admin Management</span>
+              </NavLink>
+              
+              <NavLink 
+                to="/admin/duration" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <Clock size={18} />
+                <span>Staff Durations</span>
+              </NavLink>
+              
+              <button 
+                type="button"
+                className="mobile-drawer-link logout" 
+                onClick={() => {
+                  setShowMore(false);
+                  handleLogout();
+                }}
+              >
+                <LogOut size={18} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -1,28 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import {
-  getClients, getUsers,
-} from '../lib/firestore';
+import { getClients, getUsers } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User } from '../types';
+import type { Client, FilterOptions, User } from '../../types';
 
-import ClientTable from '../components/ClientTable/ClientTable';
-import ClientFilters from '../components/ClientTable/ClientFilters';
-import Pagination from '../components/Pagination';
-import AddClientModal from '../components/AddClientModal';
+import ClientTable from '../../components/ClientTable/ClientTable';
+import ClientFilters from '../../components/ClientTable/ClientFilters';
+import Pagination from '../../components/Pagination';
+import AddClientModal from '../../components/AddClientModal';
 import toast from 'react-hot-toast';
 
-const DashboardPage: React.FC = () => {
-  const { userRole, currentUser } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (userRole === 'admin') {
-      navigate('/admin/clients', { replace: true });
-    }
-  }, [userRole, navigate]);
+const AdminClientsPage: React.FC = () => {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
@@ -46,9 +34,6 @@ const DashboardPage: React.FC = () => {
     setLoading(true);
     try {
       const constraints = [];
-      if (userRole === 'agent' && currentUser) {
-        constraints.push(where('assignedAgent', '==', currentUser.uid));
-      }
       if (filters.agentId) constraints.push(where('assignedAgent', '==', filters.agentId));
       if (filters.status) constraints.push(where('status', '==', filters.status));
 
@@ -79,7 +64,7 @@ const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, page, userRole, currentUser]);
+  }, [filters, page]);
 
   useEffect(() => {
     loadClients();
@@ -89,15 +74,13 @@ const DashboardPage: React.FC = () => {
     getUsers('agent').then(setAgents).catch(() => {});
   }, []);
 
-
-
   return (
     <div>
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Manage and track all your clients</p>
+          <h1 className="page-title">Client Management</h1>
+          <p className="page-subtitle">View and manage all clients across all agents</p>
         </div>
         <button
           id="add-client-btn"
@@ -108,8 +91,6 @@ const DashboardPage: React.FC = () => {
           <span className="desktop-only">Add Client</span>
         </button>
       </div>
-
-
 
       {/* Table Card */}
       <div className="card" style={{ padding: 0 }}>
@@ -159,6 +140,7 @@ const DashboardPage: React.FC = () => {
           clients={clients}
           loading={loading}
           agents={agents}
+          isAdminView={true}
           onRefresh={loadClients}
           onClearFilters={() => {
             setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
@@ -205,4 +187,4 @@ const DashboardPage: React.FC = () => {
   );
 };
 
-export default DashboardPage;
+export default AdminClientsPage;
