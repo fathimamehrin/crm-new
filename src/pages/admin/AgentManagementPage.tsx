@@ -227,33 +227,95 @@ const AgentManagementPage: React.FC = () => {
             <p className="empty-state-desc">No agents matched your search query "{searchQuery}".</p>
           </div>
         ) : (
-          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAgents.map((agent) => (
-                  <tr 
-                    key={agent.id}
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input')) {
-                        navigate(`/admin/agents/${agent.id}`);
-                      }
-                    }}
-                    style={{ cursor: editingId === agent.id ? 'default' : 'pointer' }}
-                  >
-                    <td data-label="Agent">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
+          <>
+            {/* Desktop View Table */}
+            <div className="table-wrapper table-responsive-stack desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAgents.map((agent) => (
+                    <tr 
+                      key={agent.id}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input')) {
+                          navigate(`/admin/agents/${agent.id}`);
+                        }
+                      }}
+                      style={{ cursor: editingId === agent.id ? 'default' : 'pointer' }}
+                    >
+                      <td data-label="Agent">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
+                          {editingId === agent.id ? (
+                            <form onSubmit={editSubmit(onEdit)} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                              <input {...editReg('name')} className="form-input text-sm" style={{ width: 140, padding: '4px 8px' }} />
+                              <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '4px 8px' }}><Check size={12} /></button>
+                              <button type="button" className="btn btn-sm btn-secondary" style={{ padding: '4px 8px' }} onClick={() => setEditingId(null)}><X size={12} /></button>
+                            </form>
+                          ) : (
+                            <Link to={`/admin/agents/${agent.id}`} className="font-semibold text-sm text-accent hover:underline">
+                              {agent.name}
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-sm text-secondary" data-label="Email">{agent.email}</td>
+                      <td className="text-sm text-secondary" data-label="Phone">{agent.phone || '—'}</td>
+                      <td data-label="Status">
+                        <span className={`badge ${agent.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                          {agent.status}
+                        </span>
+                      </td>
+                      <td className="text-sm text-muted" data-label="Created">{format(agent.createdAt, 'dd MMM yyyy')}</td>
+                      <td data-label="Actions">
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                            onClick={() => toggleStatus(agent)}
+                          >
+                            {agent.status === 'active'
+                              ? <><ToggleLeft size={14} /> Disable</>
+                              : <><ToggleRight size={14} /> Enable</>
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View Cards */}
+            <div className="mobile-only" style={{ padding: 'var(--space-4) var(--space-3)' }}>
+              {filteredAgents.map((agent) => (
+                <div 
+                  key={agent.id}
+                  className="mobile-card"
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input')) {
+                      navigate(`/admin/agents/${agent.id}`);
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                      <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
+                      <div>
                         {editingId === agent.id ? (
                           <form onSubmit={editSubmit(onEdit)} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                             <input {...editReg('name')} className="form-input text-sm" style={{ width: 140, padding: '4px 8px' }} />
@@ -265,37 +327,44 @@ const AgentManagementPage: React.FC = () => {
                             {agent.name}
                           </Link>
                         )}
+                        <span className="text-xs text-muted" style={{ display: 'block', marginTop: 2 }}>
+                          Created: {format(agent.createdAt, 'dd MMM yyyy')}
+                        </span>
                       </div>
-                    </td>
-                    <td className="text-sm text-secondary" data-label="Email">{agent.email}</td>
-                    <td className="text-sm text-secondary" data-label="Phone">{agent.phone || '—'}</td>
-                    <td data-label="Status">
-                      <span className={`badge ${agent.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
-                        {agent.status}
-                      </span>
-                    </td>
-                    <td className="text-sm text-muted" data-label="Created">{format(agent.createdAt, 'dd MMM yyyy')}</td>
-                    <td data-label="Actions">
-                      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                          onClick={() => toggleStatus(agent)}
-                        >
-                          {agent.status === 'active'
-                            ? <><ToggleLeft size={14} /> Disable</>
-                            : <><ToggleRight size={14} /> Enable</>
-                          }
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <span className={`badge ${agent.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                      {agent.status}
+                    </span>
+                  </div>
+
+                  <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="text-xs text-secondary">
+                      <span className="text-muted">Email: </span>{agent.email}
+                    </div>
+                    <div className="text-xs text-secondary">
+                      <span className="text-muted">Phone: </span>{agent.phone || '—'}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 4 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
+                      <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                    </button>
+                    <button
+                      className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                      onClick={() => toggleStatus(agent)}
+                      style={{ minHeight: 32 }}
+                    >
+                      {agent.status === 'active'
+                        ? <><ToggleLeft size={14} /> Disable</>
+                        : <><ToggleRight size={14} /> Enable</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
