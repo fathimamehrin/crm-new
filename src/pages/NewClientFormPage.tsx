@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X } from 'lucide-react';
-import { createClient, createSummary, createPayment } from '../lib/firestore';
+import { createClient, createSummary, createPayment, getClientByWhatsApp } from '../lib/firestore';
 import { uploadFile, generateStoragePath } from '../lib/storage';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -100,6 +100,21 @@ const NewClientFormPage: React.FC = () => {
 
   const onSubmit = async (data: FormData) => {
     if (!currentUser) return;
+
+    try {
+      const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
+      const existing = await getClientByWhatsApp(fullWhatsAppNumber);
+      if (existing) {
+        toast.success('Client already exists. Opening existing record.');
+        const isAdmin = userProfile?.role === 'admin';
+        navigate(isAdmin ? `/admin/clients/${existing.id}` : `/clients/${existing.id}`);
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error checking WhatsApp number');
+      return;
+    }
 
     if (addSummary) {
       if (data.paymentAmount && !data.paymentStatus) {
@@ -246,7 +261,7 @@ const NewClientFormPage: React.FC = () => {
         }
       }
 
-      toast.success('Client created successfully!');
+      toast.success('New client created successfully.');
       const isAdmin = userProfile?.role === 'admin';
       navigate(isAdmin ? `/admin/clients/${clientId}` : `/clients/${clientId}`);
     } catch (err: any) {

@@ -23,7 +23,7 @@ interface AddClientModalProps {
 const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const { currentUser, userRole } = useAuth();
+  const { userRole } = useAuth();
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -34,13 +34,11 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
     setLoading(true);
     try {
       const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
-      const existing = await getClientByWhatsApp(
-        fullWhatsAppNumber,
-        userRole === 'agent' && currentUser ? currentUser.uid : undefined
-      );
+      const existing = await getClientByWhatsApp(fullWhatsAppNumber);
       if (existing) {
-        toast.success('Client found! Redirecting…');
-        navigate(`/clients/${existing.id}`);
+        toast.success('Client already exists. Opening existing record.');
+        const isAdmin = userRole === 'admin';
+        navigate(isAdmin ? `/admin/clients/${existing.id}` : `/clients/${existing.id}`);
         onClose();
       } else {
         navigate('/clients/new', { state: { whatsappNumber: data.whatsappNumber, countryCode: data.countryCode } });

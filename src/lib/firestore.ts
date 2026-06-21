@@ -116,7 +116,24 @@ export const updateUser = async (id: string, data: Partial<User>): Promise<void>
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 export const getClientByWhatsApp = async (number: string, agentId?: string): Promise<Client | null> => {
-  const constraints = [where('whatsappNumber', '==', number)];
+  // Extract digits
+  const clean = number.replace(/\D/g, '');
+  const tenDigit = clean.slice(-10);
+
+  const searchValues = [number];
+  if (tenDigit.length === 10) {
+    searchValues.push(tenDigit);
+    searchValues.push(`91${tenDigit}`);
+    searchValues.push(`+91${tenDigit}`);
+    const prefix = clean.slice(0, -10);
+    if (prefix && prefix !== '91') {
+      searchValues.push(`${prefix}${tenDigit}`);
+      searchValues.push(`+${prefix}${tenDigit}`);
+    }
+  }
+
+  const uniqueValues = Array.from(new Set(searchValues.filter(Boolean)));
+  const constraints = [where('whatsappNumber', 'in', uniqueValues)];
   if (agentId) {
     constraints.push(where('assignedAgent', '==', agentId));
   }
