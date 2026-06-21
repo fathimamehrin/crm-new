@@ -194,20 +194,18 @@ const AgentManagementPage: React.FC = () => {
       </div>
 
       {/* Search Input Bar */}
-      {agents.length > 0 && (
-        <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-wrapper" style={{ flex: 1, minWidth: '240px' }}>
-            <Search className="search-icon" size={16} />
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Search agents by name, email, or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="search-wrapper" style={{ flex: 1, minWidth: '240px' }}>
+          <Search className="search-icon" size={16} />
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Search agents by name, email, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-      )}
+      </div>
  
       <div className="card" style={{ padding: 0 }}>
         {loading ? (
