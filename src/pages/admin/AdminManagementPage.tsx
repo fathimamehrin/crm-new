@@ -160,49 +160,96 @@ const AdminManagementPage: React.FC = () => {
             <p className="empty-state-desc">Create the first admin account.</p>
           </div>
         ) : (
-          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Admin</th>
-                  <th>Email</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {admins.map((admin) => (
-                  <tr key={admin.id}>
-                    <td data-label="Admin">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div className="avatar avatar-sm">{admin.name.charAt(0)}</div>
-                        <span className="font-medium text-sm">{admin.name}</span>
-                      </div>
-                    </td>
-                    <td className="text-sm text-secondary" data-label="Email">{admin.email}</td>
-                    <td data-label="Status">
-                      <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
-                        {admin.status}
-                      </span>
-                    </td>
-                    <td className="text-sm text-muted" data-label="Created">{format(admin.createdAt, 'dd MMM yyyy')}</td>
-                    <td data-label="Actions">
-                      <button
-                        className={`btn btn-sm ${admin.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                        onClick={() => toggleStatus(admin)}
-                      >
-                        {admin.status === 'active'
-                          ? <><ToggleLeft size={14} /> Disable</>
-                          : <><ToggleRight size={14} /> Enable</>
-                        }
-                      </button>
-                    </td>
+          <>
+            {/* Desktop View Table */}
+            <div className="table-wrapper table-responsive-stack desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Admin</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {admins.map((admin) => (
+                    <tr key={admin.id}>
+                      <td data-label="Admin">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <div className="avatar avatar-sm">{admin.name.charAt(0)}</div>
+                          <span className="font-medium text-sm">{admin.name}</span>
+                        </div>
+                      </td>
+                      <td className="text-sm text-secondary" data-label="Email">{admin.email}</td>
+                      <td data-label="Status">
+                        <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                          {admin.status}
+                        </span>
+                      </td>
+                      <td className="text-sm text-muted" data-label="Created">{format(admin.createdAt, 'dd MMM yyyy')}</td>
+                      <td data-label="Actions">
+                        <button
+                          className={`btn btn-sm ${admin.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                          onClick={() => toggleStatus(admin)}
+                        >
+                          {admin.status === 'active'
+                            ? <><ToggleLeft size={14} /> Disable</>
+                            : <><ToggleRight size={14} /> Enable</>
+                          }
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View Cards */}
+            <div className="mobile-only" style={{ padding: 'var(--space-4) var(--space-3)' }}>
+              {admins.map((admin) => (
+                <div 
+                  key={admin.id}
+                  className="mobile-card"
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                      <div className="avatar avatar-sm">{admin.name.charAt(0)}</div>
+                      <div>
+                        <div className="font-semibold text-sm" style={{ color: 'var(--color-text-primary)' }}>{admin.name}</div>
+                        <span className="text-xs text-muted" style={{ display: 'block', marginTop: 2 }}>
+                          Created: {format(admin.createdAt, 'dd MMM yyyy')}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                      {admin.status}
+                    </span>
+                  </div>
+
+                  <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)' }}>
+                    <div className="text-xs text-secondary">
+                      <span className="text-muted">Email: </span>{admin.email}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button
+                      className={`btn btn-sm ${admin.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                      onClick={() => toggleStatus(admin)}
+                      style={{ minHeight: 32 }}
+                    >
+                      {admin.status === 'active'
+                        ? <><ToggleLeft size={14} /> Disable</>
+                        : <><ToggleRight size={14} /> Enable</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
