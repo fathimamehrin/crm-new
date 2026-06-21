@@ -12,7 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Plus, UserCheck, X, ToggleLeft, ToggleRight,
-  Mail, User, Phone, Edit3, Check,
+  Mail, User, Phone, Edit3, Check, Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { User as UserType } from '../../types';
@@ -43,6 +43,16 @@ const AgentManagementPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredAgents = agents.filter((agent) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      agent.name.toLowerCase().includes(q) ||
+      agent.email.toLowerCase().includes(q) ||
+      (agent.phone && agent.phone.toLowerCase().includes(q))
+    );
+  });
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -183,6 +193,22 @@ const AgentManagementPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Search Input Bar */}
+      {agents.length > 0 && (
+        <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="search-wrapper" style={{ flex: 1, minWidth: '240px' }}>
+            <Search className="search-icon" size={16} />
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search agents by name, email, or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+ 
       <div className="card" style={{ padding: 0 }}>
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-10)' }}>
@@ -193,6 +219,12 @@ const AgentManagementPage: React.FC = () => {
             <div className="empty-state-icon"><UserCheck size={28} /></div>
             <h3 className="empty-state-title">No Agents Yet</h3>
             <p className="empty-state-desc">Add agents to assign clients and track their activity.</p>
+          </div>
+        ) : filteredAgents.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><UserCheck size={28} /></div>
+            <h3 className="empty-state-title">No Matching Agents</h3>
+            <p className="empty-state-desc">No agents matched your search query "{searchQuery}".</p>
           </div>
         ) : (
           <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
@@ -208,7 +240,7 @@ const AgentManagementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {agents.map((agent) => (
+                {filteredAgents.map((agent) => (
                   <tr 
                     key={agent.id}
                     onClick={(e) => {
