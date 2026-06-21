@@ -105,7 +105,7 @@ const ClientDetailsPage: React.FC = () => {
         clientName: client!.name,
         summaryId: requestingSummary.id,
         summaryText: requestingSummary.summaryText,
-        agentId: currentUser!.uid,
+        agentId: currentUser.uid,
         agentName: userProfile?.name || 'Agent',
         reason: requestReason,
       });
@@ -239,7 +239,7 @@ const ClientDetailsPage: React.FC = () => {
 
       // Update local state
       setSummaries((prev) =>
-        prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText } : s))
+        prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText, updatedAt: new Date() } : s))
       );
 
       await logActivity({
@@ -310,9 +310,9 @@ const ClientDetailsPage: React.FC = () => {
 
       // Update local state
       setSummaries((prev) =>
-        prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields } : s))
+        prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields, updatedAt: new Date() } : s))
       );
-      setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields } : null);
+      setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields, updatedAt: new Date() } : null);
       
       // Update modal edit fields to match the newly saved values
       setModalEditSummaryText(modalEditSummaryText);
@@ -687,7 +687,11 @@ const ClientDetailsPage: React.FC = () => {
                   >
                     <div className="client-log-header">
                       <span className="client-log-author">{s.createdByName || 'Agent'}</span>
-                      <span className="client-log-date">{format(s.createdAt, 'dd MMM yyyy')}</span>
+                      {s.updatedAt ? (
+                        <span className="client-log-date" style={{ color: 'var(--color-accent)' }}>Edited: {format(s.updatedAt, 'dd MMM yyyy')}</span>
+                      ) : (
+                        <span className="client-log-date">{format(s.createdAt, 'dd MMM yyyy')}</span>
+                      )}
                     </div>
                     <div className="client-log-body">
                       {s.summaryText}
@@ -736,7 +740,12 @@ const ClientDetailsPage: React.FC = () => {
                       </div>
                       <div>
                         <span className="client-feed-author-name">{s.createdByName || 'Unknown Agent'}</span>
-                        <div className="client-feed-post-date">{format(s.createdAt, 'dd MMM yyyy, hh:mm a')}</div>
+                        <div className="client-feed-post-date" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span>Created: {format(s.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
+                          {s.updatedAt && (
+                            <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>Edited: {format(s.updatedAt, 'dd MMM yyyy, hh:mm a')}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {editingSummaryId !== s.id && (
@@ -1052,8 +1061,11 @@ const ClientDetailsPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="font-semibold text-sm">Editing summary by {selectedSummary.createdByName || 'Unknown'}</div>
-                    <div className="text-xs text-muted">
-                      {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
+                    <div className="text-xs text-muted" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span>Created: {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
+                      {selectedSummary.updatedAt && (
+                        <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>Edited: {format(selectedSummary.updatedAt, 'dd MMM yyyy, hh:mm a')}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1170,8 +1182,11 @@ const ClientDetailsPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="font-semibold text-sm">Added by {selectedSummary.createdByName || 'Unknown'}</div>
-                    <div className="text-xs text-muted">
-                      {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}
+                    <div className="text-xs text-muted" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span>Created: {format(selectedSummary.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
+                      {selectedSummary.updatedAt && (
+                        <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>Edited: {format(selectedSummary.updatedAt, 'dd MMM yyyy, hh:mm a')}</span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -45,6 +45,7 @@ export interface Summary {
   documents: DocumentFile[];
   paymentDetails?: PaymentDetails;
   createdAt: Date;
+  updatedAt?: Date;
   createdBy: string;
   createdByName?: string;
 }

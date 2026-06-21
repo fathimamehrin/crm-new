@@ -51,6 +51,7 @@ export const clientFromDoc = (snap: AnySnap): Client => ({
 export const summaryFromDoc = (snap: AnySnap): Summary => ({
   id: snap.id, ...snap.data(),
   createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
   documents: snap.data().documents || [],
 } as Summary);
 
@@ -191,7 +192,10 @@ export const createSummary = async (data: Omit<Summary, 'id' | 'createdAt'>): Pr
 };
 
 export const updateSummary = async (id: string, data: Partial<Summary>): Promise<void> => {
-  await updateDoc(doc(db, 'summaries', id), cleanObject(data));
+  await updateDoc(doc(db, 'summaries', id), cleanObject({
+    ...data,
+    updatedAt: serverTimestamp(),
+  }));
 };
 
 // ─── Payments ────────────────────────────────────────────────────────────────

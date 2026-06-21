@@ -59,7 +59,7 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         isAgent() &&
         resource.data.agentId == request.auth.uid &&
-        request.resource.data.status == 'completed'
+        (request.resource.data.status == 'completed' || request.resource.data.status == 'pending')
       );
       allow delete: if isAdmin();
     }
@@ -73,7 +73,7 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         isAgent() &&
         resource.data.agentId == request.auth.uid &&
-        request.resource.data.status == 'completed'
+        (request.resource.data.status == 'completed' || request.resource.data.status == 'pending')
       );
       allow delete: if isAdmin();
     }
