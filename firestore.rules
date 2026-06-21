@@ -28,8 +28,12 @@ service cloud.firestore {
     match /clients/{clientId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAdmin() ||
-        (isAgent() && resource.data.assignedAgent == request.auth.uid);
+      allow update: if isAdmin() || (
+        isAgent() &&
+        resource.data.assignedAgent == request.auth.uid &&
+        exists(/databases/$(database)/documents/clientEditRequests/$(clientId)) &&
+        get(/databases/$(database)/documents/clientEditRequests/$(clientId)).data.status == 'approved'
+      );
       allow delete: if isAdmin();
     }
 
@@ -48,6 +52,20 @@ service cloud.firestore {
 
     // Edit Requests collection
     match /editRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        request.resource.data.agentId == request.auth.uid
+      );
+      allow update: if isAdmin() || (
+        isAgent() &&
+        resource.data.agentId == request.auth.uid &&
+        request.resource.data.status == 'completed'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Client Edit Requests collection
+    match /clientEditRequests/{clientId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && (
         request.resource.data.agentId == request.auth.uid

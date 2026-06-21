@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { getAllEditRequests, updateEditRequestStatus, logActivity } from '../../lib/firestore';
+import { 
+  getAllEditRequests, 
+  updateEditRequestStatus, 
+  getAllClientEditRequests, 
+  updateClientEditRequestStatus, 
+  logActivity 
+} from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
 import { Check, X, ClipboardList, Clock, ChevronDown, ChevronUp, User, FileText, AlertCircle } from 'lucide-react';
-import type { EditRequest } from '../../types';
+import type { EditRequest, ClientEditRequest } from '../../types';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -15,16 +21,26 @@ const STATUS_BADGE: Record<string, string> = {
 
 const EditRequestsPage: React.FC = () => {
   const { currentUser, userProfile } = useAuth();
-  const [requests, setRequests] = useState<EditRequest[]>([]);
+  
+  // Data states
+  const [summaryRequests, setSummaryRequests] = useState<EditRequest[]>([]);
+  const [clientRequests, setClientRequests] = useState<ClientEditRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Tab selectors
+  const [requestType, setRequestType] = useState<'summary' | 'client'>('summary');
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
 
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const data = await getAllEditRequests();
-      setRequests(data);
+      const [summariesData, clientsData] = await Promise.all([
+        getAllEditRequests(),
+        getAllClientEditRequests(),
+      ]);
+      setSummaryRequests(summariesData);
+      setClientRequests(clientsData);
     } catch (err) {
       console.error('Failed to load edit requests:', err);
       toast.error('Failed to load edit requests');
@@ -41,19 +57,33 @@ const EditRequestsPage: React.FC = () => {
     setExpandedRequests(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleAction = async (request: EditRequest, status: 'approved' | 'rejected') => {
+  const handleAction = async (request: EditRequest | ClientEditRequest, status: 'approved' | 'rejected') => {
     try {
-      await updateEditRequestStatus(request.summaryId, status);
-      
-      // Log this activity
-      await logActivity({
-        userId: currentUser!.uid,
-        userName: userProfile?.name,
-        action: 'summary_updated',
-        entityType: 'summary',
-        entityId: request.summaryId,
-        entityName: `Edit request by ${request.agentName} ${status}`,
-      });
+      if (requestType === 'summary') {
+        const req = request as EditRequest;
+        await updateEditRequestStatus(req.summaryId, status);
+        
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'summary_updated',
+          entityType: 'summary',
+          entityId: req.summaryId,
+          entityName: `Edit request by ${req.agentName} ${status}`,
+        });
+      } else {
+        const req = request as ClientEditRequest;
+        await updateClientEditRequestStatus(req.clientId, status);
+
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'client_updated',
+          entityType: 'client',
+          entityId: req.clientId,
+          entityName: `Edit request by ${req.agentName} ${status}`,
+        });
+      }
 
       toast.success(`Request successfully ${status}`);
       loadRequests();
@@ -63,27 +93,45 @@ const EditRequestsPage: React.FC = () => {
     }
   };
 
+  const activeRequests = requestType === 'summary' ? summaryRequests : clientRequests;
+
   const counts = {
-    all: requests.length,
-    pending: requests.filter(r => r.status === 'pending').length,
-    approved: requests.filter(r => r.status === 'approved').length,
-    rejected: requests.filter(r => r.status === 'rejected').length,
-    completed: requests.filter(r => r.status === 'completed').length,
+    all: activeRequests.length,
+    pending: activeRequests.filter(r => r.status === 'pending').length,
+    approved: activeRequests.filter(r => r.status === 'approved').length,
+    rejected: activeRequests.filter(r => r.status === 'rejected').length,
+    completed: activeRequests.filter(r => r.status === 'completed').length,
   };
 
-  const filteredRequests = requests.filter(req => {
+  const filteredRequests = activeRequests.filter(req => {
     if (activeTab === 'all') return true;
     return req.status === activeTab;
   });
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: 'var(--space-6)' }}>
+      <div className="page-header" style={{ marginBottom: 'var(--space-5)' }}>
         <h1 className="page-title">Edit Permission Requests</h1>
-        <p className="page-subtitle">Manage agent requests to edit call summaries</p>
+        <p className="page-subtitle">Manage agent requests to edit call summaries or client information</p>
       </div>
 
-      {/* Tabs Filter (Responsive Layout) */}
+      {/* Top Level Category Tabs */}
+      <div className="tabs" style={{ marginBottom: 'var(--space-5)' }}>
+        <button
+          className={`tab-btn ${requestType === 'summary' ? 'active' : ''}`}
+          onClick={() => { setRequestType('summary'); setActiveTab('all'); }}
+        >
+          Call Summaries
+        </button>
+        <button
+          className={`tab-btn ${requestType === 'client' ? 'active' : ''}`}
+          onClick={() => { setRequestType('client'); setActiveTab('all'); }}
+        >
+          Client Information
+        </button>
+      </div>
+
+      {/* Tabs Filter */}
       <div className="requests-tabs">
         {(['all', 'pending', 'approved', 'rejected', 'completed'] as const).map((tab) => {
           const count = counts[tab];
@@ -160,9 +208,11 @@ const EditRequestsPage: React.FC = () => {
                           <div className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)', wordBreak: 'break-word' }}>
                             "{req.reason}"
                           </div>
-                          <div className="text-xs text-muted truncate" title={req.summaryText} style={{ opacity: 0.8 }}>
-                            Original: {req.summaryText}
-                          </div>
+                          {requestType === 'summary' && (
+                            <div className="text-xs text-muted truncate" title={(req as EditRequest).summaryText} style={{ opacity: 0.8 }}>
+                              Original: {(req as EditRequest).summaryText}
+                            </div>
+                          )}
                         </div>
                       </td>
 
@@ -216,10 +266,12 @@ const EditRequestsPage: React.FC = () => {
           {/* Mobile View (Card List Layout) */}
           <div className="mobile-only">
             {filteredRequests.map((req) => {
+              const isSummaryReq = requestType === 'summary';
+              const summaryText = isSummaryReq ? (req as EditRequest).summaryText : '';
               const isExpanded = !!expandedRequests[req.id];
-              const previewText = req.summaryText.length > 90 
-                ? `${req.summaryText.substring(0, 90)}...` 
-                : req.summaryText;
+              const previewText = summaryText.length > 90 
+                ? `${summaryText.substring(0, 90)}...` 
+                : summaryText;
 
               return (
                 <div 
@@ -264,35 +316,37 @@ const EditRequestsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Original Notes */}
-                    <div className="request-card-meta-row" style={{ marginTop: 4 }}>
-                      <span className="request-card-meta-label">
-                        <FileText size={12} /> Original Summary Notes
-                      </span>
-                      
-                      {isExpanded ? (
-                        <div className="request-card-original-notes">
-                          {req.summaryText}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted" style={{ opacity: 0.9, lineHeight: 1.4, marginTop: 4 }}>
-                          {previewText}
-                        </div>
-                      )}
+                    {/* Original Notes for summary requests only */}
+                    {isSummaryReq && (
+                      <div className="request-card-meta-row" style={{ marginTop: 4 }}>
+                        <span className="request-card-meta-label">
+                          <FileText size={12} /> Original Summary Notes
+                        </span>
+                        
+                        {isExpanded ? (
+                          <div className="request-card-original-notes">
+                            {summaryText}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted" style={{ opacity: 0.9, lineHeight: 1.4, marginTop: 4 }}>
+                            {previewText}
+                          </div>
+                        )}
 
-                      {req.summaryText.length > 90 && (
-                        <button 
-                          onClick={() => toggleExpand(req.id)}
-                          className="request-card-collapse-btn"
-                        >
-                          {isExpanded ? (
-                            <>Collapse <ChevronUp size={12} /></>
-                          ) : (
-                            <>Show Full Notes <ChevronDown size={12} /></>
-                          )}
-                        </button>
-                      )}
-                    </div>
+                        {summaryText.length > 90 && (
+                          <button 
+                            onClick={() => toggleExpand(req.id)}
+                            className="request-card-collapse-btn"
+                          >
+                            {isExpanded ? (
+                              <>Collapse <ChevronUp size={12} /></>
+                            ) : (
+                              <>Show Full Notes <ChevronDown size={12} /></>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer / Actions */}

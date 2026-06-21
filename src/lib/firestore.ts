@@ -18,7 +18,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -28,6 +28,7 @@ const summariesColRef= () => collection(db, 'summaries');
 const paymentsColRef = () => collection(db, 'payments');
 const logsColRef     = () => collection(db, 'activityLogs');
 const editRequestsColRef = () => collection(db, 'editRequests');
+const clientEditRequestsColRef = () => collection(db, 'clientEditRequests');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -67,6 +68,13 @@ export const editRequestFromDoc = (snap: AnySnap): EditRequest => ({
   createdAt: toDate(snap.data().createdAt),
   updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
 } as EditRequest);
+
+export const clientEditRequestFromDoc = (snap: AnySnap): ClientEditRequest => ({
+  id: snap.id,
+  ...snap.data(),
+  createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
+} as ClientEditRequest);
 
 // Helper to recursively strip undefined properties so Firestore doesn't reject them
 const cleanObject = (obj: any): any => {
@@ -240,6 +248,42 @@ export const updateEditRequestStatus = async (
   status: 'approved' | 'rejected' | 'completed'
 ): Promise<void> => {
   await updateDoc(doc(db, 'editRequests', summaryId), cleanObject({
+    status,
+    updatedAt: serverTimestamp(),
+  }));
+};
+
+// ─── Client Edit Requests ─────────────────────────────────────────────────────
+export const createClientEditRequest = async (
+  clientId: string,
+  data: Omit<ClientEditRequest, 'id' | 'createdAt' | 'status'>
+): Promise<void> => {
+  await setDoc(doc(db, 'clientEditRequests', clientId), cleanObject({
+    ...data,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  }));
+};
+
+export const getClientEditRequest = async (clientId: string): Promise<ClientEditRequest | null> => {
+  const snap = await getDoc(doc(db, 'clientEditRequests', clientId));
+  if (!snap.exists()) return null;
+  return clientEditRequestFromDoc(snap as AnySnap);
+};
+
+export const getAllClientEditRequests = async (status?: string): Promise<ClientEditRequest[]> => {
+  const constraints: QueryConstraint[] = [];
+  if (status) constraints.push(where('status', '==', status));
+  const snap = await getDocs(query(clientEditRequestsColRef(), ...constraints));
+  const requests = snap.docs.map(clientEditRequestFromDoc);
+  return requests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+export const updateClientEditRequestStatus = async (
+  clientId: string,
+  status: 'approved' | 'rejected' | 'completed'
+): Promise<void> => {
+  await updateDoc(doc(db, 'clientEditRequests', clientId), cleanObject({
     status,
     updatedAt: serverTimestamp(),
   }));

@@ -135,3 +135,16 @@ export interface EditRequest {
   createdAt: Date;
   updatedAt?: Date;
 }
+
+export interface ClientEditRequest {
+  id: string; // Equals clientId
+  clientId: string;
+  clientName: string;
+  agentId: string;
+  agentName: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  createdAt: Date;
+  updatedAt?: Date;
+}
+

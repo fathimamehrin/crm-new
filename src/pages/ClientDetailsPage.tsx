@@ -4,12 +4,13 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink, X, Copy, Check, Grid, List
+  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, updateEditRequestStatus } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, updateEditRequestStatus, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest } from '../types';
+import EditClientModal from '../components/EditClientModal';
 import { resolvePresignedUrls } from '../lib/storage';
 import toast from 'react-hot-toast';
 
@@ -36,6 +37,53 @@ const ClientDetailsPage: React.FC = () => {
   const [requestingSummary, setRequestingSummary] = useState<Summary | null>(null);
   const [requestReason, setRequestReason] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  // Client edit requests state
+  const [clientEditRequest, setClientEditRequest] = useState<ClientEditRequest | null>(null);
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
+  const [showRequestClientEditModal, setShowRequestClientEditModal] = useState(false);
+  const [clientRequestReason, setClientRequestReason] = useState('');
+  const [submittingClientRequest, setSubmittingClientRequest] = useState(false);
+
+  const handleRequestClientEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!client || !clientRequestReason.trim()) return;
+    setSubmittingClientRequest(true);
+    try {
+      await createClientEditRequest(client.id, {
+        clientId: client.id,
+        clientName: client.name,
+        agentId: currentUser!.uid,
+        agentName: userProfile?.name || 'Agent',
+        reason: clientRequestReason,
+      });
+
+      const newReq = await getClientEditRequest(client.id);
+      setClientEditRequest(newReq);
+
+      toast.success('Client edit request submitted to admin!');
+      setShowRequestClientEditModal(false);
+      setClientRequestReason('');
+    } catch (err) {
+      console.error('Failed to create client edit request:', err);
+      toast.error('Failed to submit edit request');
+    } finally {
+      setSubmittingClientRequest(false);
+    }
+  };
+
+  const handleClientUpdated = async (updatedClient: Client) => {
+    setClient(updatedClient);
+    if (userRole === 'agent') {
+      try {
+        await updateClientEditRequestStatus(client!.id, 'completed');
+        const updatedReq = await getClientEditRequest(client!.id);
+        setClientEditRequest(updatedReq);
+      } catch (err) {
+        console.error('Failed to lock client edit request:', err);
+      }
+    }
+  };
 
   const canEditSummary = (summary: Summary | null) => {
     if (!summary) return false;
@@ -347,6 +395,16 @@ const ClientDetailsPage: React.FC = () => {
         ]);
         setClient(c);
 
+        // Load client edit request if agent
+        if (id) {
+          try {
+            const clientReq = await getClientEditRequest(id);
+            setClientEditRequest(clientReq);
+          } catch (err) {
+            console.error('Failed to load client edit request:', err);
+          }
+        }
+
         // Load any edit requests associated with the summaries
         const requestsMap: Record<string, EditRequest> = {};
         const requestPromises = s.map(async (summary) => {
@@ -430,7 +488,52 @@ const ClientDetailsPage: React.FC = () => {
               <h2 className="client-title">{client.name}</h2>
             </div>
           </div>
-          <div className="client-actions">
+          <div className="client-actions" style={{ display: 'flex', gap: '8px' }}>
+            {userRole === 'admin' ? (
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowEditClientModal(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+              >
+                <Edit3 size={16} />
+                <span>Edit Info</span>
+              </button>
+            ) : userRole === 'agent' && client.assignedAgent === currentUser?.uid ? (
+              <>
+                {(!clientEditRequest || clientEditRequest.status === 'completed' || clientEditRequest.status === 'rejected') && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowRequestClientEditModal(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                  >
+                    <Edit3 size={16} />
+                    <span>Request Edit</span>
+                  </button>
+                )}
+                {clientEditRequest?.status === 'pending' && (
+                  <button
+                    className="btn btn-secondary"
+                    disabled
+                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', opacity: 0.65, cursor: 'not-allowed' }}
+                    title="Edit request is pending admin approval"
+                  >
+                    <Clock size={16} style={{ animation: 'spin 2s linear infinite' }} />
+                    <span>Edit Pending</span>
+                  </button>
+                )}
+                {clientEditRequest?.status === 'approved' && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowEditClientModal(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', borderColor: 'var(--color-success)', color: '#059669', background: 'rgba(16, 185, 129, 0.05)' }}
+                  >
+                    <Edit3 size={16} />
+                    <span>Edit Info</span>
+                  </button>
+                )}
+              </>
+            ) : null}
+
             <button
               id="add-summary-btn"
               className="btn btn-primary"
@@ -1285,6 +1388,71 @@ const ClientDetailsPage: React.FC = () => {
                   disabled={submittingRequest || !requestReason.trim()}
                 >
                   {submittingRequest ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Details Modal */}
+      {showEditClientModal && client && (
+        <EditClientModal
+          client={client}
+          onClose={() => setShowEditClientModal(false)}
+          onUpdate={handleClientUpdated}
+        />
+      )}
+
+      {/* Request Client Edit Modal */}
+      {showRequestClientEditModal && (
+        <div className="modal-overlay" onClick={() => { if (!submittingClientRequest) setShowRequestClientEditModal(false); }}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Request Client Edit</h2>
+                <p className="text-sm text-muted" style={{ marginTop: 4 }}>
+                  Explain why you need to edit this client's profile details.
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={() => setShowRequestClientEditModal(false)}
+                disabled={submittingClientRequest}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRequestClientEdit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="form-group">
+                <label className="form-label required" htmlFor="client-request-reason">Reason for Request</label>
+                <textarea
+                  id="client-request-reason"
+                  className="form-input"
+                  style={{ minHeight: 100, resize: 'vertical' }}
+                  placeholder="e.g., Spelling correction in client name / updated email address"
+                  value={clientRequestReason}
+                  onChange={(e) => setClientRequestReason(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRequestClientEditModal(false)}
+                  disabled={submittingClientRequest}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={submittingClientRequest || !clientRequestReason.trim()}
+                >
+                  {submittingClientRequest ? 'Submitting...' : 'Submit Request'}
                 </button>
               </div>
             </form>
