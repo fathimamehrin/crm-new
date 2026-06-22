@@ -1,29 +1,116 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {  Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, RotateCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  captchaInput: z.string().min(1, 'Please enter the verification code'),
 });
 type FormData = z.infer<typeof schema>;
+
+const CAPTCHA_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+const generateCaptchaCode = () => {
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += CAPTCHA_CHARS.charAt(Math.floor(Math.random() * CAPTCHA_CHARS.length));
+  }
+  return code;
+};
+
+const drawCaptchaOnCanvas = (canvas: HTMLCanvasElement, code: string) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Clear and set background
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#f1f5f9'; // matching background token --color-bg-secondary
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw noise lines
+  for (let i = 0; i < 6; i++) {
+    ctx.strokeStyle = `rgba(${Math.floor(Math.random() * 150)}, ${Math.floor(Math.random() * 150)}, ${Math.floor(Math.random() * 255)}, 0.25)`;
+    ctx.lineWidth = 1 + Math.random() * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+    ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+    ctx.stroke();
+  }
+
+  // Draw noise dots
+  for (let i = 0; i < 35; i++) {
+    ctx.fillStyle = `rgba(${Math.floor(Math.random() * 180)}, ${Math.floor(Math.random() * 180)}, ${Math.floor(Math.random() * 220)}, 0.35)`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 1 + Math.random() * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw characters
+  ctx.textBaseline = 'middle';
+  const charWidth = canvas.width / (code.length + 1);
+  
+  for (let i = 0; i < code.length; i++) {
+    const char = code[i];
+    const fontSize = 20 + Math.floor(Math.random() * 6); // font size between 20 and 26
+    ctx.font = `bold ${fontSize}px "Inter", "Courier New", Courier, monospace`;
+    
+    // Random darker colors for high contrast and readability
+    ctx.fillStyle = `rgb(${Math.floor(Math.random() * 100)}, ${Math.floor(Math.random() * 100)}, ${Math.floor(Math.random() * 160)})`;
+    
+    // Position with slight randomness
+    const x = (i + 0.8) * charWidth;
+    const y = canvas.height / 2 + (Math.random() * 8 - 4);
+    
+    // Rotate slightly
+    ctx.save();
+    ctx.translate(x, y);
+    const angle = (Math.random() * 30 - 15) * Math.PI / 180; // -15deg to 15deg
+    ctx.rotate(angle);
+    ctx.fillText(char, 0, 0);
+    ctx.restore();
+  }
+};
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [captchaCode, setCaptchaCode] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, setError, setValue } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
+  const generateNewCaptcha = useCallback(() => {
+    setCaptchaCode(generateCaptchaCode());
+  }, []);
+
+  useEffect(() => {
+    generateNewCaptcha();
+  }, [generateNewCaptcha]);
+
+  useEffect(() => {
+    if (canvasRef.current && captchaCode) {
+      drawCaptchaOnCanvas(canvasRef.current, captchaCode);
+    }
+  }, [captchaCode]);
+
   const onSubmit = async (data: FormData) => {
+    if (data.captchaInput.toLowerCase() !== captchaCode.toLowerCase()) {
+      setError('captchaInput', { type: 'manual', message: 'Incorrect verification code' });
+      setValue('captchaInput', '');
+      generateNewCaptcha();
+      return;
+    }
+
     setLoading(true);
     try {
       await login(data.email, data.password);
@@ -36,6 +123,9 @@ const LoginPage: React.FC = () => {
         ? 'This account has been disabled'
         : 'Login failed. Please try again.';
       toast.error(msg);
+      // Refresh captcha on login failure for security
+      generateNewCaptcha();
+      setValue('captchaInput', '');
     } finally {
       setLoading(false);
     }
@@ -138,6 +228,80 @@ const LoginPage: React.FC = () => {
                 </button>
               </div>
               {errors.password && <span className="form-error">{errors.password.message}</span>}
+            </div>
+
+            {/* Security Captcha */}
+            <div className="form-group">
+              <label className="form-label required" htmlFor="login-captcha">Security Verification</label>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-2)',
+                background: 'var(--color-bg-secondary)',
+                padding: 'var(--space-2)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <canvas
+                    ref={canvasRef}
+                    width={150}
+                    height={45}
+                    style={{
+                      borderRadius: 'var(--radius-sm)',
+                      background: '#f1f5f9',
+                      border: '1px solid var(--color-border)',
+                      display: 'block',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={generateNewCaptcha}
+                    style={{
+                      background: 'var(--color-bg-card)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: 'var(--space-2)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--color-text-secondary)',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--color-accent)';
+                      e.currentTarget.style.borderColor = 'var(--color-accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'var(--color-text-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--color-border)';
+                    }}
+                    title="Refresh Captcha"
+                    aria-label="Refresh Captcha"
+                  >
+                    <RotateCw size={16} />
+                  </button>
+                </div>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', fontWeight: 500, marginRight: 'var(--space-2)' }}>
+                  Case-insensitive
+                </span>
+              </div>
+              
+              <div className="search-wrapper">
+                <input
+                  id="login-captcha"
+                  type="text"
+                  className={`form-input ${errors.captchaInput ? 'error' : ''}`}
+                  placeholder="Enter the 6-character code"
+                  autoComplete="off"
+                  {...register('captchaInput')}
+                />
+              </div>
+              {errors.captchaInput && <span className="form-error">{errors.captchaInput.message}</span>}
             </div>
 
             <button
