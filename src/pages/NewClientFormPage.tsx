@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X } from 'lucide-react';
-import { createClient, createSummary, createPayment, getClientByWhatsApp } from '../lib/firestore';
+import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient, createClientEditRequest } from '../lib/firestore';
 import { uploadFile, generateStoragePath } from '../lib/storage';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,15 +101,10 @@ const NewClientFormPage: React.FC = () => {
   const onSubmit = async (data: FormData) => {
     if (!currentUser) return;
 
+    let existing: any = null;
+    const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
     try {
-      const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
-      const existing = await getClientByWhatsApp(fullWhatsAppNumber);
-      if (existing) {
-        toast.success('Client already exists. Opening existing record.');
-        const isAdmin = userProfile?.role === 'admin';
-        navigate(isAdmin ? `/admin/clients/${existing.id}` : `/clients/${existing.id}`);
-        return;
-      }
+      existing = await getClientByWhatsApp(fullWhatsAppNumber);
     } catch (err) {
       console.error(err);
       toast.error('Error checking WhatsApp number');
@@ -182,29 +177,84 @@ const NewClientFormPage: React.FC = () => {
         });
       }
 
+      const isAdmin = userProfile?.role === 'admin';
       const isAgent = userProfile?.role === 'agent';
-      const clientId = await createClient({
-        name: data.name,
-        whatsappNumber: data.countryCode + data.whatsappNumber,
-        email: data.email || '',
-        alternateContact: data.alternateContact || '',
-        address: '',
-        notes: data.notes || '',
-        profileImage: '',
-        status: 'active',
-        assignedAgent: isAgent ? currentUser.uid : '',
-        assignedAgentName: isAgent ? (userProfile?.name || '') : '',
-        createdBy: currentUser.uid,
-      });
+      let clientId = '';
 
-      await logActivity({
-        userId: currentUser.uid,
-        userName: userProfile?.name,
-        action: 'client_created',
-        entityType: 'client',
-        entityId: clientId,
-        entityName: data.name,
-      });
+      if (existing) {
+        clientId = existing.id;
+        const mergedNotes = data.notes 
+          ? (existing.notes ? `${existing.notes}\n\n${data.notes}` : data.notes)
+          : (existing.notes || '');
+
+        if (isAdmin) {
+          await updateClient(clientId, {
+            name: data.name,
+            email: data.email || existing.email || '',
+            alternateContact: data.alternateContact || existing.alternateContact || '',
+            notes: mergedNotes,
+          });
+          await logActivity({
+            userId: currentUser.uid,
+            userName: userProfile?.name,
+            action: 'client_updated',
+            entityType: 'client',
+            entityId: clientId,
+            entityName: data.name,
+          });
+          toast.success('Existing client details updated.');
+        } else {
+          await createClientEditRequest(clientId, {
+            clientId,
+            clientName: existing.name,
+            agentId: currentUser.uid,
+            agentName: userProfile?.name || 'Agent',
+            reason: 'Automatic details update & client assignment request on duplicate lead submission',
+            requestType: 'edit',
+            proposedChanges: {
+              name: data.name,
+              email: data.email || existing.email || '',
+              alternateContact: data.alternateContact || existing.alternateContact || '',
+              notes: mergedNotes,
+              assignedAgent: currentUser.uid,
+              assignedAgentName: userProfile?.name || '',
+            },
+          });
+          await logActivity({
+            userId: currentUser.uid,
+            userName: userProfile?.name,
+            action: 'client_updated',
+            entityType: 'client',
+            entityId: clientId,
+            entityName: `${data.name} (Takeover requested)`,
+          });
+          toast.success('Existing client found. Takeover/edit request submitted to Admin.');
+        }
+      } else {
+        clientId = await createClient({
+          name: data.name,
+          whatsappNumber: data.countryCode + data.whatsappNumber,
+          email: data.email || '',
+          alternateContact: data.alternateContact || '',
+          address: '',
+          notes: data.notes || '',
+          profileImage: '',
+          status: 'active',
+          assignedAgent: isAgent ? currentUser.uid : '',
+          assignedAgentName: isAgent ? (userProfile?.name || '') : '',
+          createdBy: currentUser.uid,
+        });
+
+        await logActivity({
+          userId: currentUser.uid,
+          userName: userProfile?.name,
+          action: 'client_created',
+          entityType: 'client',
+          entityId: clientId,
+          entityName: data.name,
+        });
+        toast.success('New client created successfully.');
+      }
 
       const hasSummary = addSummary || uploadedDocs.length > 0;
       let summaryId = '';
@@ -219,7 +269,7 @@ const NewClientFormPage: React.FC = () => {
 
         summaryId = await createSummary({
           clientId: clientId,
-          summaryText: addSummary ? (data.summaryText || '') : 'Uploaded documents on client creation',
+          summaryText: addSummary ? (data.summaryText || '') : 'Uploaded documents on client registration',
           voiceUrl: voiceUrl || undefined,
           documents: uploadedDocs,
           paymentDetails,
@@ -261,8 +311,6 @@ const NewClientFormPage: React.FC = () => {
         }
       }
 
-      toast.success('New client created successfully.');
-      const isAdmin = userProfile?.role === 'admin';
       navigate(isAdmin ? `/admin/clients/${clientId}` : `/clients/${clientId}`);
     } catch (err: any) {
       console.error(err);

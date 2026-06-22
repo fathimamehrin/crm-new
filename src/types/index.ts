@@ -128,10 +128,15 @@ export interface EditRequest {
   clientId: string;
   clientName: string;
   summaryId: string;
-  summaryText: string;
+  summaryText: string; // Original summary text
+  requestType?: 'edit' | 'delete';
+  proposedChanges?: {
+    summaryText?: string;
+    paymentDetails?: PaymentDetails;
+  };
   agentId: string;
   agentName: string;
-  reason: string;
+  reason?: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   createdAt: Date;
   updatedAt?: Date;
@@ -141,11 +146,24 @@ export interface ClientEditRequest {
   id: string; // Equals clientId
   clientId: string;
   clientName: string;
+  requestType?: 'edit' | 'delete';
+  proposedChanges?: {
+    name?: string;
+    whatsappNumber?: string;
+    email?: string;
+    alternateContact?: string;
+    address?: string;
+    notes?: string;
+    status?: ClientStatus;
+    assignedAgent?: string;
+    assignedAgentName?: string;
+  };
   agentId: string;
   agentName: string;
-  reason: string;
+  reason?: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   createdAt: Date;
   updatedAt?: Date;
 }
+
 

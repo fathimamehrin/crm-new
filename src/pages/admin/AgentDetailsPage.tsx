@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Calendar, UserCheck, Search, MessageCircle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, UserCheck, Search, MessageCircle, ExternalLink, Key } from 'lucide-react';
 import { getUserById, getClients } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
 import { format } from 'date-fns';
 import type { User, Client } from '../../types';
 import toast from 'react-hot-toast';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'badge-success',
@@ -23,6 +25,24 @@ const AgentDetailsPage: React.FC = () => {
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!agent) return;
+    if (!window.confirm(`Are you sure you want to send a password reset email to ${agent.name} (${agent.email})?`)) {
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      await sendPasswordResetEmail(auth, agent.email);
+      toast.success(`Password reset email sent to ${agent.name}`);
+    } catch (err: any) {
+      console.error('Failed to send password reset email:', err);
+      toast.error(err.message || 'Failed to send password reset email');
+    } finally {
+      setResettingPassword(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -121,6 +141,14 @@ const AgentDetailsPage: React.FC = () => {
             {agent.status}
           </span>
           <span className="text-xs text-muted">Sales Agent</span>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={handleResetPassword}
+            disabled={resettingPassword}
+          >
+            <Key size={12} /> {resettingPassword ? 'Sending...' : 'Reset Password'}
+          </button>
         </div>
       </div>
 

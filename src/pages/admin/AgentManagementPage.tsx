@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { db, firebaseConfig } from '../../lib/firebase';
+import { db, firebaseConfig, auth } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { logActivity } from '../../lib/firestore';
@@ -12,7 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Plus, UserCheck, X, ToggleLeft, ToggleRight,
-  Mail, User, Phone, Edit3, Check, Search,
+  Mail, User, Phone, Edit3, Check, Search, Key,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { User as UserType } from '../../types';
@@ -44,14 +44,34 @@ const AgentManagementPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
+
+  const handleResetPassword = async (agent: UserType) => {
+    if (!window.confirm(`Are you sure you want to send a password reset email to ${agent.name} (${agent.email})?`)) {
+      return;
+    }
+    setResettingPasswordId(agent.id);
+    try {
+      await sendPasswordResetEmail(auth, agent.email);
+      toast.success(`Password reset email sent to ${agent.name}`);
+    } catch (err: any) {
+      console.error('Failed to send password reset email:', err);
+      toast.error(err.message || 'Failed to send password reset email');
+    } finally {
+      setResettingPasswordId(null);
+    }
+  };
 
   const filteredAgents = agents.filter((agent) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       agent.name.toLowerCase().includes(q) ||
       agent.email.toLowerCase().includes(q) ||
       (agent.phone && agent.phone.toLowerCase().includes(q))
     );
+    const matchesStatus = statusFilter === 'all' || agent.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<FormData>({
@@ -193,7 +213,7 @@ const AgentManagementPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Search Input Bar */}
+      {/* Search & Filter Bar */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
         <div className="search-wrapper" style={{ flex: 1, minWidth: '240px' }}>
           <Search className="search-icon" size={16} />
@@ -204,6 +224,18 @@ const AgentManagementPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+        <div style={{ width: '180px' }}>
+          <select
+            className="form-input form-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled')}
+            aria-label="Filter by Status"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="disabled">Disabled Only</option>
+          </select>
         </div>
       </div>
  
@@ -280,6 +312,16 @@ const AgentManagementPage: React.FC = () => {
                           <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
                             <Edit3 size={14} />
                           </button>
+                          <button 
+                            className="btn btn-ghost btn-sm" 
+                            onClick={() => handleResetPassword(agent)} 
+                            title="Reset Password"
+                            aria-label="Reset Password"
+                            disabled={resettingPasswordId === agent.id}
+                            style={{ padding: '6px' }}
+                          >
+                            <Key size={14} />
+                          </button>
                           <button
                             className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
                             onClick={() => toggleStatus(agent)}
@@ -347,6 +389,14 @@ const AgentManagementPage: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 4 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
                       <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                    </button>
+                    <button 
+                      className="btn btn-ghost btn-sm" 
+                      onClick={() => handleResetPassword(agent)} 
+                      disabled={resettingPasswordId === agent.id}
+                      style={{ minHeight: 32 }}
+                    >
+                      <Key size={14} /> <span style={{ marginLeft: 4 }}>Reset PW</span>
                     </button>
                     <button
                       className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}

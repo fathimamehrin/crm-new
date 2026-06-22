@@ -16,6 +16,7 @@ import {
   onSnapshot,
   writeBatch,
   serverTimestamp,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest } from '../types';
@@ -251,6 +252,22 @@ export const updateEditRequestStatus = async (
   summaryId: string,
   status: 'approved' | 'rejected' | 'completed'
 ): Promise<void> => {
+  if (status === 'approved') {
+    const req = await getEditRequest(summaryId);
+    if (req) {
+      if (req.requestType === 'delete') {
+        await deleteDoc(doc(db, 'summaries', summaryId));
+      } else {
+        if (req.proposedChanges) {
+          await updateDoc(doc(db, 'summaries', summaryId), cleanObject({
+            ...req.proposedChanges,
+            updatedAt: serverTimestamp(),
+          }));
+        }
+      }
+    }
+  }
+
   await updateDoc(doc(db, 'editRequests', summaryId), cleanObject({
     status,
     updatedAt: serverTimestamp(),
@@ -287,6 +304,19 @@ export const updateClientEditRequestStatus = async (
   clientId: string,
   status: 'approved' | 'rejected' | 'completed'
 ): Promise<void> => {
+  if (status === 'approved') {
+    const req = await getClientEditRequest(clientId);
+    if (req) {
+      if (req.requestType === 'delete') {
+        await deleteDoc(doc(db, 'clients', clientId));
+      } else {
+        if (req.proposedChanges) {
+          await updateDoc(doc(db, 'clients', clientId), cleanObject(req.proposedChanges));
+        }
+      }
+    }
+  }
+
   await updateDoc(doc(db, 'clientEditRequests', clientId), cleanObject({
     status,
     updatedAt: serverTimestamp(),
@@ -320,4 +350,5 @@ export {
   setDoc,
   updateDoc,
   getDoc,
+  deleteDoc,
 };

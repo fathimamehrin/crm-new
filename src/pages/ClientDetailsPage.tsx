@@ -6,8 +6,9 @@ import {
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, updateEditRequestStatus, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
+import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest } from '../types';
 import EditClientModal from '../components/EditClientModal';
@@ -34,9 +35,6 @@ const ClientDetailsPage: React.FC = () => {
 
   // Edit requests tracking state
   const [editRequests, setEditRequests] = useState<Record<string, EditRequest>>({});
-  const [requestingSummary, setRequestingSummary] = useState<Summary | null>(null);
-  const [requestReason, setRequestReason] = useState('');
-  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   // Client edit requests state
   const [clientEditRequest, setClientEditRequest] = useState<ClientEditRequest | null>(null);
@@ -44,6 +42,15 @@ const ClientDetailsPage: React.FC = () => {
   const [showRequestClientEditModal, setShowRequestClientEditModal] = useState(false);
   const [clientRequestReason, setClientRequestReason] = useState('');
   const [submittingClientRequest, setSubmittingClientRequest] = useState(false);
+
+  // New deletion and edit/takeover state variables
+  const [summaryEditReason, setSummaryEditReason] = useState('');
+  const [showRequestClientDeleteModal, setShowRequestClientDeleteModal] = useState(false);
+  const [clientDeleteReason, setClientDeleteReason] = useState('');
+  const [submittingClientDelete, setSubmittingClientDelete] = useState(false);
+  const [deletingSummary, setDeletingSummary] = useState<Summary | null>(null);
+  const [summaryDeleteReason, setSummaryDeleteReason] = useState('');
+  const [submittingSummaryDelete, setSubmittingSummaryDelete] = useState(false);
 
   const handleRequestClientEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,17 +63,22 @@ const ClientDetailsPage: React.FC = () => {
         agentId: currentUser!.uid,
         agentName: userProfile?.name || 'Agent',
         reason: clientRequestReason,
+        requestType: 'edit',
+        proposedChanges: {
+          assignedAgent: currentUser!.uid,
+          assignedAgentName: userProfile?.name || 'Agent',
+        }
       });
 
       const newReq = await getClientEditRequest(client.id);
       setClientEditRequest(newReq);
 
-      toast.success('Client edit request submitted to admin!');
+      toast.success('Client claim request submitted to admin!');
       setShowRequestClientEditModal(false);
       setClientRequestReason('');
     } catch (err) {
-      console.error('Failed to create client edit request:', err);
-      toast.error('Failed to submit edit request');
+      console.error('Failed to create client claim request:', err);
+      toast.error('Failed to submit claim request');
     } finally {
       setSubmittingClientRequest(false);
     }
@@ -85,46 +97,118 @@ const ClientDetailsPage: React.FC = () => {
     }
   };
 
-  const canEditSummary = (summary: Summary | null) => {
-    if (!summary) return false;
-    if (userRole === 'admin') return true;
-    if (userRole === 'agent' && summary.createdBy === currentUser?.uid) {
-      const req = editRequests[summary.id];
-      return req && req.status === 'approved';
+
+  const handleAdminDeleteClient = async () => {
+    if (!client) return;
+    if (!window.confirm(`Are you sure you want to permanently delete the client "${client.name}" and all their records?`)) {
+      return;
     }
-    return false;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, 'clients', client.id));
+      await logActivity({
+        userId: currentUser!.uid,
+        userName: userProfile?.name,
+        action: 'client_updated',
+        entityType: 'client',
+        entityId: client.id,
+        entityName: `${client.name} (Deleted by Admin)`,
+      });
+      toast.success('Client permanently deleted');
+      navigate('/');
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+      toast.error('Failed to delete client');
+      setLoading(false);
+    }
   };
 
-  const handleRequestEdit = async (e: React.FormEvent) => {
+  const handleRequestClientDelete = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!requestingSummary || !requestReason.trim()) return;
-    setSubmittingRequest(true);
+    if (!client) return;
+    setSubmittingClientDelete(true);
     try {
-      await createEditRequest(requestingSummary.id, {
-        clientId: client!.id,
-        clientName: client!.name,
-        summaryId: requestingSummary.id,
-        summaryText: requestingSummary.summaryText,
-        agentId: currentUser.uid,
+      await createClientEditRequest(client.id, {
+        clientId: client.id,
+        clientName: client.name,
+        agentId: currentUser!.uid,
         agentName: userProfile?.name || 'Agent',
-        reason: requestReason,
+        reason: clientDeleteReason.trim() || 'Client deletion request',
+        requestType: 'delete',
       });
-      
-      const newReq = await getEditRequest(requestingSummary.id);
-      if (newReq) {
-        setEditRequests((prev) => ({ ...prev, [requestingSummary.id]: newReq }));
-      }
-      
-      toast.success('Edit request submitted to admin!');
-      setRequestingSummary(null);
-      setRequestReason('');
+
+      const newReq = await getClientEditRequest(client.id);
+      setClientEditRequest(newReq);
+
+      toast.success('Client deletion request submitted to Admin!');
+      setShowRequestClientDeleteModal(false);
+      setClientDeleteReason('');
     } catch (err) {
-      console.error('Failed to create edit request:', err);
-      toast.error('Failed to submit edit request');
+      console.error('Failed to create client deletion request:', err);
+      toast.error('Failed to submit deletion request');
     } finally {
-      setSubmittingRequest(false);
+      setSubmittingClientDelete(false);
     }
   };
+
+  const handleAdminDeleteSummary = async (summaryId: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this summary?')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, 'summaries', summaryId));
+      await logActivity({
+        userId: currentUser!.uid,
+        userName: userProfile?.name,
+        action: 'summary_updated',
+        entityType: 'summary',
+        entityId: summaryId,
+        entityName: `Deleted summary for client`,
+      });
+      toast.success('Summary permanently deleted');
+      setSummaries(prev => prev.filter(s => s.id !== summaryId));
+      setSelectedSummary(null);
+    } catch (err) {
+      console.error('Failed to delete summary:', err);
+      toast.error('Failed to delete summary');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestSummaryDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deletingSummary) return;
+    setSubmittingSummaryDelete(true);
+    try {
+      await createEditRequest(deletingSummary.id, {
+        clientId: client!.id,
+        clientName: client!.name,
+        summaryId: deletingSummary.id,
+        summaryText: deletingSummary.summaryText,
+        agentId: currentUser!.uid,
+        agentName: userProfile?.name || 'Agent',
+        reason: summaryDeleteReason.trim() || 'Summary deletion request',
+        requestType: 'delete',
+      });
+
+      const newReq = await getEditRequest(deletingSummary.id);
+      if (newReq) {
+        setEditRequests((prev) => ({ ...prev, [deletingSummary.id]: newReq }));
+      }
+
+      toast.success('Deletion request submitted to Admin!');
+      setDeletingSummary(null);
+      setSummaryDeleteReason('');
+    } catch (err) {
+      console.error('Failed to create deletion request:', err);
+      toast.error('Failed to submit deletion request');
+    } finally {
+      setSubmittingSummaryDelete(false);
+    }
+  };
+
 
   const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
   const [editSummaryText, setEditSummaryText] = useState('');
@@ -223,36 +307,58 @@ const ClientDetailsPage: React.FC = () => {
   const handleSaveSummary = async (summaryId: string) => {
     setSavingSummary(true);
     try {
-      await updateSummary(summaryId, { summaryText: editSummaryText });
+      if (userRole === 'admin') {
+        await updateSummary(summaryId, { summaryText: editSummaryText });
 
-      // Complete request if agent
-      if (userRole === 'agent') {
-        await updateEditRequestStatus(summaryId, 'completed');
-        setEditRequests((prev) => {
-          const updated = { ...prev };
-          if (updated[summaryId]) {
-            updated[summaryId] = { ...updated[summaryId], status: 'completed' };
-          }
-          return updated;
+        // Update local state
+        setSummaries((prev) =>
+          prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText, updatedAt: new Date() } : s))
+        );
+
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'summary_updated',
+          entityType: 'summary',
+          entityId: summaryId,
+          entityName: `Edited summary for client`,
         });
+
+        toast.success('Summary updated successfully');
+      } else {
+        // Agent submits proposed edit request
+        await createEditRequest(summaryId, {
+          clientId: client!.id,
+          clientName: client!.name,
+          summaryId: summaryId,
+          summaryText: summaries.find(s => s.id === summaryId)?.summaryText || '',
+          agentId: currentUser!.uid,
+          agentName: userProfile?.name || 'Agent',
+          reason: summaryEditReason.trim() || 'Summary text update request',
+          requestType: 'edit',
+          proposedChanges: {
+            summaryText: editSummaryText,
+          },
+        });
+
+        const newReq = await getEditRequest(summaryId);
+        if (newReq) {
+          setEditRequests((prev) => ({ ...prev, [summaryId]: newReq }));
+        }
+
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'summary_updated',
+          entityType: 'summary',
+          entityId: summaryId,
+          entityName: `Edited summary for client (Edit request submitted)`,
+        });
+
+        toast.success('Edit request submitted to Admin');
       }
 
-      // Update local state
-      setSummaries((prev) =>
-        prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText, updatedAt: new Date() } : s))
-      );
-
-      await logActivity({
-        userId: currentUser!.uid,
-        userName: userProfile?.name,
-        action: 'summary_updated',
-        entityType: 'summary',
-        entityId: summaryId,
-        entityName: `Edited summary for client`,
-      });
-
       setEditingSummaryId(null);
-      toast.success('Summary updated successfully');
     } catch {
       toast.error('Failed to update summary');
     } finally {
@@ -284,45 +390,65 @@ const ClientDetailsPage: React.FC = () => {
         paymentDetails: updatedPaymentDetails,
       };
 
-      await updateSummary(selectedSummary.id, updatedFields);
+      if (userRole === 'admin') {
+        await updateSummary(selectedSummary.id, updatedFields);
 
-      // Complete request if agent
-      if (userRole === 'agent') {
-        await updateEditRequestStatus(selectedSummary.id, 'completed');
-        setEditRequests((prev) => {
-          const updated = { ...prev };
-          if (updated[selectedSummary.id]) {
-            updated[selectedSummary.id] = { ...updated[selectedSummary.id], status: 'completed' };
-          }
-          return updated;
+        // Log activity
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'summary_updated',
+          entityType: 'summary',
+          entityId: selectedSummary.id,
+          entityName: `Edited summary details in modal`,
         });
+
+        // Update local state
+        setSummaries((prev) =>
+          prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields, updatedAt: new Date() } : s))
+        );
+        setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields, updatedAt: new Date() } : null);
+        
+        // Update modal edit fields to match the newly saved values
+        setModalEditSummaryText(modalEditSummaryText);
+        setModalEditAmount(modalEditAmount);
+        setModalEditStatus(modalEditStatus);
+        setModalEditTransactionId(modalEditTransactionId);
+        setModalEditPaymentNotes(modalEditPaymentNotes);
+
+        setIsEditingInModal(false);
+        toast.success('Summary details updated successfully');
+      } else {
+        // Agent submits proposed changes as edit request
+        await createEditRequest(selectedSummary.id, {
+          clientId: client!.id,
+          clientName: client!.name,
+          summaryId: selectedSummary.id,
+          summaryText: selectedSummary.summaryText,
+          agentId: currentUser!.uid,
+          agentName: userProfile?.name || 'Agent',
+          reason: summaryEditReason.trim() || 'Summary details update request',
+          requestType: 'edit',
+          proposedChanges: updatedFields,
+        });
+
+        const newReq = await getEditRequest(selectedSummary.id);
+        if (newReq) {
+          setEditRequests((prev) => ({ ...prev, [selectedSummary.id]: newReq }));
+        }
+
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'summary_updated',
+          entityType: 'summary',
+          entityId: selectedSummary.id,
+          entityName: `Edited summary details in modal (Edit request submitted)`,
+        });
+
+        toast.success('Edit request submitted to Admin');
+        setIsEditingInModal(false);
       }
-
-      // Log activity
-      await logActivity({
-        userId: currentUser!.uid,
-        userName: userProfile?.name,
-        action: 'summary_updated',
-        entityType: 'summary',
-        entityId: selectedSummary.id,
-        entityName: `Edited summary details in modal`,
-      });
-
-      // Update local state
-      setSummaries((prev) =>
-        prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields, updatedAt: new Date() } : s))
-      );
-      setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields, updatedAt: new Date() } : null);
-      
-      // Update modal edit fields to match the newly saved values
-      setModalEditSummaryText(modalEditSummaryText);
-      setModalEditAmount(modalEditAmount);
-      setModalEditStatus(modalEditStatus);
-      setModalEditTransactionId(modalEditTransactionId);
-      setModalEditPaymentNotes(modalEditPaymentNotes);
-
-      setIsEditingInModal(false);
-      toast.success('Summary details updated successfully');
       return true;
     } catch (err) {
       console.error("Failed to update summary in modal:", err);
@@ -490,46 +616,67 @@ const ClientDetailsPage: React.FC = () => {
           </div>
           <div className="client-actions" style={{ display: 'flex', gap: '8px' }}>
             {userRole === 'admin' ? (
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowEditClientModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-              >
-                <Edit3 size={16} />
-                <span>Edit Info</span>
-              </button>
-            ) : userRole === 'agent' && client.assignedAgent === currentUser?.uid ? (
               <>
-                {(!clientEditRequest || clientEditRequest.status === 'completed' || clientEditRequest.status === 'rejected') && (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setShowRequestClientEditModal(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-                  >
-                    <Edit3 size={16} />
-                    <span>Request Edit</span>
-                  </button>
-                )}
-                {clientEditRequest?.status === 'pending' && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditClientModal(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                >
+                  <Edit3 size={16} />
+                  <span>Edit Info</span>
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleAdminDeleteClient}
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                >
+                  <X size={16} />
+                  <span>Delete Client</span>
+                </button>
+              </>
+            ) : userRole === 'agent' ? (
+              <>
+                {clientEditRequest?.status === 'pending' ? (
                   <button
                     className="btn btn-secondary"
                     disabled
                     style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', opacity: 0.65, cursor: 'not-allowed' }}
-                    title="Edit request is pending admin approval"
+                    title="An edit/takeover request is pending Admin approval"
                   >
                     <Clock size={16} style={{ animation: 'spin 2s linear infinite' }} />
-                    <span>Edit Pending</span>
+                    <span>Request Pending</span>
                   </button>
-                )}
-                {clientEditRequest?.status === 'approved' && (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setShowEditClientModal(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', borderColor: 'var(--color-success)', color: '#059669', background: 'rgba(16, 185, 129, 0.05)' }}
-                  >
-                    <Edit3 size={16} />
-                    <span>Edit Info</span>
-                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setShowEditClientModal(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                    >
+                      <Edit3 size={16} />
+                      <span>{client.assignedAgent === currentUser?.uid ? 'Edit Info' : 'Claim & Edit'}</span>
+                    </button>
+                    {client.assignedAgent !== currentUser?.uid && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowRequestClientEditModal(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                      >
+                        <UserCheck size={16} />
+                        <span>Claim Client</span>
+                      </button>
+                    )}
+                    {client.assignedAgent === currentUser?.uid && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowRequestClientDeleteModal(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                      >
+                        <X size={16} />
+                        <span>Delete Client</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             ) : null}
@@ -749,44 +896,68 @@ const ClientDetailsPage: React.FC = () => {
                       </div>
                     </div>
                     {editingSummaryId !== s.id && (
-                      <>
-                        {canEditSummary(s) ? (
-                          <button
-                            className="btn btn-ghost btn-icon"
-                            style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEditSummary(s);
-                            }}
-                            title="Edit Summary"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                        ) : (
-                          userRole === 'agent' && s.createdBy === currentUser?.uid && (
-                            <>
-                              {(!editRequests[s.id] || editRequests[s.id].status === 'completed' || editRequests[s.id].status === 'rejected') && (
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {userRole === 'admin' ? (
+                          <>
+                            <button
+                              className="btn btn-ghost btn-icon"
+                              style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartEditSummary(s);
+                              }}
+                              title="Edit Summary"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-icon"
+                              style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAdminDeleteSummary(s.id);
+                              }}
+                              title="Delete Summary"
+                            >
+                              <X size={12} />
+                            </button>
+                          </>
+                        ) : userRole === 'agent' && s.createdBy === currentUser?.uid ? (
+                          <>
+                            {editRequests[s.id]?.status === 'pending' ? (
+                              <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '10px' }} title={`Reason: ${editRequests[s.id].reason}`}>
+                                ⏳ Pending
+                              </span>
+                            ) : (
+                              <>
                                 <button
                                   className="btn btn-ghost btn-icon"
-                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-text-muted)' }}
+                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setRequestingSummary(s);
+                                    setSummaryEditReason('');
+                                    handleStartEditSummary(s);
                                   }}
-                                  title={editRequests[s.id]?.status === 'rejected' ? "Request Edit (Previous rejected)" : "Request Edit Permission"}
+                                  title="Edit Summary"
                                 >
                                   <Edit3 size={12} />
                                 </button>
-                              )}
-                              {editRequests[s.id]?.status === 'pending' && (
-                                <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '10px' }} title={`Reason: ${editRequests[s.id].reason}`}>
-                                  ⏳ Pending
-                                </span>
-                              )}
-                            </>
-                          )
-                        )}
-                      </>
+                                <button
+                                  className="btn btn-ghost btn-icon"
+                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeletingSummary(s);
+                                  }}
+                                  title="Request Delete Summary"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
                     )}
                   </div>
 
@@ -803,6 +974,16 @@ const ClientDetailsPage: React.FC = () => {
                           onChange={(e) => setEditSummaryText(e.target.value)}
                           placeholder="Edit call summary..."
                         />
+                        {userRole === 'agent' && (
+                          <input
+                            type="text"
+                            className="form-input text-xs"
+                            placeholder="Reason for Edit (Optional)"
+                            value={summaryEditReason}
+                            onChange={(e) => setSummaryEditReason(e.target.value)}
+                            style={{ marginBottom: '4px' }}
+                          />
+                        )}
                         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
                           <button
                             className="btn btn-secondary btn-sm"
@@ -1018,34 +1199,52 @@ const ClientDetailsPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 {!isEditingInModal && (
                   <>
-                    {canEditSummary(selectedSummary) ? (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setIsEditingInModal(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
-                      >
-                        <Edit3 size={12} /> Edit Details
-                      </button>
-                    ) : (
-                      userRole === 'agent' && selectedSummary.createdBy === currentUser?.uid && (
-                        <>
-                          {(!editRequests[selectedSummary.id] || editRequests[selectedSummary.id].status === 'completed' || editRequests[selectedSummary.id].status === 'rejected') && (
+                    {userRole === 'admin' ? (
+                      <>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setIsEditingInModal(true)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
+                        >
+                          <Edit3 size={12} /> Edit Details
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleAdminDeleteSummary(selectedSummary.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
+                        >
+                          <X size={12} /> Delete Summary
+                        </button>
+                      </>
+                    ) : userRole === 'agent' && selectedSummary.createdBy === currentUser?.uid ? (
+                      <>
+                        {editRequests[selectedSummary.id]?.status === 'pending' ? (
+                          <span className="badge badge-warning" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                            ⏳ Request Pending
+                          </span>
+                        ) : (
+                          <>
                             <button
                               className="btn btn-ghost btn-sm"
-                              onClick={() => setRequestingSummary(selectedSummary)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}
+                              onClick={() => {
+                                setSummaryEditReason('');
+                                setIsEditingInModal(true);
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
                             >
-                              <Edit3 size={12} /> Request Edit
+                              <Edit3 size={12} /> Edit Details
                             </button>
-                          )}
-                          {editRequests[selectedSummary.id]?.status === 'pending' && (
-                            <span className="badge badge-warning" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                              ⏳ Edit Request Pending
-                            </span>
-                          )}
-                        </>
-                      )
-                    )}
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setDeletingSummary(selectedSummary)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
+                            >
+                              <X size={12} /> Delete Summary
+                            </button>
+                          </>
+                        )}
+                      </>
+                    ) : null}
                   </>
                 )}
                 <button className="btn btn-ghost btn-icon" onClick={handleCloseModal} disabled={savingModalEdit}><X size={20} /></button>
@@ -1354,80 +1553,15 @@ const ClientDetailsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Request Edit Modal */}
-      {requestingSummary && (
-        <div className="modal-overlay" onClick={() => { if (!submittingRequest) setRequestingSummary(null); }}>
-          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2 className="modal-title">Request Edit Permission</h2>
-                <p className="text-sm text-muted" style={{ marginTop: 4 }}>
-                  Explain why you need to edit this summary.
-                </p>
-              </div>
-              <button
-                className="btn btn-ghost btn-icon"
-                onClick={() => setRequestingSummary(null)}
-                disabled={submittingRequest}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleRequestEdit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className="form-group">
-                <label className="form-label required" htmlFor="request-reason">Reason for Request</label>
-                <textarea
-                  id="request-reason"
-                  className="form-input"
-                  style={{ minHeight: 100, resize: 'vertical' }}
-                  placeholder="e.g., Typo in financial details / updated client requirements"
-                  value={requestReason}
-                  onChange={(e) => setRequestReason(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setRequestingSummary(null)}
-                  disabled={submittingRequest}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={submittingRequest || !requestReason.trim()}
-                >
-                  {submittingRequest ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Client Details Modal */}
-      {showEditClientModal && client && (
-        <EditClientModal
-          client={client}
-          onClose={() => setShowEditClientModal(false)}
-          onUpdate={handleClientUpdated}
-        />
-      )}
-
-      {/* Request Client Edit Modal */}
+      {/* Request Client Claim Modal */}
       {showRequestClientEditModal && (
         <div className="modal-overlay" onClick={() => { if (!submittingClientRequest) setShowRequestClientEditModal(false); }}>
           <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">Request Client Edit</h2>
+                <h2 className="modal-title">Claim Client</h2>
                 <p className="text-sm text-muted" style={{ marginTop: 4 }}>
-                  Explain why you need to edit this client's profile details.
+                  Explain why you want to claim/take over this client.
                 </p>
               </div>
               <button
@@ -1441,12 +1575,12 @@ const ClientDetailsPage: React.FC = () => {
 
             <form onSubmit={handleRequestClientEdit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div className="form-group">
-                <label className="form-label required" htmlFor="client-request-reason">Reason for Request</label>
+                <label className="form-label required" htmlFor="client-request-reason">Reason for Claim</label>
                 <textarea
                   id="client-request-reason"
                   className="form-input"
                   style={{ minHeight: 100, resize: 'vertical' }}
-                  placeholder="e.g., Spelling correction in client name / updated email address"
+                  placeholder="e.g., Previous agent left, I am taking over this lead"
                   value={clientRequestReason}
                   onChange={(e) => setClientRequestReason(e.target.value)}
                   required
@@ -1467,7 +1601,126 @@ const ClientDetailsPage: React.FC = () => {
                   className="btn btn-primary"
                   disabled={submittingClientRequest || !clientRequestReason.trim()}
                 >
-                  {submittingClientRequest ? 'Submitting...' : 'Submit Request'}
+                  {submittingClientRequest ? 'Submitting...' : 'Submit Claim Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Details Modal */}
+      {showEditClientModal && client && (
+        <EditClientModal
+          client={client}
+          onClose={() => setShowEditClientModal(false)}
+          onUpdate={handleClientUpdated}
+        />
+      )}
+
+      {/* Request Client Delete Modal */}
+      {showRequestClientDeleteModal && (
+        <div className="modal-overlay" onClick={() => { if (!submittingClientDelete) setShowRequestClientDeleteModal(false); }}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Request Client Deletion</h2>
+                <p className="text-sm text-muted" style={{ marginTop: 4 }}>
+                  Explain why you want to delete this client's profile.
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={() => setShowRequestClientDeleteModal(false)}
+                disabled={submittingClientDelete}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRequestClientDelete} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="client-delete-reason">Reason for Deletion</label>
+                <textarea
+                  id="client-delete-reason"
+                  className="form-input"
+                  style={{ minHeight: 100, resize: 'vertical' }}
+                  placeholder="Why are you requesting deletion? (Optional)"
+                  value={clientDeleteReason}
+                  onChange={(e) => setClientDeleteReason(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRequestClientDeleteModal(false)}
+                  disabled={submittingClientDelete}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-danger"
+                  disabled={submittingClientDelete}
+                >
+                  {submittingClientDelete ? 'Submitting...' : 'Submit Delete Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Request Summary Delete Modal */}
+      {deletingSummary && (
+        <div className="modal-overlay" onClick={() => { if (!submittingSummaryDelete) setDeletingSummary(null); }}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Request Summary Deletion</h2>
+                <p className="text-sm text-muted" style={{ marginTop: 4 }}>
+                  Explain why this summary should be deleted.
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={() => setDeletingSummary(null)}
+                disabled={submittingSummaryDelete}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRequestSummaryDelete} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="summary-delete-reason">Reason for Deletion</label>
+                <textarea
+                  id="summary-delete-reason"
+                  className="form-input"
+                  style={{ minHeight: 100, resize: 'vertical' }}
+                  placeholder="Why are you requesting deletion? (Optional)"
+                  value={summaryDeleteReason}
+                  onChange={(e) => setSummaryDeleteReason(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setDeletingSummary(null)}
+                  disabled={submittingSummaryDelete}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-danger"
+                  disabled={submittingSummaryDelete}
+                >
+                  {submittingSummaryDelete ? 'Submitting...' : 'Submit Delete Request'}
                 </button>
               </div>
             </form>

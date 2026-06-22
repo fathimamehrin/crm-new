@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X, User, Phone, Mail, MapPin, ClipboardList } from 'lucide-react';
-import { updateClient, getUsers, logActivity } from '../lib/firestore';
+import { updateClient, getUsers, logActivity, createClientEditRequest } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import type { Client, User as UserType } from '../types';
 import toast from 'react-hot-toast';
@@ -26,9 +26,10 @@ interface EditClientModalProps {
   client: Client;
   onClose: () => void;
   onUpdate: (updatedClient: Client) => void;
+  onRequestSubmitted?: () => void;
 }
 
-const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUpdate }) => {
+const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUpdate, onRequestSubmitted }) => {
   const { currentUser, userRole, userProfile } = useAuth();
   const [agents, setAgents] = useState<UserType[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -90,6 +91,8 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
     }
   }, [userRole]);
 
+  const [reason, setReason] = useState('');
+
   const onSubmit = async (data: FormData) => {
     setSaving(true);
     try {
@@ -119,27 +122,56 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       if (userRole === 'admin') {
         updatedFields.assignedAgent = data.assignedAgent || '';
         updatedFields.assignedAgentName = assignedAgentName;
+        
+        await updateClient(client.id, updatedFields);
+
+        // Log update action
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'client_updated',
+          entityType: 'client',
+          entityId: client.id,
+          entityName: data.name,
+        });
+
+        // Pass updated object back
+        onUpdate({
+          ...client,
+          ...updatedFields,
+        });
+
+        toast.success('Client details updated successfully');
+      } else {
+        // Agent submits proposed changes as edit request
+        const proposedChanges: Partial<Client> = { ...updatedFields };
+        if (client.assignedAgent !== currentUser?.uid) {
+          proposedChanges.assignedAgent = currentUser!.uid;
+          proposedChanges.assignedAgentName = userProfile?.name || 'Agent';
+        }
+
+        await createClientEditRequest(client.id, {
+          clientId: client.id,
+          clientName: client.name,
+          agentId: currentUser!.uid,
+          agentName: userProfile?.name || 'Agent',
+          reason: reason.trim() || (client.assignedAgent !== currentUser?.uid ? 'Client takeover & details update request' : 'Client details update request'),
+          requestType: 'edit',
+          proposedChanges,
+        });
+
+        await logActivity({
+          userId: currentUser!.uid,
+          userName: userProfile?.name,
+          action: 'client_updated',
+          entityType: 'client',
+          entityId: client.id,
+          entityName: `${data.name} (Edit request submitted)`,
+        });
+
+        toast.success('Edit request submitted to Admin');
+        onRequestSubmitted?.();
       }
-
-      await updateClient(client.id, updatedFields);
-
-      // Log update action
-      await logActivity({
-        userId: currentUser!.uid,
-        userName: userProfile?.name,
-        action: 'client_updated',
-        entityType: 'client',
-        entityId: client.id,
-        entityName: data.name,
-      });
-
-      // Pass updated object back
-      onUpdate({
-        ...client,
-        ...updatedFields,
-      });
-
-      toast.success('Client details updated successfully');
       onClose();
     } catch (err) {
       console.error('Failed to update client details:', err);
@@ -328,6 +360,20 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 />
               </div>
             </div>
+            {/* Reason for Edit (Agent Only) */}
+          {!isAdmin && (
+            <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
+              <label className="form-label" htmlFor="edit-reason">Reason for Edit / Justification (Optional)</label>
+              <textarea
+                id="edit-reason"
+                className="form-input"
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why are you making these changes? (Optional)"
+              />
+            </div>
+          )}
           </div>
 
           <div className="modal-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
