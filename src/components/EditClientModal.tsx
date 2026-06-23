@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X, User, Phone, Mail, MapPin, ClipboardList } from 'lucide-react';
+import { X, User, Phone, Mail, ClipboardList } from 'lucide-react';
 import { updateClient, getUsers, logActivity, createClientEditRequest } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import type { Client, User as UserType } from '../types';
@@ -14,7 +14,6 @@ const schema = z.object({
   whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   alternateContact: z.string().optional().or(z.literal('')),
-  address: z.string().nullable().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'lead', 'closed']),
   assignedAgent: z.string().optional().or(z.literal('')),
@@ -66,7 +65,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       whatsappNumber: digits,
       email: client.email || '',
       alternateContact: client.alternateContact || '',
-      address: client.address || '',
       notes: client.notes || '',
       status: client.status,
       assignedAgent: client.assignedAgent || '',
@@ -114,7 +112,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         whatsappNumber: fullWhatsAppNumber,
         email: data.email || '',
         alternateContact: data.alternateContact || '',
-        address: data.address || '',
         notes: data.notes || '',
         status: data.status,
       };
@@ -288,21 +285,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
             {/* Right Side fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              {/* Address */}
-              <div className="form-group">
-                <label className="form-label" htmlFor="client-address-input">Address</label>
-                <div className="search-wrapper">
-                  <MapPin className="search-icon" size={16} style={{ top: '18px', transform: 'none' }} />
-                  <textarea
-                    id="client-address-input"
-                    className="form-input"
-                    rows={2}
-                    style={{ paddingLeft: '2.5rem', resize: 'vertical' }}
-                    placeholder="Client location details (Optional)"
-                    {...register('address')}
-                  />
-                </div>
-              </div>
+
 
               {/* Status */}
               <div className="form-group">
