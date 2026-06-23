@@ -41,13 +41,8 @@ const AgentDetailsPage: React.FC = () => {
   const handleResetPassword = async () => {
     if (!agent || !newPassword) return;
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (newPassword.length < 8) {
-      setResetError('Password must be at least 8 characters');
-      return;
-    }
-    if (!passwordRegex.test(newPassword)) {
-      setResetError('Requires uppercase, lowercase, number, and special character');
+    if (newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters');
       return;
     }
 
@@ -405,7 +400,7 @@ const AgentDetailsPage: React.FC = () => {
               />
               {resetError && <span className="form-error">{resetError}</span>}
               <p className="text-xs text-muted" style={{ marginTop: 'var(--space-2)' }}>
-                Min 8 characters with uppercase, lowercase, number, and special character.
+                Minimum 6 characters.
               </p>
             </div>
             <div className="modal-footer" style={{ marginTop: 0 }}>

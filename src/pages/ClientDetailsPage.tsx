@@ -210,9 +210,7 @@ const ClientDetailsPage: React.FC = () => {
   };
 
 
-  const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
-  const [editSummaryText, setEditSummaryText] = useState('');
-  const [savingSummary, setSavingSummary] = useState(false);
+
   const [selectedSummary, setSelectedSummary] = useState<Summary | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -300,70 +298,13 @@ const ClientDetailsPage: React.FC = () => {
   };
 
   const handleStartEditSummary = (summary: Summary) => {
-    setEditingSummaryId(summary.id);
-    setEditSummaryText(summary.summaryText);
-  };
-
-  const handleSaveSummary = async (summaryId: string) => {
-    setSavingSummary(true);
-    try {
-      if (userRole === 'admin') {
-        await updateSummary(summaryId, { summaryText: editSummaryText });
-
-        // Update local state
-        setSummaries((prev) =>
-          prev.map((s) => (s.id === summaryId ? { ...s, summaryText: editSummaryText, updatedAt: new Date() } : s))
-        );
-
-        await logActivity({
-          userId: currentUser!.uid,
-          userName: userProfile?.name,
-          action: 'summary_updated',
-          entityType: 'summary',
-          entityId: summaryId,
-          entityName: `Edited summary for client`,
-        });
-
-        toast.success('Summary updated successfully');
-      } else {
-        // Agent submits proposed edit request
-        await createEditRequest(summaryId, {
-          clientId: client!.id,
-          clientName: client!.name,
-          summaryId: summaryId,
-          summaryText: summaries.find(s => s.id === summaryId)?.summaryText || '',
-          agentId: currentUser!.uid,
-          agentName: userProfile?.name || 'Agent',
-          reason: summaryEditReason.trim() || 'Summary text update request',
-          requestType: 'edit',
-          proposedChanges: {
-            summaryText: editSummaryText,
-          },
-        });
-
-        const newReq = await getEditRequest(summaryId);
-        if (newReq) {
-          setEditRequests((prev) => ({ ...prev, [summaryId]: newReq }));
-        }
-
-        await logActivity({
-          userId: currentUser!.uid,
-          userName: userProfile?.name,
-          action: 'summary_updated',
-          entityType: 'summary',
-          entityId: summaryId,
-          entityName: `Edited summary for client (Edit request submitted)`,
-        });
-
-        toast.success('Edit request submitted to Admin');
-      }
-
-      setEditingSummaryId(null);
-    } catch {
-      toast.error('Failed to update summary');
-    } finally {
-      setSavingSummary(false);
-    }
+    setSelectedSummary(summary);
+    setModalEditSummaryText(summary.summaryText);
+    setModalEditAmount(summary.paymentDetails?.amount?.toString() || '');
+    setModalEditStatus(summary.paymentDetails?.status || '');
+    setModalEditTransactionId(summary.paymentDetails?.transactionId || '');
+    setModalEditPaymentNotes(summary.paymentDetails?.notes || '');
+    setIsEditingInModal(true);
   };
 
   const handleSaveModalEdit = async () => {
@@ -833,9 +774,7 @@ const ClientDetailsPage: React.FC = () => {
                     key={s.id}
                     className="client-log-card"
                     onClick={() => {
-                      if (editingSummaryId !== s.id) {
-                        handleSelectSummary(s);
-                      }
+                      handleSelectSummary(s);
                     }}
                   >
                     <div className="client-log-header">
@@ -880,9 +819,7 @@ const ClientDetailsPage: React.FC = () => {
                   key={s.id}
                   className="client-feed-post"
                   onClick={() => {
-                    if (editingSummaryId !== s.id) {
-                      handleSelectSummary(s);
-                    }
+                    handleSelectSummary(s);
                   }}
                   style={{ cursor: 'pointer' }}
                 >
@@ -901,119 +838,76 @@ const ClientDetailsPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    {editingSummaryId !== s.id && (
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {userRole === 'admin' ? (
-                          <>
-                            <button
-                              className="btn btn-ghost btn-icon"
-                              style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartEditSummary(s);
-                              }}
-                              title="Edit Summary"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-icon"
-                              style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAdminDeleteSummary(s.id);
-                              }}
-                              title="Delete Summary"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </>
-                        ) : userRole === 'agent' && s.createdBy === currentUser?.uid ? (
-                          <>
-                            {editRequests[s.id]?.status === 'pending' ? (
-                              <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '10px' }} title={`Reason: ${editRequests[s.id].reason}`}>
-                                ⏳ Pending
-                              </span>
-                            ) : (
-                              <>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSummaryEditReason('');
-                                    handleStartEditSummary(s);
-                                  }}
-                                  title="Edit Summary"
-                                >
-                                  <Edit3 size={12} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeletingSummary(s);
-                                  }}
-                                  title="Request Delete Summary"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </>
-                            )}
-                          </>
-                        ) : null}
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      {userRole === 'admin' ? (
+                        <>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditSummary(s);
+                            }}
+                            title="Edit Summary"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAdminDeleteSummary(s.id);
+                            }}
+                            title="Delete Summary"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </>
+                      ) : userRole === 'agent' && s.createdBy === currentUser?.uid ? (
+                        <>
+                          {editRequests[s.id]?.status === 'pending' ? (
+                            <span className="badge badge-warning" style={{ padding: '2px 6px', fontSize: '10px' }} title={`Reason: ${editRequests[s.id].reason}`}>
+                              ⏳ Pending
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                className="btn btn-ghost btn-icon"
+                                style={{ padding: 4, width: 24, height: 24, color: 'var(--color-accent)' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSummaryEditReason('');
+                                  handleStartEditSummary(s);
+                                }}
+                                title="Edit Summary"
+                              >
+                                <Edit3 size={12} />
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-icon"
+                                style={{ padding: 4, width: 24, height: 24, color: 'var(--color-danger)' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingSummary(s);
+                                }}
+                                title="Request Delete Summary"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+                        </>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="client-feed-post-body">
-                    {editingSummaryId === s.id ? (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
-                      >
-                        <textarea
-                          className="form-input text-sm"
-                          style={{ minHeight: 100, width: '100%', resize: 'vertical', lineHeight: 1.5 }}
-                          value={editSummaryText}
-                          onChange={(e) => setEditSummaryText(e.target.value)}
-                          placeholder="Edit call summary..."
-                        />
-                        {userRole === 'agent' && (
-                          <input
-                            type="text"
-                            className="form-input text-xs"
-                            placeholder="Reason for Edit (Optional)"
-                            value={summaryEditReason}
-                            onChange={(e) => setSummaryEditReason(e.target.value)}
-                            style={{ marginBottom: '4px' }}
-                          />
-                        )}
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setEditingSummaryId(null)}
-                            disabled={savingSummary}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handleSaveSummary(s.id)}
-                            disabled={savingSummary}
-                          >
-                            {savingSummary ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{s.summaryText}</p>
-                    )}
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{s.summaryText}</p>
                   </div>
 
                   {/* Attachments inside Feed Card */}
-                  {editingSummaryId !== s.id && (s.voiceUrl || s.documents?.length > 0 || s.paymentDetails) && (
+                  {(s.voiceUrl || s.documents?.length > 0 || s.paymentDetails) && (
                     <div className="client-feed-post-attachments" onClick={(e) => e.stopPropagation()}>
                       {s.voiceUrl && (
                         <div style={{ marginBottom: '12px' }}>

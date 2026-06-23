@@ -25,8 +25,7 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   phone: z.string().optional(),
   password: z.string()
-    .min(8, 'password must be atleast 8 characters ')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/, 'Requires uppercase, lowercase, number, and special character'),
+    .min(6, 'Password must be at least 6 characters'),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -66,13 +65,8 @@ const AgentManagementPage: React.FC = () => {
     if (!resetAgent || !newPassword) return;
 
     // Validate password
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (newPassword.length < 8) {
-      setResetError('Password must be at least 8 characters');
-      return;
-    }
-    if (!passwordRegex.test(newPassword)) {
-      setResetError('Requires uppercase, lowercase, number, and special character');
+    if (newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters');
       return;
     }
 
@@ -560,7 +554,7 @@ const AgentManagementPage: React.FC = () => {
               />
               {resetError && <span className="form-error">{resetError}</span>}
               <p className="text-xs text-muted" style={{ marginTop: 'var(--space-2)' }}>
-                Min 8 characters with uppercase, lowercase, number, and special character.
+                Minimum 6 characters.
               </p>
             </div>
             <div className="modal-footer" style={{ marginTop: 0 }}>
