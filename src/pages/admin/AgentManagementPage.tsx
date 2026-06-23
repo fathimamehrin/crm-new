@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { db, firebaseConfig, auth } from '../../lib/firebase';
+import { db, firebaseConfig } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { logActivity } from '../../lib/firestore';
@@ -17,6 +17,8 @@ import {
 import { format } from 'date-fns';
 import type { User as UserType } from '../../types';
 import toast from 'react-hot-toast';
+
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
@@ -47,17 +49,52 @@ const AgentManagementPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
 
-  const handleResetPassword = async (agent: UserType) => {
-    if (!window.confirm(`Are you sure you want to send a password reset email to ${agent.name} (${agent.email})?`)) {
+  // Reset password modal state
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetAgent, setResetAgent] = useState<UserType | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+
+  const openResetModal = (agent: UserType) => {
+    setResetAgent(agent);
+    setNewPassword('');
+    setResetError('');
+    setShowResetModal(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetAgent || !newPassword) return;
+
+    // Validate password
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (newPassword.length < 8) {
+      setResetError('Password must be at least 8 characters');
       return;
     }
-    setResettingPasswordId(agent.id);
+    if (!passwordRegex.test(newPassword)) {
+      setResetError('Requires uppercase, lowercase, number, and special character');
+      return;
+    }
+
+    setResettingPasswordId(resetAgent.id);
+    setResetError('');
     try {
-      await sendPasswordResetEmail(auth, agent.email);
-      toast.success(`Password reset email sent to ${agent.name}`);
+      const res = await fetch(`${API_URL}/api/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: resetAgent.id, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+
+      toast.success(`Password reset for ${resetAgent.name}`);
+      setShowResetModal(false);
+      setResetAgent(null);
+      setNewPassword('');
     } catch (err: any) {
-      console.error('Failed to send password reset email:', err);
-      toast.error(err.message || 'Failed to send password reset email');
+      console.error('Failed to reset password:', err);
+      setResetError(err.message || 'Failed to reset password');
+      toast.error(err.message || 'Failed to reset password');
     } finally {
       setResettingPasswordId(null);
     }
@@ -314,7 +351,7 @@ const AgentManagementPage: React.FC = () => {
                           </button>
                           <button 
                             className="btn btn-ghost btn-sm" 
-                            onClick={() => handleResetPassword(agent)} 
+                            onClick={() => openResetModal(agent)} 
                             title="Reset Password"
                             aria-label="Reset Password"
                             disabled={resettingPasswordId === agent.id}
@@ -392,7 +429,7 @@ const AgentManagementPage: React.FC = () => {
                     </button>
                     <button 
                       className="btn btn-ghost btn-sm" 
-                      onClick={() => handleResetPassword(agent)} 
+                      onClick={() => openResetModal(agent)} 
                       disabled={resettingPasswordId === agent.id}
                       style={{ minHeight: 32 }}
                     >
@@ -493,6 +530,51 @@ const AgentManagementPage: React.FC = () => {
               </button>
               <button type="button" className="btn btn-primary" onClick={handleSaveConfirm}>
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reset Password Modal */}
+      {showResetModal && resetAgent && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Reset Password</h2>
+              <button className="btn btn-ghost btn-icon" type="button" onClick={() => setShowResetModal(false)}><X size={20} /></button>
+            </div>
+            <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-4)' }}>
+              Set a new password for <strong>{resetAgent.name}</strong> ({resetAgent.email})
+            </p>
+            <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+              <label className="form-label required" htmlFor="reset-password-input">New Password</label>
+              <input
+                id="reset-password-input"
+                type="password"
+                className={`form-input ${resetError ? 'error' : ''}`}
+                placeholder="Enter new password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setResetError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleResetPassword(); } }}
+              />
+              {resetError && <span className="form-error">{resetError}</span>}
+              <p className="text-xs text-muted" style={{ marginTop: 'var(--space-2)' }}>
+                Min 8 characters with uppercase, lowercase, number, and special character.
+              </p>
+            </div>
+            <div className="modal-footer" style={{ marginTop: 0 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowResetModal(false)}>Cancel</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleResetPassword}
+                disabled={!newPassword || resettingPasswordId === resetAgent.id}
+              >
+                {resettingPasswordId === resetAgent.id
+                  ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Resetting…</>
+                  : 'Reset Password'
+                }
               </button>
             </div>
           </div>

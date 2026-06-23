@@ -2927,6 +2927,27 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+@media (max-width: 640px) {
+  .summary-action-btn {
+    padding: 0.5rem !important;
+    border-radius: var(--radius-full) !important;
+    width: 36px !important;
+    height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+  .summary-action-btn .summary-action-label {
+    display: none !important;
+  }
+  .summary-action-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+}
+
+
 
 
 

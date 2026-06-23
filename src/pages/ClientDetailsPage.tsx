@@ -1208,18 +1208,22 @@ const ClientDetailsPage: React.FC = () => {
                     {userRole === 'admin' ? (
                       <>
                         <button
-                          className="btn btn-ghost btn-sm"
+                          className="btn btn-ghost btn-sm summary-action-btn"
                           onClick={() => setIsEditingInModal(true)}
+                          title="Edit Details"
                           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
                         >
-                          <Edit3 size={12} /> Edit Details
+                          <Edit3 size={12} />
+                          <span className="summary-action-label">Edit Details</span>
                         </button>
                         <button
-                          className="btn btn-ghost btn-sm"
+                          className="btn btn-ghost btn-sm summary-action-btn"
                           onClick={() => handleAdminDeleteSummary(selectedSummary.id)}
+                          title="Delete Summary"
                           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
                         >
-                          <X size={12} /> Delete Summary
+                          <X size={12} />
+                          <span className="summary-action-label">Delete Summary</span>
                         </button>
                       </>
                     ) : userRole === 'agent' && selectedSummary.createdBy === currentUser?.uid ? (
@@ -1231,21 +1235,25 @@ const ClientDetailsPage: React.FC = () => {
                         ) : (
                           <>
                             <button
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-ghost btn-sm summary-action-btn"
                               onClick={() => {
                                 setSummaryEditReason('');
                                 setIsEditingInModal(true);
                               }}
+                              title="Edit Details"
                               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)' }}
                             >
-                              <Edit3 size={12} /> Edit Details
+                              <Edit3 size={12} />
+                              <span className="summary-action-label">Edit Details</span>
                             </button>
                             <button
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-ghost btn-sm summary-action-btn"
                               onClick={() => setDeletingSummary(selectedSummary)}
+                              title="Delete Summary"
                               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
                             >
-                              <X size={12} /> Delete Summary
+                              <X size={12} />
+                              <span className="summary-action-label">Delete Summary</span>
                             </button>
                           </>
                         )}
@@ -1358,6 +1366,21 @@ const ClientDetailsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Agent: optional reason for edit */}
+                {userRole === 'agent' && (
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="modal-edit-reason">Reason for Edit (Optional)</label>
+                    <textarea
+                      id="modal-edit-reason"
+                      className="form-input"
+                      style={{ minHeight: 60, resize: 'vertical' }}
+                      placeholder="Briefly describe why you're requesting this edit..."
+                      value={summaryEditReason}
+                      onChange={(e) => setSummaryEditReason(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 {/* Edit Form Actions */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
                   <button
@@ -1374,7 +1397,7 @@ const ClientDetailsPage: React.FC = () => {
                     onClick={handleSaveModalEdit}
                     disabled={savingModalEdit}
                   >
-                    {savingModalEdit ? 'Saving...' : 'Save Changes'}
+                    {savingModalEdit ? 'Saving...' : userRole === 'agent' ? 'Submit Edit Request' : 'Save Changes'}
                   </button>
                 </div>
               </div>

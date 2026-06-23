@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import admin from 'firebase-admin';
 
 // Resolve environment variables from the root folder .env
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,30 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize Firebase Admin SDK
+try {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    // Use service account key file if path is set
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Use inline service account JSON from env
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } else {
+    // Fallback: use project ID (works in Google Cloud environments)
+    admin.initializeApp({
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'vn-crm-3d78b',
+    });
+  }
+  console.log('Firebase Admin SDK initialized');
+} catch (err) {
+  console.error('Firebase Admin SDK initialization error:', err.message);
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -120,6 +145,27 @@ app.delete('/api/delete', async (req, res) => {
   } catch (error) {
     console.error('Error deleting object:', error);
     res.status(500).json({ error: 'Failed to delete object' });
+  }
+});
+
+// Endpoint 4: Reset user password directly (Admin SDK)
+app.post('/api/reset-password', async (req, res) => {
+  const { uid, newPassword } = req.body;
+
+  if (!uid || !newPassword) {
+    return res.status(400).json({ error: 'Missing uid or newPassword' });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  try {
+    await admin.auth().updateUser(uid, { password: newPassword });
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ error: error.message || 'Failed to reset password' });
   }
 });
 
