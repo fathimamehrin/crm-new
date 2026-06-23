@@ -14,7 +14,7 @@ const schema = z.object({
   whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   alternateContact: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
+  address: z.string().nullable().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'lead', 'closed']),
   assignedAgent: z.string().optional().or(z.literal('')),
@@ -298,7 +298,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                     className="form-input"
                     rows={2}
                     style={{ paddingLeft: '2.5rem', resize: 'vertical' }}
-                    placeholder="Client location details"
+                    placeholder="Client location details (Optional)"
                     {...register('address')}
                   />
                 </div>

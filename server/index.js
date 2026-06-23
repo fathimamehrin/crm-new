@@ -156,8 +156,8 @@ app.post('/api/reset-password', async (req, res) => {
     return res.status(400).json({ error: 'Missing uid or newPassword' });
   }
 
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
   try {

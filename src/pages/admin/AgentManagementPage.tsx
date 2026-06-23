@@ -23,7 +23,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
   email: z.string().email('Invalid email'),
-  phone: z.string().optional(),
+  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   password: z.string()
     .min(6, 'Password must be at least 6 characters'),
 });
@@ -473,11 +473,19 @@ const AgentManagementPage: React.FC = () => {
                 {errors.email && <span className="form-error">{errors.email.message}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="agent-phone">Phone</label>
+                <label className="form-label required" htmlFor="agent-phone">Phone</label>
                 <div className="search-wrapper">
                   <Phone className="search-icon" size={16} />
-                  <input id="agent-phone" type="tel" className="form-input" style={{ paddingLeft: '2.5rem' }} {...register('phone')} />
+                  <input
+                    id="agent-phone"
+                    type="tel"
+                    className={`form-input ${errors.phone ? 'error' : ''}`}
+                    style={{ paddingLeft: '2.5rem' }}
+                    placeholder="Enter phone number"
+                    {...register('phone')}
+                  />
                 </div>
+                {errors.phone && <span className="form-error">{errors.phone.message}</span>}
               </div>
               <div className="form-group">
                 <label className="form-label required" htmlFor="agent-password">Temporary Password</label>
