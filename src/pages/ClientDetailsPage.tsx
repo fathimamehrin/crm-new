@@ -620,6 +620,7 @@ const ClientDetailsPage: React.FC = () => {
                 <button
                   className="btn btn-secondary"
                   onClick={() => setShowEditClientModal(true)}
+                  title="Edit Info"
                   style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                 >
                   <Edit3 size={16} />
@@ -628,6 +629,7 @@ const ClientDetailsPage: React.FC = () => {
                 <button
                   className="btn btn-secondary"
                   onClick={handleAdminDeleteClient}
+                  title="Delete Client"
                   style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
                 >
                   <X size={16} />
@@ -651,6 +653,7 @@ const ClientDetailsPage: React.FC = () => {
                     <button
                       className="btn btn-secondary"
                       onClick={() => setShowEditClientModal(true)}
+                      title={client.assignedAgent === currentUser?.uid ? 'Edit Info' : 'Claim & Edit'}
                       style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                     >
                       <Edit3 size={16} />
@@ -660,6 +663,7 @@ const ClientDetailsPage: React.FC = () => {
                       <button
                         className="btn btn-secondary"
                         onClick={() => setShowRequestClientEditModal(true)}
+                        title="Claim Client"
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                       >
                         <UserCheck size={16} />
@@ -670,6 +674,7 @@ const ClientDetailsPage: React.FC = () => {
                       <button
                         className="btn btn-secondary"
                         onClick={() => setShowRequestClientDeleteModal(true)}
+                        title="Delete Client"
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
                       >
                         <X size={16} />
@@ -685,6 +690,7 @@ const ClientDetailsPage: React.FC = () => {
               id="add-summary-btn"
               className="btn btn-primary"
               onClick={() => navigate(isAdminPath ? `/admin/clients/${id}/summary` : `/clients/${id}/summary`)}
+              title="Add Summary"
               style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
             >
               <Plus size={16} />

@@ -2163,80 +2163,220 @@ h1, h2, h3, h4, h5, h6 {
 /* ─── Mobile Overrides for SaaS CRM Client Profile ─────────────────── */
 @media (max-width: 768px) {
   .client-profile-card {
-    padding: 16px;
-    gap: 16px;
+    padding: 0;
+    gap: 0;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    position: relative;
   }
-  
+
+  /* Gradient accent strip at top of card */
+  .client-profile-card::before {
+    content: '';
+    display: block;
+    height: 4px;
+    background: linear-gradient(90deg, var(--color-accent), #8b5cf6, #ec4899);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
   .client-header-row {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 16px;
     width: 100%;
+    padding: 20px 16px 16px;
+    border-bottom: none;
   }
-  
+
   .client-header-info {
     width: 100%;
-    gap: 16px;
+    gap: 14px;
   }
-  
+
   .client-avatar {
-    width: 64px;
-    height: 64px;
-    font-size: 1.75rem;
+    width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: 0 0 0 2px var(--color-accent-light), 0 4px 12px rgba(37, 99, 235, 0.15);
   }
-  
-  .client-name-status {
-    width: 100%;
+
+  .client-title {
+    font-size: 1.15rem;
   }
-  
+
+  /* ── Action buttons: icon-only circles with tooltip ── */
   .client-actions {
     width: 100%;
-  }
-  
-  .client-actions button {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .client-tabs-nav {
+    justify-content: flex-end;
     gap: 8px;
-    justify-content: space-between;
+    padding: 0 16px 16px;
+    border-bottom: 1px solid var(--color-border);
   }
-  
+
+  .client-actions .btn {
+    position: relative;
+    width: 40px !important;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0 !important;
+    flex-shrink: 0;
+    font-size: 0;
+    overflow: visible;
+    transition: all 0.2s ease;
+  }
+
+  .client-actions .btn:active {
+    transform: scale(0.92);
+  }
+
+  /* Hide text labels inside buttons on mobile */
+  .client-actions .btn span {
+    display: none !important;
+  }
+
+  /* Tooltip on hover/focus */
+  .client-actions .btn::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.9);
+    background: var(--color-bg-elevated, #1e293b);
+    color: #f8fafc;
+    padding: 5px 10px;
+    border-radius: var(--radius-md);
+    font-size: 0.7rem;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 50;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    letter-spacing: 0.01em;
+  }
+
+  /* Tooltip arrow */
+  .client-actions .btn::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--color-bg-elevated, #1e293b);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 50;
+  }
+
+  .client-actions .btn:hover::after,
+  .client-actions .btn:focus::after,
+  .client-actions .btn:active::after {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+
+  .client-actions .btn:hover::before,
+  .client-actions .btn:focus::before,
+  .client-actions .btn:active::before {
+    opacity: 1;
+  }
+
+  /* Primary button accent glow */
+  .client-actions .btn.btn-primary {
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  }
+
+  /* ── Meta grid: pill-style items ── */
+  .client-meta-grid {
+    padding: 16px;
+    gap: 10px;
+    grid-template-columns: 1fr;
+  }
+
+  .client-meta-item {
+    background: var(--color-bg-secondary);
+    padding: 10px 14px;
+    border-radius: var(--radius-full);
+    gap: 10px;
+    font-size: 0.8rem;
+    transition: background 0.15s ease;
+  }
+
+  .client-meta-item:active {
+    background: var(--color-bg-hover);
+  }
+
+  /* ── Tabs: compact on mobile ── */
+  .client-tabs-nav {
+    gap: 6px;
+    justify-content: space-between;
+    padding: 0 4px 8px;
+  }
+
   .client-tab-btn {
     flex: 1;
     justify-content: center;
     font-size: 0.75rem;
-    padding: 10px 8px;
+    padding: 10px 6px;
+    border-radius: var(--radius-full);
+    gap: 5px;
   }
-  
+
+  .client-tab-btn.active {
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  }
+
+  /* ── Content cards ── */
   .client-log-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 12px;
   }
-  
+
+  .client-log-card {
+    padding: 16px;
+    border-radius: var(--radius-lg);
+  }
+
   .client-feed-list {
-    gap: 16px;
+    gap: 14px;
   }
-  
+
   .client-feed-post {
     padding: 16px;
+    border-radius: var(--radius-lg);
   }
-  
+
   .client-receipt-card {
     flex-direction: column-reverse;
     padding: 16px;
     gap: 16px;
+    border-radius: var(--radius-lg);
   }
-  
+
   .client-receipt-screenshot-container {
     width: 100%;
     height: 200px;
+    border-radius: var(--radius-lg);
   }
-  
+
   .client-doc-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
+  }
+
+  /* Notes section mobile */
+  .client-profile-card > div:last-child {
+    padding: 12px 16px 16px;
   }
 }
 
