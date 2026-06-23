@@ -61,7 +61,10 @@ service cloud.firestore {
         resource.data.agentId == request.auth.uid &&
         (request.resource.data.status == 'completed' || request.resource.data.status == 'pending')
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (
+        isAgent() &&
+        resource.data.agentId == request.auth.uid
+      );
     }
 
     // Client Edit Requests collection
@@ -75,7 +78,10 @@ service cloud.firestore {
         resource.data.agentId == request.auth.uid &&
         (request.resource.data.status == 'completed' || request.resource.data.status == 'pending')
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (
+        isAgent() &&
+        resource.data.agentId == request.auth.uid
+      );
     }
 
     // Payments collection

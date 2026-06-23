@@ -227,7 +227,18 @@ export const createEditRequest = async (
   summaryId: string,
   data: Omit<EditRequest, 'id' | 'createdAt' | 'status'>
 ): Promise<void> => {
-  await setDoc(doc(db, 'editRequests', summaryId), cleanObject({
+  const docRef = doc(db, 'editRequests', summaryId);
+  // Delete any existing request first so Firestore treats setDoc as a "create"
+  // (avoids permission errors when overwriting a previous request)
+  try {
+    const existing = await getDoc(docRef);
+    if (existing.exists()) {
+      await deleteDoc(docRef);
+    }
+  } catch {
+    // Ignore – if delete fails, the setDoc below may still succeed
+  }
+  await setDoc(docRef, cleanObject({
     ...data,
     status: 'pending',
     createdAt: serverTimestamp(),
@@ -279,7 +290,18 @@ export const createClientEditRequest = async (
   clientId: string,
   data: Omit<ClientEditRequest, 'id' | 'createdAt' | 'status'>
 ): Promise<void> => {
-  await setDoc(doc(db, 'clientEditRequests', clientId), cleanObject({
+  const docRef = doc(db, 'clientEditRequests', clientId);
+  // Delete any existing request first so Firestore treats setDoc as a "create"
+  // (avoids permission errors when overwriting a previous request)
+  try {
+    const existing = await getDoc(docRef);
+    if (existing.exists()) {
+      await deleteDoc(docRef);
+    }
+  } catch {
+    // Ignore – if delete fails, the setDoc below may still succeed
+  }
+  await setDoc(docRef, cleanObject({
     ...data,
     status: 'pending',
     createdAt: serverTimestamp(),
