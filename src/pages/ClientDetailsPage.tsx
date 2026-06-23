@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock
+  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2
 } from 'lucide-react';
 import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
@@ -925,7 +925,7 @@ const ClientDetailsPage: React.FC = () => {
                               }}
                               title="Delete Summary"
                             >
-                              <X size={12} />
+                              <Trash2 size={12} />
                             </button>
                           </>
                         ) : userRole === 'agent' && s.createdBy === currentUser?.uid ? (
@@ -957,7 +957,7 @@ const ClientDetailsPage: React.FC = () => {
                                   }}
                                   title="Request Delete Summary"
                                 >
-                                  <X size={12} />
+                                  <Trash2 size={12} />
                                 </button>
                               </>
                             )}
@@ -1222,7 +1222,7 @@ const ClientDetailsPage: React.FC = () => {
                           title="Delete Summary"
                           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
                         >
-                          <X size={12} />
+                          <Trash2 size={12} />
                           <span className="summary-action-label">Delete Summary</span>
                         </button>
                       </>
@@ -1252,7 +1252,7 @@ const ClientDetailsPage: React.FC = () => {
                               title="Delete Summary"
                               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'var(--space-2) var(--space-3)', height: 'auto', fontSize: 'var(--font-size-xs)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
                             >
-                              <X size={12} />
+                              <Trash2 size={12} />
                               <span className="summary-action-label">Delete Summary</span>
                             </button>
                           </>
@@ -1438,18 +1438,24 @@ const ClientDetailsPage: React.FC = () => {
                   <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Call Notes
                   </h3>
-                  <div style={{
-                    background: 'var(--color-bg-elevated)',
-                    padding: 'var(--space-4)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    fontSize: 'var(--font-size-sm)',
-                    lineHeight: 1.75,
-                    color: 'var(--color-text-secondary)',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {selectedSummary.summaryText}
-                  </div>
+                  <textarea
+                    readOnly
+                    className="form-input text-sm"
+                    style={{
+                      background: 'var(--color-bg-elevated)',
+                      padding: 'var(--space-4)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      fontSize: 'var(--font-size-sm)',
+                      lineHeight: 1.6,
+                      color: 'var(--color-text-secondary)',
+                      minHeight: 150,
+                      resize: 'vertical',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                    value={selectedSummary.summaryText}
+                  />
                 </div>
 
                 {/* Voice player */}
