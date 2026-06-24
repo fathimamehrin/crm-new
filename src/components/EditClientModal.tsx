@@ -343,7 +343,9 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 />
               </div>
             </div>
-            {/* Reason for Edit (Agent Only) */}
+          </div>
+
+          {/* Reason for Edit (Agent Only) */}
           {!isAdmin && (
             <div className="form-group" style={{ marginTop: 'var(--space-4)' }}>
               <label className="form-label" htmlFor="edit-reason">Reason for Edit / Justification (Optional)</label>
@@ -357,7 +359,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
               />
             </div>
           )}
-          </div>
 
           <div className="modal-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
