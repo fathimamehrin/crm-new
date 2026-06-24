@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { db, firebaseConfig } from '../../lib/firebase';
 import { getUsers, updateUser } from '../../lib/firestore';
-import { setDoc, doc } from 'firebase/firestore';
+import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { logActivity } from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { useForm } from 'react-hook-form';
@@ -147,6 +147,33 @@ const AgentManagementPage: React.FC = () => {
 
   const onSubmit = async (data: FormData) => {
     setCreating(true);
+    
+    // Check if user already exists with this email or phone in Firestore
+    try {
+      const emailQuery = query(collection(db, 'users'), where('email', '==', data.email));
+      const emailSnap = await getDocs(emailQuery);
+      if (!emailSnap.empty) {
+        toast.error('User already exists with this email/mobile number.');
+        setCreating(false);
+        return;
+      }
+
+      if (data.phone) {
+        const phoneQuery = query(collection(db, 'users'), where('phone', '==', data.phone));
+        const phoneSnap = await getDocs(phoneQuery);
+        if (!phoneSnap.empty) {
+          toast.error('User already exists with this email/mobile number.');
+          setCreating(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed validation check:', err);
+      toast.error('Failed to validate agent details');
+      setCreating(false);
+      return;
+    }
+
     let secondaryApp;
     try {
       const appName = 'SecondaryApp' + Date.now();
@@ -179,7 +206,7 @@ const AgentManagementPage: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to create agent:', err);
       if (err.code === 'auth/email-already-in-use') {
-        toast.error('This email is already in use by another agent or admin.');
+        toast.error('User already exists with this email/mobile number.');
       } else {
         toast.error(err.message || 'Failed to create agent');
       }

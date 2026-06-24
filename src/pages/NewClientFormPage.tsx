@@ -209,15 +209,13 @@ const NewClientFormPage: React.FC = () => {
             clientName: existing.name,
             agentId: currentUser.uid,
             agentName: userProfile?.name || 'Agent',
-            reason: 'Automatic details update & client assignment request on duplicate lead submission',
+            reason: 'Automatic details update request on duplicate lead submission',
             requestType: 'edit',
             proposedChanges: {
               name: data.name,
               email: data.email || existing.email || '',
               alternateContact: data.alternateContact || existing.alternateContact || '',
               notes: mergedNotes,
-              assignedAgent: currentUser.uid,
-              assignedAgentName: userProfile?.name || '',
             },
           });
           await logActivity({
@@ -226,9 +224,9 @@ const NewClientFormPage: React.FC = () => {
             action: 'client_updated',
             entityType: 'client',
             entityId: clientId,
-            entityName: `${data.name} (Takeover requested)`,
+            entityName: `${data.name} (Edit request submitted)`,
           });
-          toast.success('Existing client found. Takeover/edit request submitted to Admin.');
+          toast.success('Existing client found. Edit request submitted to Admin.');
         }
       } else {
         clientId = await createClient({

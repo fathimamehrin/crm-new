@@ -172,7 +172,7 @@ const EditRequestsPage: React.FC = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   
   // Tab selectors
-  const [requestType, setRequestType] = useState<'summary' | 'client'>('summary');
+  const [requestType, setRequestType] = useState<'summary' | 'client' | 'claim'>('summary');
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
 
@@ -251,7 +251,16 @@ const EditRequestsPage: React.FC = () => {
     }
   };
 
-  const activeRequests = requestType === 'summary' ? summaryRequests : clientRequests;
+  const isClaimRequest = (req: ClientEditRequest) => {
+    return !!(req.proposedChanges && req.proposedChanges.assignedAgent !== undefined);
+  };
+
+  const activeRequests = 
+    requestType === 'summary' 
+      ? summaryRequests 
+      : requestType === 'client' 
+        ? clientRequests.filter(r => !isClaimRequest(r)) 
+        : clientRequests.filter(r => isClaimRequest(r));
 
   const counts = {
     all: activeRequests.length,
@@ -296,6 +305,12 @@ const EditRequestsPage: React.FC = () => {
           onClick={() => { setRequestType('client'); setActiveTab('all'); }}
         >
           Client Information
+        </button>
+        <button
+          className={`tab-btn ${requestType === 'claim' ? 'active' : ''}`}
+          onClick={() => { setRequestType('claim'); setActiveTab('all'); }}
+        >
+          Claim Requests
         </button>
       </div>
 

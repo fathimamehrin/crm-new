@@ -4,15 +4,16 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2
+  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload
 } from 'lucide-react';
 import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile } from '../types';
 import EditClientModal from '../components/EditClientModal';
-import { resolvePresignedUrls } from '../lib/storage';
+import { resolvePresignedUrls, uploadFile, deleteFile, generateStoragePath } from '../lib/storage';
+import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
 
 const PAYMENT_BADGE: Record<string, string> = {
@@ -31,6 +32,7 @@ const ClientDetailsPage: React.FC = () => {
 
   const [client, setClient] = useState<Client | null>(null);
   const [summaries, setSummaries] = useState<Summary[]>([]);
+  const [rawSummaries, setRawSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Edit requests tracking state
@@ -51,6 +53,51 @@ const ClientDetailsPage: React.FC = () => {
   const [deletingSummary, setDeletingSummary] = useState<Summary | null>(null);
   const [summaryDeleteReason, setSummaryDeleteReason] = useState('');
   const [submittingSummaryDelete, setSubmittingSummaryDelete] = useState(false);
+
+  // Modal edit attachment states
+  const [modalEditDocs, setModalEditDocs] = useState<DocumentFile[]>([]);
+  const [modalEditVoiceUrl, setModalEditVoiceUrl] = useState<string | null>(null);
+  const [modalEditScreenshotUrl, setModalEditScreenshotUrl] = useState<string | null>(null);
+
+  // New files to upload states
+  const [newUploadedDocs, setNewUploadedDocs] = useState<File[]>([]);
+  const [newVoiceFile, setNewVoiceFile] = useState<File | null>(null);
+  const [newScreenshotFile, setNewScreenshotFile] = useState<File | null>(null);
+
+  // Uploading state
+  const [uploadingModalFiles, setUploadingModalFiles] = useState(false);
+  const [modalFilesUploadProgress, setModalFilesUploadProgress] = useState(0);
+
+  const {
+    getRootProps: getModalDocsRootProps,
+    getInputProps: getModalDocsInputProps,
+    isDragActive: isModalDocsDragActive
+  } = useDropzone({
+    onDrop: (files) => setNewUploadedDocs((prev) => [...prev, ...files]),
+    maxFiles: 10,
+    maxSize: 20 * 1024 * 1024,
+  });
+
+  const {
+    getRootProps: getModalVoiceRootProps,
+    getInputProps: getModalVoiceInputProps,
+    isDragActive: isModalVoiceDragActive
+  } = useDropzone({
+    onDrop: (files) => files[0] && setNewVoiceFile(files[0]),
+    accept: { 'audio/*': [] },
+    maxFiles: 1,
+    maxSize: 50 * 1024 * 1024,
+  });
+
+  const {
+    getRootProps: getModalScreenshotRootProps,
+    getInputProps: getModalScreenshotInputProps,
+    isDragActive: isModalScreenshotDragActive
+  } = useDropzone({
+    onDrop: (files) => files[0] && setNewScreenshotFile(files[0]),
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+  });
 
   const handleRequestClientEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,28 +335,45 @@ const ClientDetailsPage: React.FC = () => {
   };
 
   const handleSelectSummary = (s: Summary) => {
+    const raw = rawSummaries.find(r => r.id === s.id) || s;
     setSelectedSummary(s);
     setModalEditSummaryText(s.summaryText);
     setModalEditAmount(s.paymentDetails?.amount?.toString() || '');
     setModalEditStatus(s.paymentDetails?.status || '');
     setModalEditTransactionId(s.paymentDetails?.transactionId || '');
     setModalEditPaymentNotes(s.paymentDetails?.notes || '');
+    
+    setModalEditDocs(raw.documents || []);
+    setModalEditVoiceUrl(raw.voiceUrl || null);
+    setModalEditScreenshotUrl(raw.paymentDetails?.screenshotUrl || null);
+
+    setNewUploadedDocs([]);
+    setNewVoiceFile(null);
+    setNewScreenshotFile(null);
     setIsEditingInModal(false);
   };
 
   const handleStartEditSummary = (summary: Summary) => {
+    const raw = rawSummaries.find(r => r.id === summary.id) || summary;
     setSelectedSummary(summary);
     setModalEditSummaryText(summary.summaryText);
     setModalEditAmount(summary.paymentDetails?.amount?.toString() || '');
     setModalEditStatus(summary.paymentDetails?.status || '');
     setModalEditTransactionId(summary.paymentDetails?.transactionId || '');
     setModalEditPaymentNotes(summary.paymentDetails?.notes || '');
+
+    setModalEditDocs(raw.documents || []);
+    setModalEditVoiceUrl(raw.voiceUrl || null);
+    setModalEditScreenshotUrl(raw.paymentDetails?.screenshotUrl || null);
+
+    setNewUploadedDocs([]);
+    setNewVoiceFile(null);
+    setNewScreenshotFile(null);
     setIsEditingInModal(true);
   };
 
   const handleSaveModalEdit = async () => {
     if (!selectedSummary) return false;
-
 
     if (modalEditStatus && modalEditAmount && parseFloat(modalEditAmount) < 0) {
       toast.error('Amount cannot be negative');
@@ -318,23 +382,99 @@ const ClientDetailsPage: React.FC = () => {
 
     setSavingModalEdit(true);
     try {
+      const raw = rawSummaries.find(r => r.id === selectedSummary.id) || selectedSummary;
+
+      let newVoiceKey = modalEditVoiceUrl;
+      let newScreenshotKey = modalEditScreenshotUrl;
+      const newDocsList = [...modalEditDocs];
+
+      interface UploadItem {
+        key: string;
+        file: File;
+        path: string;
+      }
+      const uploads: UploadItem[] = [];
+
+      if (newVoiceFile) {
+        uploads.push({ key: 'voice', file: newVoiceFile, path: generateStoragePath('voice', newVoiceFile.name) });
+      }
+      if (newScreenshotFile && modalEditStatus) {
+        uploads.push({ key: 'screenshot', file: newScreenshotFile, path: generateStoragePath('payments', newScreenshotFile.name) });
+      }
+      newUploadedDocs.forEach((docFile, index) => {
+        uploads.push({ key: `doc_${index}`, file: docFile, path: generateStoragePath('documents', docFile.name) });
+      });
+
+      if (uploads.length > 0) {
+        setUploadingModalFiles(true);
+        const totalUploads = uploads.length;
+        const progressTracker = new Array(totalUploads).fill(0);
+
+        const uploadPromises = uploads.map(async (item, index) => {
+          const url = await uploadFile(item.file, item.path, (p) => {
+            progressTracker[index] = p;
+            const totalProgress = progressTracker.reduce((sum, val) => sum + val, 0) / totalUploads;
+            setModalFilesUploadProgress(totalProgress);
+          });
+          return { ...item, url };
+        });
+
+        const results = await Promise.all(uploadPromises);
+        setUploadingModalFiles(false);
+
+        results.forEach((res) => {
+          if (res.key === 'voice') {
+            newVoiceKey = res.url;
+          } else if (res.key === 'screenshot') {
+            newScreenshotKey = res.url;
+          } else if (res.key.startsWith('doc_')) {
+            newDocsList.push({
+              name: res.file.name,
+              url: res.url,
+              type: res.file.type,
+              size: res.file.size,
+            });
+          }
+        });
+      }
+
+      if (!modalEditStatus) {
+        newScreenshotKey = null;
+      }
+
+      if (userRole === 'admin') {
+        if (raw.voiceUrl && newVoiceKey !== raw.voiceUrl) {
+          await deleteFile(raw.voiceUrl);
+        }
+        if (raw.paymentDetails?.screenshotUrl && newScreenshotKey !== raw.paymentDetails.screenshotUrl) {
+          await deleteFile(raw.paymentDetails.screenshotUrl);
+        }
+        const rawDocs = raw.documents || [];
+        for (const rd of rawDocs) {
+          if (!newDocsList.some(d => d.url === rd.url)) {
+            await deleteFile(rd.url);
+          }
+        }
+      }
+
       const updatedPaymentDetails = modalEditStatus ? {
         amount: modalEditAmount ? parseFloat(modalEditAmount) : undefined,
         status: modalEditStatus as PaymentStatus,
         transactionId: modalEditTransactionId || undefined,
         notes: modalEditPaymentNotes || undefined,
-        screenshotUrl: selectedSummary.paymentDetails?.screenshotUrl, // preserve existing screenshot
-      } : undefined;
+        screenshotUrl: newScreenshotKey || undefined,
+      } : null;
 
       const updatedFields = {
         summaryText: modalEditSummaryText,
+        voiceUrl: newVoiceKey || null,
+        documents: newDocsList,
         paymentDetails: updatedPaymentDetails,
       };
 
       if (userRole === 'admin') {
         await updateSummary(selectedSummary.id, updatedFields);
 
-        // Log activity
         await logActivity({
           userId: currentUser!.uid,
           userName: userProfile?.name,
@@ -344,23 +484,21 @@ const ClientDetailsPage: React.FC = () => {
           entityName: `Edited summary details in modal`,
         });
 
-        // Update local state
-        setSummaries((prev) =>
-          prev.map((s) => (s.id === selectedSummary.id ? { ...s, ...updatedFields, updatedAt: new Date() } : s))
-        );
-        setSelectedSummary((prev) => prev ? { ...prev, ...updatedFields, updatedAt: new Date() } : null);
-        
-        // Update modal edit fields to match the newly saved values
-        setModalEditSummaryText(modalEditSummaryText);
-        setModalEditAmount(modalEditAmount);
-        setModalEditStatus(modalEditStatus);
-        setModalEditTransactionId(modalEditTransactionId);
-        setModalEditPaymentNotes(modalEditPaymentNotes);
+        const sList = await getSummariesByClient(client!.id);
+        const resolved = await resolveSummariesUrls(sList);
+        setSummaries(resolved);
+        setRawSummaries(sList);
+
+        const updatedSummaryObj = resolved.find(s => s.id === selectedSummary.id);
+        if (updatedSummaryObj) {
+          setSelectedSummary(updatedSummaryObj);
+        } else {
+          setSelectedSummary(null);
+        }
 
         setIsEditingInModal(false);
         toast.success('Summary details updated successfully');
       } else {
-        // Agent submits proposed changes as edit request
         await createEditRequest(selectedSummary.id, {
           clientId: client!.id,
           clientName: client!.name,
@@ -489,6 +627,7 @@ const ClientDetailsPage: React.FC = () => {
 
         const resolved = await resolveSummariesUrls(s);
         setSummaries(resolved);
+        setRawSummaries(s);
       } catch {
         toast.error('Failed to load client');
       } finally {
@@ -594,11 +733,11 @@ const ClientDetailsPage: React.FC = () => {
                     <button
                       className="btn btn-secondary"
                       onClick={() => setShowEditClientModal(true)}
-                      title={client.assignedAgent === currentUser?.uid ? 'Edit Info' : 'Claim & Edit'}
+                      title="Edit Info"
                       style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                     >
                       <Edit3 size={16} />
-                      <span>{client.assignedAgent === currentUser?.uid ? 'Edit Info' : 'Claim & Edit'}</span>
+                      <span>Edit Info</span>
                     </button>
                     {client.assignedAgent !== currentUser?.uid && (
                       <button
@@ -1259,6 +1398,170 @@ const ClientDetailsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* File Attachments Edit Section */}
+                <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
+                    Attachments
+                  </h3>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    {/* 1. Documents */}
+                    <div className="form-group">
+                      <label className="form-label">Documents / Files</label>
+                      
+                      {/* Existing documents */}
+                      {modalEditDocs.length > 0 && (
+                        <div className="file-preview-list" style={{ marginBottom: 'var(--space-2)' }}>
+                          {modalEditDocs.map((doc, idx) => (
+                            <div key={`existing-doc-${idx}`} className="file-preview-item">
+                              <div className="file-preview-icon"><FileText size={16} /></div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="text-sm font-medium truncate">{doc.name}</div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-icon"
+                                onClick={() => setModalEditDocs((prev) => prev.filter((_, i) => i !== idx))}
+                                style={{ color: 'var(--color-danger)' }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Dropzone for new documents */}
+                      <div {...getModalDocsRootProps()} className={`dropzone ${isModalDocsDragActive ? 'active' : ''}`} style={{ padding: 'var(--space-3)' }}>
+                        <input {...getModalDocsInputProps()} />
+                        <Upload size={18} style={{ margin: '0 auto var(--space-1)' }} />
+                        <p className="text-xs text-muted" style={{ textAlign: 'center' }}>Drag & drop files or click to add documents</p>
+                      </div>
+
+                      {/* Selected new files */}
+                      {newUploadedDocs.length > 0 && (
+                        <div className="file-preview-list" style={{ marginTop: 'var(--space-2)' }}>
+                          {newUploadedDocs.map((file, idx) => (
+                            <div key={`new-doc-${idx}`} className="file-preview-item" style={{ borderColor: 'var(--color-accent)' }}>
+                              <div className="file-preview-icon" style={{ color: 'var(--color-accent)' }}><FileText size={16} /></div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="text-sm font-medium truncate">{file.name} (New)</div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-icon"
+                                onClick={() => setNewUploadedDocs((prev) => prev.filter((_, i) => i !== idx))}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Voice Recording */}
+                    <div className="form-group">
+                      <label className="form-label">Voice Recording</label>
+                      
+                      {modalEditVoiceUrl ? (
+                        <div className="file-preview-item">
+                          <div className="file-preview-icon" style={{ color: 'var(--color-accent)' }}><Mic size={16} /></div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span className="text-sm font-medium">Existing voice recording</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => setModalEditVoiceUrl(null)}
+                            style={{ color: 'var(--color-danger)' }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : newVoiceFile ? (
+                        <div className="file-preview-item" style={{ borderColor: 'var(--color-accent)' }}>
+                          <div className="file-preview-icon" style={{ color: 'var(--color-accent)' }}><Mic size={16} /></div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span className="text-sm font-medium truncate">{newVoiceFile.name} (New)</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => setNewVoiceFile(null)}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div {...getModalVoiceRootProps()} className={`dropzone ${isModalVoiceDragActive ? 'active' : ''}`} style={{ padding: 'var(--space-3)' }}>
+                          <input {...getModalVoiceInputProps()} />
+                          <Mic size={18} style={{ margin: '0 auto var(--space-1)' }} />
+                          <p className="text-xs text-muted" style={{ textAlign: 'center' }}>Drag & drop or click to add voice recording</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Payment Screenshot (Only when status is chosen) */}
+                    {modalEditStatus && (
+                      <div className="form-group">
+                        <label className="form-label">Payment Screenshot</label>
+                        
+                        {modalEditScreenshotUrl ? (
+                          <div className="file-preview-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div className="file-preview-icon" style={{ color: 'var(--color-success)' }}><Upload size={16} /></div>
+                              <img src={modalEditScreenshotUrl} alt="Existing" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                              <span className="text-xs font-medium text-muted">Existing screenshot</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon"
+                              onClick={() => setModalEditScreenshotUrl(null)}
+                              style={{ color: 'var(--color-danger)' }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : newScreenshotFile ? (
+                          <div className="file-preview-item" style={{ borderColor: 'var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div className="file-preview-icon" style={{ color: 'var(--color-success)' }}><Upload size={16} /></div>
+                              <span className="text-sm font-medium truncate">{newScreenshotFile.name} (New)</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon"
+                              onClick={() => setNewScreenshotFile(null)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div {...getModalScreenshotRootProps()} className={`dropzone ${isModalScreenshotDragActive ? 'active' : ''}`} style={{ padding: 'var(--space-3)' }}>
+                            <input {...getModalScreenshotInputProps()} />
+                            <Upload size={18} style={{ margin: '0 auto var(--space-1)' }} />
+                            <p className="text-xs text-muted" style={{ textAlign: 'center' }}>Drag & drop or click to add screenshot</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload progress bar inside modal */}
+                {uploadingModalFiles && (
+                  <div style={{ padding: 'var(--space-3)', background: 'var(--color-accent-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
+                      <span className="text-xs font-medium text-accent">Uploading attachment files…</span>
+                      <span className="text-xs text-accent">{Math.round(modalFilesUploadProgress)}%</span>
+                    </div>
+                    <div className="progress-bar" style={{ height: '6px' }}>
+                      <div className="progress-fill" style={{ width: `${modalFilesUploadProgress}%` }} />
+                    </div>
+                  </div>
+                )}
 
                 {/* Agent: optional reason for edit */}
                 {userRole === 'agent' && (

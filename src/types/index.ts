@@ -32,7 +32,7 @@ export interface Client {
 export interface PaymentDetails {
   amount?: number;
   status?: PaymentStatus;
-  screenshotUrl?: string;
+  screenshotUrl?: string | null;
   transactionId?: string;
   notes?: string;
 }
@@ -41,9 +41,9 @@ export interface Summary {
   id: string;
   clientId: string;
   summaryText: string;
-  voiceUrl?: string;
+  voiceUrl?: string | null;
   documents: DocumentFile[];
-  paymentDetails?: PaymentDetails;
+  paymentDetails?: PaymentDetails | null;
   createdAt: Date;
   updatedAt?: Date;
   createdBy: string;
@@ -132,7 +132,9 @@ export interface EditRequest {
   requestType?: 'edit' | 'delete';
   proposedChanges?: {
     summaryText?: string;
-    paymentDetails?: PaymentDetails;
+    voiceUrl?: string | null;
+    documents?: DocumentFile[];
+    paymentDetails?: PaymentDetails | null;
   };
   agentId: string;
   agentName: string;

@@ -17,6 +17,7 @@ const schema = z.object({
   notes: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'lead', 'closed']),
   assignedAgent: z.string().optional().or(z.literal('')),
+  address: z.string().optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -68,6 +69,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       notes: client.notes || '',
       status: client.status,
       assignedAgent: client.assignedAgent || '',
+      address: client.address || '',
     },
   });
 
@@ -114,6 +116,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         alternateContact: data.alternateContact || '',
         notes: data.notes || '',
         status: data.status,
+        address: data.address || '',
       };
 
       if (userRole === 'admin') {
@@ -142,17 +145,13 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       } else {
         // Agent submits proposed changes as edit request
         const proposedChanges: Partial<Client> = { ...updatedFields };
-        if (client.assignedAgent !== currentUser?.uid) {
-          proposedChanges.assignedAgent = currentUser!.uid;
-          proposedChanges.assignedAgentName = userProfile?.name || 'Agent';
-        }
 
         await createClientEditRequest(client.id, {
           clientId: client.id,
           clientName: client.name,
           agentId: currentUser!.uid,
           agentName: userProfile?.name || 'Agent',
-          reason: reason.trim() || (client.assignedAgent !== currentUser?.uid ? 'Client takeover & details update request' : 'Client details update request'),
+          reason: reason.trim() || 'Client details update request',
           requestType: 'edit',
           proposedChanges,
         });
@@ -280,6 +279,18 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                   />
                 </div>
                 {errors.alternateContact && <span className="form-error">{errors.alternateContact.message}</span>}
+              </div>
+
+              {/* Address */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="client-address-input">Address</label>
+                <input
+                  id="client-address-input"
+                  type="text"
+                  className="form-input"
+                  placeholder="Client address"
+                  {...register('address')}
+                />
               </div>
             </div>
 
