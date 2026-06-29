@@ -363,18 +363,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 </div>
                 {errors.alternateContact && <span className="form-error">{errors.alternateContact.message}</span>}
               </div>
-
-              {/* Address */}
-              <div className="form-group">
-                <label className="form-label" htmlFor="client-address-input">Address</label>
-                <input
-                  id="client-address-input"
-                  type="text"
-                  className="form-input"
-                  placeholder="Client address"
-                  {...register('address')}
-                />
-              </div>
             </div>
 
             {/* Right Side fields */}
