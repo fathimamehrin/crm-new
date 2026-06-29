@@ -92,8 +92,47 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
                   className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
                   style={{ paddingLeft: '2.5rem' }}
                   placeholder="10-digit number"
-                  maxLength={10}
-                  {...register('whatsappNumber')}
+                  maxLength={15}
+                  {...register('whatsappNumber', {
+                    onChange: (e) => {
+                      const rawVal = e.target.value;
+                      const clean = rawVal.replace(/[^\d+]/g, '');
+                      const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+                      let matchedCode = '';
+                      let remainingNumber = clean;
+
+                      for (const code of possibleCodes) {
+                        if (clean.startsWith(code)) {
+                          matchedCode = code;
+                          remainingNumber = clean.substring(code.length);
+                          break;
+                        }
+                      }
+
+                      if (!matchedCode) {
+                        for (const code of possibleCodes) {
+                          const codeWithoutPlus = code.replace('+', '');
+                          if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
+                            matchedCode = code;
+                            remainingNumber = clean.substring(codeWithoutPlus.length);
+                            break;
+                          }
+                        }
+                      }
+
+                      if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
+                        setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
+                        return;
+                      }
+
+                      if (matchedCode) {
+                        setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
+                        setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
+                      } else {
+                        setValue('whatsappNumber', clean.slice(0, 10), { shouldDirty: true, shouldValidate: true });
+                      }
+                    }
+                  })}
                   onPaste={(e) => {
                     const pastedText = e.clipboardData.getData('text');
                     console.log('Add modal onPaste triggered. Raw text:', pastedText);
