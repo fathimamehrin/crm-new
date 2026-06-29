@@ -718,12 +718,21 @@ const ClientDetailsPage: React.FC = () => {
               </>
             ) : userRole === 'agent' ? (
               <>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditClientModal(true)}
+                  title="Edit Info"
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                >
+                  <Edit3 size={16} />
+                  <span>Edit Info</span>
+                </button>
                 {clientEditRequest?.status === 'pending' ? (
                   <button
                     className="btn btn-secondary"
                     disabled
                     style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', opacity: 0.65, cursor: 'not-allowed' }}
-                    title="An edit/takeover request is pending Admin approval"
+                    title="A claim/takeover request is pending Admin approval"
                   >
                     <Clock size={16} style={{ animation: 'spin 2s linear infinite' }} />
                     <span>Request Pending</span>
