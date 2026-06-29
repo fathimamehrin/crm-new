@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X } from 'lucide-react';
-import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient, createClientEditRequest } from '../lib/firestore';
+import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient } from '../lib/firestore';
 import { uploadFile, generateStoragePath } from '../lib/storage';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -204,29 +204,7 @@ const NewClientFormPage: React.FC = () => {
           });
           toast.success('Existing client details updated.');
         } else {
-          await createClientEditRequest(clientId, {
-            clientId,
-            clientName: existing.name,
-            agentId: currentUser.uid,
-            agentName: userProfile?.name || 'Agent',
-            reason: 'Automatic details update request on duplicate lead submission',
-            requestType: 'edit',
-            proposedChanges: {
-              name: data.name,
-              email: data.email || existing.email || '',
-              alternateContact: data.alternateContact || existing.alternateContact || '',
-              notes: mergedNotes,
-            },
-          });
-          await logActivity({
-            userId: currentUser.uid,
-            userName: userProfile?.name,
-            action: 'client_updated',
-            entityType: 'client',
-            entityId: clientId,
-            entityName: `${data.name} (Edit request submitted)`,
-          });
-          toast.success('Existing client found. Edit request submitted to Admin.');
+          toast.success('Existing client found. Redirecting to profile...');
         }
       } else {
         clientId = await createClient({
