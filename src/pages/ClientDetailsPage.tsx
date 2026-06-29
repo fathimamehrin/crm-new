@@ -668,9 +668,9 @@ const ClientDetailsPage: React.FC = () => {
   );
 
   return (
-    <div className="page-container" style={{ maxWidth: 935, margin: '0 auto', width: '100%', padding: '0 var(--space-4)' }}>
+    <div className="page-container client-details-page-wrapper">
       {/* Back & Title */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+      <div className="client-details-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
           <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)} aria-label="Go back">
             <ArrowLeft size={20} />
@@ -679,8 +679,10 @@ const ClientDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Client Profile Header Card */}
-      <div className="client-profile-card">
+      <div className="client-details-body-container">
+        <div className="client-details-profile-column">
+          {/* Client Profile Header Card */}
+          <div className="client-profile-card">
         <div className="client-header-row">
           <div className="client-header-info">
             <div className="client-avatar">
@@ -836,9 +838,11 @@ const ClientDetailsPage: React.FC = () => {
           </div>
         )}
       </div>
+      </div> {/* close client-details-profile-column */}
 
-      {/* SaaS CRM Tabs Navigation */}
-      <nav className="client-tabs-nav">
+      <div className="client-details-tabs-column">
+        {/* SaaS CRM Tabs Navigation */}
+        <nav className="client-tabs-nav">
         <button
           className={`client-tab-btn ${activeTab === 'summaries' ? 'active' : ''}`}
           onClick={() => setActiveTab('summaries')}
@@ -862,8 +866,9 @@ const ClientDetailsPage: React.FC = () => {
         </button>
       </nav>
 
-      {/* Tab Panels */}
-      {activeTab === 'summaries' && (
+      <div className="client-tab-panel-scroll">
+        {/* Tab Panels */}
+        {activeTab === 'summaries' && (
         <>
           {summaries.length > 0 && (
             <div className="client-view-toggle">
@@ -1207,6 +1212,9 @@ const ClientDetailsPage: React.FC = () => {
           }
         </div>
       )}
+      </div> {/* close client-tab-panel-scroll */}
+      </div> {/* close client-details-tabs-column */}
+      </div> {/* close client-details-body-container */}
 
       {/* Summary Detail Modal */}
       {selectedSummary && (
@@ -1214,9 +1222,10 @@ const ClientDetailsPage: React.FC = () => {
           <div
             className="modal"
             style={{
-              maxWidth: 1000,
-              width: '95%',
-              maxHeight: '95vh',
+              maxWidth: 1400,
+              width: '98%',
+              height: '92vh',
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
               padding: 'var(--space-6)',
@@ -1313,7 +1322,7 @@ const ClientDetailsPage: React.FC = () => {
                   <textarea
                     id="modal-edit-notes"
                     className="form-input"
-                    style={{ minHeight: 300, resize: 'vertical' }}
+                    style={{ minHeight: 400, resize: 'vertical' }}
                     value={modalEditSummaryText}
                     onChange={(e) => setModalEditSummaryText(e.target.value)}
                     placeholder="Enter call notes..."
@@ -1624,7 +1633,7 @@ const ClientDetailsPage: React.FC = () => {
                       fontSize: 'var(--font-size-sm)',
                       lineHeight: 1.6,
                       color: 'var(--color-text-secondary)',
-                      minHeight: 350,
+                      minHeight: 450,
                       resize: 'vertical',
                       width: '100%',
                       boxSizing: 'border-box'

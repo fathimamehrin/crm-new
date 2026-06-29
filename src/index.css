@@ -120,14 +120,14 @@ img {
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: var(--color-bg-secondary);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-bg-elevated);
+  background: var(--color-border);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -2946,6 +2946,90 @@ h1, h2, h3, h4, h5, h6 {
     height: 16px !important;
   }
 }
+
+/* ─── Premium Viewport-Fitting Laptop/Desktop Client Details Page ──────────────── */
+@media (min-width: 1024px) {
+  .client-details-page-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 128px); /* Fits screen viewport precisely */
+    width: 100%;
+    max-width: 1400px !important; /* Fills screen width on laptop screen */
+    margin: 0 auto;
+    overflow: hidden;
+  }
+  
+  .client-details-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    flex-shrink: 0;
+  }
+  
+  .client-details-body-container {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: var(--space-6);
+    flex: 1;
+    min-height: 0; /* Critical for child scrolling */
+    overflow: hidden;
+  }
+  
+  .client-details-profile-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    overflow-y: auto;
+    height: 100%;
+    padding-right: 6px;
+  }
+  
+  .client-details-tabs-column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .client-tab-panel-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 6px;
+    padding-bottom: var(--space-12);
+  }
+}
+
+/* Fallback for smaller screens */
+@media (max-width: 1023px) {
+  .client-details-page-wrapper {
+    width: 100%;
+    max-width: 935px;
+    margin: 0 auto;
+  }
+  
+  .client-details-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  
+  .client-details-body-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+  
+  .client-details-profile-column,
+  .client-details-tabs-column,
+  .client-tab-panel-scroll {
+    display: contents; /* Dissolves column containers for simple vertical stack */
+  }
+}
+
 
 
 
