@@ -730,6 +730,15 @@ const ClientDetailsPage: React.FC = () => {
                   </button>
                 ) : (
                   <>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setShowEditClientModal(true)}
+                      title="Edit Info"
+                      style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                    >
+                      <Edit3 size={16} />
+                      <span>Edit Info</span>
+                    </button>
                     {client.assignedAgent !== currentUser?.uid && (
                       <button
                         className="btn btn-secondary"
