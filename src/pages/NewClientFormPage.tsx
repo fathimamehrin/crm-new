@@ -398,7 +398,9 @@ const NewClientFormPage: React.FC = () => {
                     {...register('whatsappNumber')}
                     onPaste={(e) => {
                       const pastedText = e.clipboardData.getData('text');
+                      console.log('onPaste triggered. Raw text:', pastedText);
                       const clean = pastedText.replace(/[^\d+]/g, '');
+                      console.log('Cleaned text:', clean);
                       const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
                       let matchedCode = '';
                       let remainingNumber = clean;
@@ -410,6 +412,7 @@ const NewClientFormPage: React.FC = () => {
                           break;
                         }
                       }
+                      console.log('Loop 1 check - matched:', matchedCode, 'remaining:', remainingNumber);
 
                       if (!matchedCode) {
                         for (const code of possibleCodes) {
@@ -421,14 +424,17 @@ const NewClientFormPage: React.FC = () => {
                           }
                         }
                       }
+                      console.log('Loop 2 check - matched:', matchedCode, 'remaining:', remainingNumber);
 
                       if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
+                        console.log('Matched leading zero, setting number:', clean.substring(1));
                         e.preventDefault();
                         setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
                         return;
                       }
 
                       if (matchedCode) {
+                        console.log('Matched code, setting country:', matchedCode, 'number:', remainingNumber.slice(0, 10));
                         e.preventDefault();
                         setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
                         setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });

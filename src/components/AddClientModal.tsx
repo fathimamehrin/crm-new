@@ -25,7 +25,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const { userRole } = useAuth();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { countryCode: '+91' },
   });
@@ -86,7 +86,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
               </select>
               <div className="search-wrapper" style={{ flex: 1 }}>
                 <Phone className="search-icon" size={16} />
-                <input
+                 <input
                   id="whatsapp-check"
                   type="tel"
                   className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
@@ -94,6 +94,50 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
                   placeholder="10-digit number"
                   maxLength={10}
                   {...register('whatsappNumber')}
+                  onPaste={(e) => {
+                    const pastedText = e.clipboardData.getData('text');
+                    console.log('Add modal onPaste triggered. Raw text:', pastedText);
+                    const clean = pastedText.replace(/[^\d+]/g, '');
+                    console.log('Add modal cleaned text:', clean);
+                    const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+                    let matchedCode = '';
+                    let remainingNumber = clean;
+
+                    for (const code of possibleCodes) {
+                      if (clean.startsWith(code)) {
+                        matchedCode = code;
+                        remainingNumber = clean.substring(code.length);
+                        break;
+                      }
+                    }
+                    console.log('Add modal loop 1 check - matched:', matchedCode, 'remaining:', remainingNumber);
+
+                    if (!matchedCode) {
+                      for (const code of possibleCodes) {
+                        const codeWithoutPlus = code.replace('+', '');
+                        if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
+                          matchedCode = code;
+                          remainingNumber = clean.substring(codeWithoutPlus.length);
+                          break;
+                        }
+                      }
+                    }
+                    console.log('Add modal loop 2 check - matched:', matchedCode, 'remaining:', remainingNumber);
+
+                    if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
+                      console.log('Add modal matched leading zero, setting number:', clean.substring(1));
+                      e.preventDefault();
+                      setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
+                      return;
+                    }
+
+                    if (matchedCode) {
+                      console.log('Add modal matched code, setting country:', matchedCode, 'number:', remainingNumber.slice(0, 10));
+                      e.preventDefault();
+                      setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
+                      setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
+                    }
+                  }}
                 />
               </div>
             </div>
