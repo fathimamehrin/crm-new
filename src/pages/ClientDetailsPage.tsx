@@ -718,21 +718,12 @@ const ClientDetailsPage: React.FC = () => {
               </>
             ) : userRole === 'agent' ? (
               <>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowEditClientModal(true)}
-                  title="Edit Info"
-                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-                >
-                  <Edit3 size={16} />
-                  <span>Edit Info</span>
-                </button>
                 {clientEditRequest?.status === 'pending' ? (
                   <button
                     className="btn btn-secondary"
                     disabled
                     style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', opacity: 0.65, cursor: 'not-allowed' }}
-                    title="A claim/takeover request is pending Admin approval"
+                    title="An edit/takeover request is pending Admin approval"
                   >
                     <Clock size={16} style={{ animation: 'spin 2s linear infinite' }} />
                     <span>Request Pending</span>
@@ -1223,12 +1214,12 @@ const ClientDetailsPage: React.FC = () => {
           <div
             className="modal"
             style={{
-              maxWidth: 600,
+              maxWidth: 1000,
               width: '95%',
-              maxHeight: '90vh',
+              maxHeight: '95vh',
               display: 'flex',
               flexDirection: 'column',
-              padding: 'var(--space-5)',
+              padding: 'var(--space-6)',
               animation: 'fadeIn 0.2s ease'
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1322,7 +1313,7 @@ const ClientDetailsPage: React.FC = () => {
                   <textarea
                     id="modal-edit-notes"
                     className="form-input"
-                    style={{ minHeight: 120, resize: 'vertical' }}
+                    style={{ minHeight: 300, resize: 'vertical' }}
                     value={modalEditSummaryText}
                     onChange={(e) => setModalEditSummaryText(e.target.value)}
                     placeholder="Enter call notes..."
@@ -1633,7 +1624,7 @@ const ClientDetailsPage: React.FC = () => {
                       fontSize: 'var(--font-size-sm)',
                       lineHeight: 1.6,
                       color: 'var(--color-text-secondary)',
-                      minHeight: 150,
+                      minHeight: 350,
                       resize: 'vertical',
                       width: '100%',
                       boxSizing: 'border-box'

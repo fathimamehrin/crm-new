@@ -28,7 +28,12 @@ service cloud.firestore {
     match /clients/{clientId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow update: if isAdmin() || (
+        isAgent() &&
+        resource.data.assignedAgent == request.auth.uid &&
+        exists(/databases/$(database)/documents/clientEditRequests/$(clientId)) &&
+        get(/databases/$(database)/documents/clientEditRequests/$(clientId)).data.status == 'approved'
+      );
       allow delete: if isAdmin();
     }
 
