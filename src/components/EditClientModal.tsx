@@ -58,7 +58,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
   const { countryCode, digits } = parseWhatsApp(client.whatsappNumber);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: client.name,
@@ -243,6 +243,44 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                       placeholder="10-digit number"
                       maxLength={10}
                       {...register('whatsappNumber')}
+                      onPaste={(e) => {
+                        const pastedText = e.clipboardData.getData('text');
+                        const clean = pastedText.replace(/[^\d+]/g, '');
+                        const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+                        let matchedCode = '';
+                        let remainingNumber = clean;
+
+                        for (const code of possibleCodes) {
+                          if (clean.startsWith(code)) {
+                            matchedCode = code;
+                            remainingNumber = clean.substring(code.length);
+                            break;
+                          }
+                        }
+
+                        if (!matchedCode) {
+                          for (const code of possibleCodes) {
+                            const codeWithoutPlus = code.replace('+', '');
+                            if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
+                              matchedCode = code;
+                              remainingNumber = clean.substring(codeWithoutPlus.length);
+                              break;
+                            }
+                          }
+                        }
+
+                        if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
+                          e.preventDefault();
+                          setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
+                          return;
+                        }
+
+                        if (matchedCode) {
+                          e.preventDefault();
+                          setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
+                          setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
+                        }
+                      }}
                     />
                   </div>
                 </div>
