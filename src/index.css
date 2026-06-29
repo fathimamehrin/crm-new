@@ -2967,36 +2967,21 @@ h1, h2, h3, h4, h5, h6 {
     flex-shrink: 0;
   }
   
-  .client-details-body-container {
-    display: grid;
-    grid-template-columns: 360px 1fr;
-    gap: var(--space-6);
-    flex: 1;
-    min-height: 0; /* Critical for child scrolling */
-    overflow: hidden;
+  .client-profile-card {
+    flex-shrink: 0;
+    margin-bottom: var(--space-4) !important;
   }
   
-  .client-details-profile-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    overflow-y: auto;
-    height: 100%;
-    padding-right: 6px;
-  }
-  
-  .client-details-tabs-column {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+  .client-tabs-nav {
+    flex-shrink: 0;
+    margin-bottom: var(--space-4) !important;
   }
   
   .client-tab-panel-scroll {
     flex: 1;
     overflow-y: auto;
     padding-right: 6px;
-    padding-bottom: var(--space-12);
+    padding-bottom: var(--space-10);
   }
 }
 
@@ -3017,16 +3002,8 @@ h1, h2, h3, h4, h5, h6 {
     gap: var(--space-3);
   }
   
-  .client-details-body-container {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-  }
-  
-  .client-details-profile-column,
-  .client-details-tabs-column,
   .client-tab-panel-scroll {
-    display: contents; /* Dissolves column containers for simple vertical stack */
+    display: contents; /* Dissolves scroll container for simple vertical stack */
   }
 }
 

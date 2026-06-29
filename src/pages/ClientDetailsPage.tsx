@@ -679,10 +679,8 @@ const ClientDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="client-details-body-container">
-        <div className="client-details-profile-column">
-          {/* Client Profile Header Card */}
-          <div className="client-profile-card">
+      {/* Client Profile Header Card */}
+      <div className="client-profile-card">
         <div className="client-header-row">
           <div className="client-header-info">
             <div className="client-avatar">
@@ -838,11 +836,9 @@ const ClientDetailsPage: React.FC = () => {
           </div>
         )}
       </div>
-      </div> {/* close client-details-profile-column */}
 
-      <div className="client-details-tabs-column">
-        {/* SaaS CRM Tabs Navigation */}
-        <nav className="client-tabs-nav">
+      {/* SaaS CRM Tabs Navigation */}
+      <nav className="client-tabs-nav">
         <button
           className={`client-tab-btn ${activeTab === 'summaries' ? 'active' : ''}`}
           onClick={() => setActiveTab('summaries')}
@@ -1213,8 +1209,6 @@ const ClientDetailsPage: React.FC = () => {
         </div>
       )}
       </div> {/* close client-tab-panel-scroll */}
-      </div> {/* close client-details-tabs-column */}
-      </div> {/* close client-details-body-container */}
 
       {/* Summary Detail Modal */}
       {selectedSummary && (
