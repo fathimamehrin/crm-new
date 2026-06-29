@@ -1372,19 +1372,6 @@ const ClientDetailsPage: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label" htmlFor="modal-edit-txid">Transaction ID</label>
-                      <input
-                        id="modal-edit-txid"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. TXN12345678"
-                        value={modalEditTransactionId}
-                        onChange={(e) => setModalEditTransactionId(e.target.value)}
-                        disabled={!modalEditStatus}
-                      />
-                    </div>
-
-                    <div className="form-group">
                       <label className="form-label" htmlFor="modal-edit-paynotes">Payment Notes</label>
                       <textarea
                         id="modal-edit-paynotes"

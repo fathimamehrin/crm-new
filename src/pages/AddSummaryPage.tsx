@@ -391,17 +391,6 @@ const AddSummaryPage: React.FC = () => {
             </div>
 
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label className="form-label" htmlFor="transaction-id">Transaction ID</label>
-              <input
-                id="transaction-id"
-                type="text"
-                className="form-input"
-                placeholder="UTR / transaction reference"
-                {...register('transactionId')}
-              />
-            </div>
-
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label className="form-label">Payment Screenshot</label>
               {paymentScreenshot ? (
                 <div className="file-preview-item">
