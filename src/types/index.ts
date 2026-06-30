@@ -27,6 +27,8 @@ export interface Client {
   status: ClientStatus;
   createdAt: Date;
   createdBy: string;
+  tags?: string[];
+  projectName?: string;
 }
 
 export interface PaymentDetails {
@@ -84,9 +86,13 @@ export type ActivityAction =
   | 'admin_enabled'
   | 'admin_disabled'
   | 'user_login'
-  | 'user_logout';
+  | 'user_logout'
+  | 'tag_created'
+  | 'tag_updated'
+  | 'tag_enabled'
+  | 'tag_disabled';
 
-export type EntityType = 'client' | 'summary' | 'payment' | 'user';
+export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag';
 
 export interface ActivityLog {
   id: string;
@@ -115,6 +121,7 @@ export interface FilterOptions {
   paymentStatus: PaymentStatus | '';
   dateFrom: string;
   dateTo: string;
+  tags: string[];
 }
 
 export interface PaginationState {
@@ -166,6 +173,14 @@ export interface ClientEditRequest {
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string; // Hex color code
+  status: 'active' | 'disabled';
+  createdAt: Date;
 }
 
 

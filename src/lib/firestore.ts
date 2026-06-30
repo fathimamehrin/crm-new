@@ -19,7 +19,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -30,6 +30,7 @@ const paymentsColRef = () => collection(db, 'payments');
 const logsColRef     = () => collection(db, 'activityLogs');
 const editRequestsColRef = () => collection(db, 'editRequests');
 const clientEditRequestsColRef = () => collection(db, 'clientEditRequests');
+const tagsColRef = () => collection(db, 'tags');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -77,6 +78,12 @@ export const clientEditRequestFromDoc = (snap: AnySnap): ClientEditRequest => ({
   createdAt: toDate(snap.data().createdAt),
   updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
 } as ClientEditRequest);
+
+export const tagFromDoc = (snap: AnySnap): Tag => ({
+  id: snap.id,
+  ...snap.data(),
+  createdAt: toDate(snap.data().createdAt),
+} as Tag);
 
 // Helper to recursively strip undefined properties so Firestore doesn't reject them
 const cleanObject = (obj: any): any => {
@@ -163,8 +170,11 @@ export const getClients = async (
   return { clients, lastDoc: null };
 };
 
-export const createClient = async (data: Omit<Client, 'id' | 'createdAt'>): Promise<string> => {
-  const ref = await addDoc(clientsColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
+export const createClient = async (data: Omit<Client, 'id' | 'createdAt'> & { createdAt?: Date }): Promise<string> => {
+  const ref = await addDoc(clientsColRef(), cleanObject({
+    ...data,
+    createdAt: data.createdAt || serverTimestamp(),
+  }));
   return ref.id;
 };
 
@@ -197,6 +207,22 @@ export const updateSummary = async (id: string, data: Partial<Summary>): Promise
     ...data,
     updatedAt: serverTimestamp(),
   }));
+};
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+export const getTags = async (): Promise<Tag[]> => {
+  const snap = await getDocs(tagsColRef());
+  const tags = snap.docs.map(tagFromDoc);
+  return tags.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+export const createTag = async (data: Omit<Tag, 'id' | 'createdAt'>): Promise<string> => {
+  const ref = await addDoc(tagsColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
+  return ref.id;
+};
+
+export const updateTag = async (id: string, data: Partial<Tag>): Promise<void> => {
+  await updateDoc(doc(db, 'tags', id), cleanObject(data));
 };
 
 // ─── Payments ────────────────────────────────────────────────────────────────

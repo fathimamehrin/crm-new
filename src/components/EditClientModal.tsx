@@ -2,25 +2,67 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X, User, Phone, Mail, ClipboardList } from 'lucide-react';
-import { updateClient, getUsers, logActivity, createClientEditRequest } from '../lib/firestore';
+import { X, User, Phone, Mail, ClipboardList, Folder } from 'lucide-react';
+import { updateClient, getUsers, logActivity, createClientEditRequest, getTags } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, User as UserType } from '../types';
+import type { Client, User as UserType, Tag } from '../types';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   countryCode: z.string(),
-  whatsappNumber: z.string().regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
+  whatsappNumber: z.string()
+    .min(4, 'WhatsApp number is too short')
+    .max(15, 'WhatsApp number is too long')
+    .regex(/^\d+$/, 'Must contain only digits'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   alternateContact: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'lead', 'closed']),
   assignedAgent: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
+  createdAt: z.string().optional(),
+  projectName: z.string().optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof schema>;
+
+// Helper to parse WhatsApp phone numbers gracefully supporting international formats & copy-paste cleaning
+const parseWhatsAppNumber = (rawText: string) => {
+  const clean = rawText.trim().replace(/[^\d+]/g, '');
+  const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+
+  for (const code of possibleCodes) {
+    if (clean.startsWith(code)) {
+      return {
+        countryCode: code,
+        digits: clean.substring(code.length),
+      };
+    }
+  }
+
+  for (const code of possibleCodes) {
+    const codeWithoutPlus = code.replace('+', '');
+    if (clean.startsWith(codeWithoutPlus) && clean.length > codeWithoutPlus.length + 3) {
+      return {
+        countryCode: code,
+        digits: clean.substring(codeWithoutPlus.length),
+      };
+    }
+  }
+
+  if (clean.startsWith('0') && clean.length > 5) {
+    return {
+      countryCode: null,
+      digits: clean.substring(1),
+    };
+  }
+
+  return {
+    countryCode: null,
+    digits: clean.replace('+', ''),
+  };
+};
 
 interface EditClientModalProps {
   client: Client;
@@ -34,6 +76,18 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
   const [agents, setAgents] = useState<UserType[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(client.tags || []);
+
+  useEffect(() => {
+    getTags().then(tags => {
+      const clientTagIds = client.tags || [];
+      const filtered = tags.filter(t => t.status === 'active' || clientTagIds.includes(t.id));
+      setAllTags(filtered);
+    }).catch(err => {
+      console.error('Failed to load tags:', err);
+    });
+  }, [client]);
 
   // Parse whatsappNumber into countryCode and digits
   const parseWhatsApp = (num: string) => {
@@ -70,6 +124,8 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       status: client.status,
       assignedAgent: client.assignedAgent || '',
       address: client.address || '',
+      createdAt: client.createdAt ? new Date(client.createdAt).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10),
+      projectName: client.projectName || '',
     },
   });
 
@@ -109,7 +165,8 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         }
       }
 
-      const updatedFields: Partial<Client> = {
+      const selectedDate = data.createdAt ? new Date(data.createdAt + 'T00:00:00') : new Date();
+      const updatedFields: Partial<Client> & { createdAt?: Date } = {
         name: data.name,
         whatsappNumber: fullWhatsAppNumber,
         email: data.email || '',
@@ -117,6 +174,9 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         notes: data.notes || '',
         status: data.status,
         address: data.address || '',
+        tags: selectedTags,
+        createdAt: selectedDate,
+        projectName: data.projectName || '',
       };
 
       if (userRole === 'admin') {
@@ -212,6 +272,21 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 {errors.name && <span className="form-error">{errors.name.message}</span>}
               </div>
 
+              {/* Project Name */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="client-project-name-input">Project Name / Context</label>
+                <div className="search-wrapper">
+                  <Folder className="search-icon" size={16} />
+                  <input
+                    id="client-project-name-input"
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Downtown Residency, candidate hiring"
+                    {...register('projectName')}
+                  />
+                </div>
+              </div>
+
               {/* WhatsApp Number */}
               <div className="form-group">
                 <label className="form-label required" htmlFor="client-whatsapp-input">WhatsApp Number</label>
@@ -240,91 +315,25 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                       id="client-whatsapp-input"
                       type="tel"
                       className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
-                      placeholder="10-digit number"
+                      placeholder="Enter phone number"
                       maxLength={15}
                       {...register('whatsappNumber', {
                         onChange: (e) => {
-                          const rawVal = e.target.value;
-                          const clean = rawVal.replace(/[^\d+]/g, '');
-                          const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                          let matchedCode = '';
-                          let remainingNumber = clean;
-
-                          for (const code of possibleCodes) {
-                            if (clean.startsWith(code)) {
-                              matchedCode = code;
-                              remainingNumber = clean.substring(code.length);
-                              break;
-                            }
+                          const parsed = parseWhatsAppNumber(e.target.value);
+                          if (parsed.countryCode) {
+                            setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                           }
-
-                          if (!matchedCode) {
-                            for (const code of possibleCodes) {
-                              const codeWithoutPlus = code.replace('+', '');
-                              if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                                matchedCode = code;
-                                remainingNumber = clean.substring(codeWithoutPlus.length);
-                                break;
-                              }
-                            }
-                          }
-
-                          if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                            setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                            return;
-                          }
-
-                          if (matchedCode) {
-                            setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                            setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                          } else {
-                            setValue('whatsappNumber', clean.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                          }
+                          setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                         }
                       })}
                       onPaste={(e) => {
                         const pastedText = e.clipboardData.getData('text');
-                        console.log('Edit onPaste triggered. Raw text:', pastedText);
-                        const clean = pastedText.replace(/[^\d+]/g, '');
-                        console.log('Edit cleaned text:', clean);
-                        const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                        let matchedCode = '';
-                        let remainingNumber = clean;
-
-                        for (const code of possibleCodes) {
-                          if (clean.startsWith(code)) {
-                            matchedCode = code;
-                            remainingNumber = clean.substring(code.length);
-                            break;
-                          }
+                        const parsed = parseWhatsAppNumber(pastedText);
+                        e.preventDefault();
+                        if (parsed.countryCode) {
+                          setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                         }
-                        console.log('Edit loop 1 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                        if (!matchedCode) {
-                          for (const code of possibleCodes) {
-                            const codeWithoutPlus = code.replace('+', '');
-                            if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                              matchedCode = code;
-                              remainingNumber = clean.substring(codeWithoutPlus.length);
-                              break;
-                            }
-                          }
-                        }
-                        console.log('Edit loop 2 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                        if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                          console.log('Edit matched leading zero, setting number:', clean.substring(1));
-                          e.preventDefault();
-                          setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                          return;
-                        }
-
-                        if (matchedCode) {
-                          console.log('Edit matched code, setting country:', matchedCode, 'number:', remainingNumber.slice(0, 10));
-                          e.preventDefault();
-                          setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                          setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                        }
+                        setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                       }}
                     />
                   </div>
@@ -412,6 +421,20 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 </div>
               ) : null}
 
+              {/* Lead Creation Date */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="client-created-at-edit">Lead Creation Date</label>
+                <input
+                  id="client-created-at-edit"
+                  type="date"
+                  className="form-input"
+                  {...register('createdAt')}
+                />
+                <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                  Allows correcting the creation date for this contact.
+                </p>
+              </div>
+
               {/* Notes / Bio */}
               <div className="form-group">
                 <label className="form-label" htmlFor="client-notes-input">Notes / Bio</label>
@@ -424,8 +447,42 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                   {...register('notes')}
                 />
               </div>
-            </div>
           </div>
+        </div>
+
+        {/* Tags Selection */}
+        <div className="form-group" style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+          <label className="form-label">Tags / Labels</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+            {allTags.map((tag) => {
+              const isSelected = selectedTags.includes(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                    } else {
+                      setSelectedTags([...selectedTags, tag.id]);
+                    }
+                  }}
+                  className={`tag-selectable-pill ${isSelected ? 'active' : ''}`}
+                  style={isSelected ? {
+                    backgroundColor: `${tag.color}1c`,
+                    color: tag.color,
+                    borderColor: tag.color,
+                  } : {}}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+            {allTags.length === 0 && (
+              <span className="text-xs text-muted">No custom tags available. Manage tags in the Admin Panel.</span>
+            )}
+          </div>
+        </div>
 
           {/* Reason for Edit (Agent Only) */}
           {!isAdmin && (

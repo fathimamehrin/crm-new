@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
-import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X } from 'lucide-react';
-import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient } from '../lib/firestore';
+import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X, Folder } from 'lucide-react';
+import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient, getTags } from '../lib/firestore';
 import { uploadFile, generateStoragePath } from '../lib/storage';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import type { Tag } from '../types';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   countryCode: z.string(),
-  whatsappNumber: z.string().regex(/^\d{10}$/, 'Must be 10 digits'),
+  whatsappNumber: z.string()
+    .min(4, 'WhatsApp number is too short')
+    .max(15, 'WhatsApp number is too long')
+    .regex(/^\d+$/, 'Must contain only digits'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   alternateContact: z.string().optional(),
   notes: z.string().optional(),
@@ -23,8 +27,47 @@ const schema = z.object({
   paymentStatus: z.enum(['pending', 'partial', 'paid', 'failed', '']).optional(),
   transactionId: z.string().optional(),
   paymentNotes: z.string().optional(),
+  createdAt: z.string().optional(),
+  projectName: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
+
+// Helper to parse WhatsApp phone numbers gracefully supporting international formats & copy-paste cleaning
+const parseWhatsAppNumber = (rawText: string) => {
+  const clean = rawText.trim().replace(/[^\d+]/g, '');
+  const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+
+  for (const code of possibleCodes) {
+    if (clean.startsWith(code)) {
+      return {
+        countryCode: code,
+        digits: clean.substring(code.length),
+      };
+    }
+  }
+
+  for (const code of possibleCodes) {
+    const codeWithoutPlus = code.replace('+', '');
+    if (clean.startsWith(codeWithoutPlus) && clean.length > codeWithoutPlus.length + 3) {
+      return {
+        countryCode: code,
+        digits: clean.substring(codeWithoutPlus.length),
+      };
+    }
+  }
+
+  if (clean.startsWith('0') && clean.length > 5) {
+    return {
+      countryCode: null,
+      digits: clean.substring(1),
+    };
+  }
+
+  return {
+    countryCode: null,
+    digits: clean.replace('+', ''),
+  };
+};
 
 const NewClientFormPage: React.FC = () => {
   const location = useLocation();
@@ -41,10 +84,26 @@ const NewClientFormPage: React.FC = () => {
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    getTags().then(tags => {
+      setAllTags(tags.filter(t => t.status === 'active'));
+    }).catch(err => {
+      console.error('Failed to load tags:', err);
+    });
+  }, []);
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { whatsappNumber: prefilledNumber, countryCode: prefilledCountryCode, paymentStatus: '' },
+    defaultValues: {
+      whatsappNumber: prefilledNumber,
+      countryCode: prefilledCountryCode,
+      paymentStatus: '',
+      createdAt: new Date().toISOString().substring(0, 10),
+      projectName: '',
+    },
   });
 
   const handleBack = () => {
@@ -207,6 +266,7 @@ const NewClientFormPage: React.FC = () => {
           toast.success('Existing client found. Redirecting to profile...');
         }
       } else {
+        const selectedDate = data.createdAt ? new Date(data.createdAt + 'T00:00:00') : new Date();
         clientId = await createClient({
           name: data.name,
           whatsappNumber: data.countryCode + data.whatsappNumber,
@@ -219,6 +279,9 @@ const NewClientFormPage: React.FC = () => {
           assignedAgent: isAgent ? currentUser.uid : '',
           assignedAgentName: isAgent ? (userProfile?.name || '') : '',
           createdBy: currentUser.uid,
+          tags: selectedTags,
+          createdAt: selectedDate,
+          projectName: data.projectName || '',
         });
 
         await logActivity({
@@ -342,6 +405,22 @@ const NewClientFormPage: React.FC = () => {
               {errors.name && <span className="form-error">{errors.name.message}</span>}
             </div>
 
+            {/* Project Name */}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label" htmlFor="client-project-name">Project Name / Context</label>
+              <div className="search-wrapper">
+                <Folder className="search-icon" size={16} />
+                <input
+                  id="client-project-name"
+                  type="text"
+                  className="form-input"
+                  style={{ paddingLeft: '2.5rem' }}
+                  placeholder="e.g. Downtown Residency, commercial purchase, candidate hiring"
+                  {...register('projectName')}
+                />
+              </div>
+            </div>
+
             {/* WhatsApp */}
             <div className="form-group">
               <label className="form-label required" htmlFor="client-whatsapp">WhatsApp Number</label>
@@ -371,91 +450,25 @@ const NewClientFormPage: React.FC = () => {
                     type="tel"
                     className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
                     style={{ paddingLeft: '2.5rem' }}
-                    placeholder="10 digits"
+                    placeholder="Enter phone number"
                     maxLength={15}
                     {...register('whatsappNumber', {
                       onChange: (e) => {
-                        const rawVal = e.target.value;
-                        const clean = rawVal.replace(/[^\d+]/g, '');
-                        const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                        let matchedCode = '';
-                        let remainingNumber = clean;
-
-                        for (const code of possibleCodes) {
-                          if (clean.startsWith(code)) {
-                            matchedCode = code;
-                            remainingNumber = clean.substring(code.length);
-                            break;
-                          }
+                        const parsed = parseWhatsAppNumber(e.target.value);
+                        if (parsed.countryCode) {
+                          setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                         }
-
-                        if (!matchedCode) {
-                          for (const code of possibleCodes) {
-                            const codeWithoutPlus = code.replace('+', '');
-                            if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                              matchedCode = code;
-                              remainingNumber = clean.substring(codeWithoutPlus.length);
-                              break;
-                            }
-                          }
-                        }
-
-                        if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                          setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                          return;
-                        }
-
-                        if (matchedCode) {
-                          setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                          setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                        } else {
-                          setValue('whatsappNumber', clean.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                        }
+                        setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                       }
                     })}
                     onPaste={(e) => {
                       const pastedText = e.clipboardData.getData('text');
-                      console.log('onPaste triggered. Raw text:', pastedText);
-                      const clean = pastedText.replace(/[^\d+]/g, '');
-                      console.log('Cleaned text:', clean);
-                      const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                      let matchedCode = '';
-                      let remainingNumber = clean;
-
-                      for (const code of possibleCodes) {
-                        if (clean.startsWith(code)) {
-                          matchedCode = code;
-                          remainingNumber = clean.substring(code.length);
-                          break;
-                        }
+                      const parsed = parseWhatsAppNumber(pastedText);
+                      e.preventDefault();
+                      if (parsed.countryCode) {
+                        setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                       }
-                      console.log('Loop 1 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                      if (!matchedCode) {
-                        for (const code of possibleCodes) {
-                          const codeWithoutPlus = code.replace('+', '');
-                          if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                            matchedCode = code;
-                            remainingNumber = clean.substring(codeWithoutPlus.length);
-                            break;
-                          }
-                        }
-                      }
-                      console.log('Loop 2 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                      if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                        console.log('Matched leading zero, setting number:', clean.substring(1));
-                        e.preventDefault();
-                        setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                        return;
-                      }
-
-                      if (matchedCode) {
-                        console.log('Matched code, setting country:', matchedCode, 'number:', remainingNumber.slice(0, 10));
-                        e.preventDefault();
-                        setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                        setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                      }
+                      setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                     }}
                   />
                 </div>
@@ -492,6 +505,20 @@ const NewClientFormPage: React.FC = () => {
               />
             </div>
 
+            {/* Lead Creation Date */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="client-created-at">Lead Creation Date</label>
+              <input
+                id="client-created-at"
+                type="date"
+                className="form-input"
+                {...register('createdAt')}
+              />
+              <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                Defaults to today. Backdate this for historical entries.
+              </p>
+            </div>
+
 
             {/* Notes */}
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -505,6 +532,40 @@ const NewClientFormPage: React.FC = () => {
                   placeholder="Any additional notes…"
                   {...register('notes')}
                 />
+              </div>
+            </div>
+
+            {/* Tags / Labels */}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">Tags / Labels</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                {allTags.map((tag) => {
+                  const isSelected = selectedTags.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                        } else {
+                          setSelectedTags([...selectedTags, tag.id]);
+                        }
+                      }}
+                      className={`tag-selectable-pill ${isSelected ? 'active' : ''}`}
+                      style={isSelected ? {
+                        backgroundColor: `${tag.color}1c`,
+                        color: tag.color,
+                        borderColor: tag.color,
+                      } : {}}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+                {allTags.length === 0 && (
+                  <span className="text-xs text-muted">No custom tags available. Manage tags in the Admin Panel.</span>
+                )}
               </div>
             </div>
 

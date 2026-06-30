@@ -1,15 +1,16 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import type { FilterOptions } from '../../types';
+import type { FilterOptions, Tag } from '../../types';
 
 interface ClientFiltersProps {
   filters: FilterOptions;
   onChange: (f: FilterOptions) => void;
   onClose: () => void;
   onClear: () => void;
+  allTags: Tag[];
 }
 
-const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear }) => {
+const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear, allTags = [] }) => {
   const set = (key: keyof FilterOptions, value: string) =>
     onChange({ ...filters, [key]: value });
 
@@ -38,6 +39,47 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClos
             <option value="paid">Paid</option>
             <option value="failed">Failed</option>
           </select>
+        </div>
+
+        {/* Filter by Tags */}
+        <div className="form-group">
+          <label className="form-label">Filter by Tags</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+            {allTags.map((tag) => {
+              const isSelected = (filters.tags || []).includes(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    const current = filters.tags || [];
+                    const updated = current.includes(tag.id)
+                      ? current.filter((id) => id !== tag.id)
+                      : [...current, tag.id];
+                    onChange({ ...filters, tags: updated });
+                  }}
+                  className="tag-badge"
+                  style={{
+                    backgroundColor: isSelected ? `${tag.color}1c` : 'var(--color-bg-elevated)',
+                    color: isSelected ? tag.color : 'var(--color-text-secondary)',
+                    border: isSelected ? `1px solid ${tag.color}` : '1px solid var(--color-border)',
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    borderRadius: '100px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+            {allTags.length === 0 && (
+              <span className="text-xs text-muted" style={{ display: 'block', fontStyle: 'italic' }}>No custom tags found</span>
+            )}
+          </div>
         </div>
 
         {/* Date Range */}

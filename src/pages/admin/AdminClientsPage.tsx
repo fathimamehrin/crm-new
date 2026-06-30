@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
-import { getClients, getUsers, getAllSummaries, getAllActivityLogs } from '../../lib/firestore';
+import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User } from '../../types';
+import type { Client, FilterOptions, User, Tag } from '../../types';
 import { format } from 'date-fns';
 
 import ClientTable from '../../components/ClientTable/ClientTable';
@@ -48,7 +48,10 @@ const AdminClientsPage: React.FC = () => {
     paymentStatus: '',
     dateFrom: '',
     dateTo: '',
+    tags: [],
   });
+
+  const [allTags, setAllTags] = useState<Tag[]>([]);
 
   const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
 
@@ -99,7 +102,13 @@ const AdminClientsPage: React.FC = () => {
         getAllActivityLogs()
       ]);
 
-      const data = clientsRes.clients;
+      let data = clientsRes.clients;
+
+      if (filters.tags && filters.tags.length > 0) {
+        data = data.filter((c) =>
+          filters.tags.every((tagId) => c.tags?.includes(tagId))
+        );
+      }
 
       if (filters.search) {
         const q = filters.search.toLowerCase();
@@ -117,6 +126,9 @@ const AdminClientsPage: React.FC = () => {
           }
           if (client.email && client.email.toLowerCase().includes(q)) {
             matches.push({ type: 'client_info', field: 'Email', text: client.email });
+          }
+          if (client.projectName && client.projectName.toLowerCase().includes(q)) {
+            matches.push({ type: 'client_info', field: 'Project Name', text: client.projectName });
           }
           if (client.alternateContact && client.alternateContact.toLowerCase().includes(q)) {
             matches.push({ type: 'client_info', field: 'Alternate Contact', text: client.alternateContact });
@@ -215,6 +227,7 @@ const AdminClientsPage: React.FC = () => {
 
   useEffect(() => {
     getUsers('agent').then(setAgents).catch(() => {});
+    getTags().then(setAllTags).catch(() => {});
   }, []);
 
   return (
@@ -268,7 +281,7 @@ const AdminClientsPage: React.FC = () => {
           >
             <Filter size={16} />
             Filters
-            {(filters.agentId || filters.status || filters.dateFrom) && (
+            {(filters.agentId || filters.status || filters.dateFrom || (filters.tags && filters.tags.length > 0)) && (
               <span style={{
                 width: 18, height: 18, borderRadius: '50%',
                 background: 'var(--color-accent)', color: '#fff',
@@ -323,6 +336,27 @@ const AdminClientsPage: React.FC = () => {
                           <span>WhatsApp: {highlightText(client.whatsappNumber, filters.search)}</span>
                           {client.email && <span>Email: {highlightText(client.email, filters.search)}</span>}
                         </div>
+                        {client.tags && client.tags.length > 0 && (
+                          <div className="tags-list-container" style={{ marginTop: 6 }}>
+                            {client.tags.map((tagId) => {
+                              const tag = allTags.find((t) => t.id === tagId);
+                              if (!tag) return null;
+                              return (
+                                <span
+                                  key={tag.id}
+                                  className="tag-badge sm"
+                                  style={{
+                                    backgroundColor: `${tag.color}1c`,
+                                    color: tag.color,
+                                    border: `1px solid ${tag.color}33`,
+                                  }}
+                                >
+                                  {tag.name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ textTransform: 'capitalize' }}>
@@ -365,9 +399,10 @@ const AdminClientsPage: React.FC = () => {
               isAdminView={true}
               onRefresh={loadClients}
               onClearFilters={() => {
-                setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
+                setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
                 setPage(1);
               }}
+              allTags={allTags}
             />
 
             {/* Pagination */}
@@ -396,9 +431,10 @@ const AdminClientsPage: React.FC = () => {
             onChange={(f) => { setFilters(f); setPage(1); }}
             onClose={() => setShowFilters(false)}
             onClear={() => {
-              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
+              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
               setPage(1);
             }}
+            allTags={allTags}
           />
         </>
       )}

@@ -15,6 +15,7 @@ import AgentManagementPage from '../pages/admin/AgentManagementPage';
 import AgentDetailsPage from '../pages/admin/AgentDetailsPage';
 import AdminClientsPage from '../pages/admin/AdminClientsPage';
 import EditRequestsPage from '../pages/admin/EditRequestsPage';
+import AdminTagsPage from '../pages/admin/AdminTagsPage';
 
 import StaffDurationPage from '../pages/admin/StaffDurationPage';
 import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
@@ -48,6 +49,7 @@ const router = createBrowserRouter([
                   { path: '/admin/clients/:id', element: <ClientDetailsPage /> },
                   { path: '/admin/clients/:id/summary', element: <AddSummaryPage /> },
                   { path: '/admin/requests', element: <EditRequestsPage /> },
+                  { path: '/admin/tags', element: <AdminTagsPage /> },
 
                   { path: '/admin/duration', element: <StaffDurationPage /> },
                   { path: '/admin/revenue', element: <RevenueAnalyticsPage /> },

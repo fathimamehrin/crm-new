@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
-  Clock, DollarSign, X, MoreHorizontal
+  Clock, DollarSign, X, MoreHorizontal, Tag
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -91,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/duration" icon={Clock} label="Staff Durations" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
@@ -151,6 +152,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <UserCog size={18} />
                 <span>Admin Management</span>
+              </NavLink>
+
+              <NavLink 
+                to="/admin/tags" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <Tag size={18} />
+                <span>Tag Management</span>
               </NavLink>
               
               <NavLink 

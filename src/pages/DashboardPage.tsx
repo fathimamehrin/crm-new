@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getClients, getUsers,
+  getClients, getUsers, getTags,
 } from '../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User } from '../types';
+import type { Client, FilterOptions, User, Tag } from '../types';
 
 import ClientTable from '../components/ClientTable/ClientTable';
 import ClientFilters from '../components/ClientTable/ClientFilters';
@@ -40,7 +40,10 @@ const DashboardPage: React.FC = () => {
     paymentStatus: '',
     dateFrom: '',
     dateTo: '',
+    tags: [],
   });
+
+  const [allTags, setAllTags] = useState<Tag[]>([]);
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -61,7 +64,8 @@ const DashboardPage: React.FC = () => {
           (c) =>
             c.name.toLowerCase().includes(q) ||
             c.whatsappNumber.includes(q) ||
-            c.email?.toLowerCase().includes(q)
+            c.email?.toLowerCase().includes(q) ||
+            c.projectName?.toLowerCase().includes(q)
         );
       }
       if (filters.dateFrom) {
@@ -69,6 +73,11 @@ const DashboardPage: React.FC = () => {
       }
       if (filters.dateTo) {
         filtered = filtered.filter((c) => c.createdAt <= new Date(filters.dateTo + 'T23:59:59'));
+      }
+      if (filters.tags && filters.tags.length > 0) {
+        filtered = filtered.filter((c) =>
+          filters.tags.every((tagId) => c.tags?.includes(tagId))
+        );
       }
 
       setTotalClients(filtered.length);
@@ -87,6 +96,7 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     getUsers('agent').then(setAgents).catch(() => {});
+    getTags().then(setAllTags).catch(() => {});
   }, []);
 
 
@@ -144,7 +154,7 @@ const DashboardPage: React.FC = () => {
           >
             <Filter size={16} />
             Filters
-            {(filters.agentId || filters.status || filters.dateFrom) && (
+            {(filters.agentId || filters.status || filters.dateFrom || (filters.tags && filters.tags.length > 0)) && (
               <span style={{
                 width: 18, height: 18, borderRadius: '50%',
                 background: 'var(--color-accent)', color: '#fff',
@@ -161,9 +171,10 @@ const DashboardPage: React.FC = () => {
           agents={agents}
           onRefresh={loadClients}
           onClearFilters={() => {
-            setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
+            setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
             setPage(1);
           }}
+          allTags={allTags}
         />
 
         {/* Pagination */}
@@ -190,9 +201,10 @@ const DashboardPage: React.FC = () => {
             onChange={(f) => { setFilters(f); setPage(1); }}
             onClose={() => setShowFilters(false)}
             onClear={() => {
-              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '' });
+              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
               setPage(1);
             }}
+            allTags={allTags}
           />
         </>
       )}

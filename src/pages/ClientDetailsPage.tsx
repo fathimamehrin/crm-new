@@ -6,11 +6,11 @@ import {
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag } from '../types';
 import EditClientModal from '../components/EditClientModal';
 import { resolvePresignedUrls, uploadFile, deleteFile, generateStoragePath } from '../lib/storage';
 import { useDropzone } from 'react-dropzone';
@@ -34,6 +34,11 @@ const ClientDetailsPage: React.FC = () => {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [rawSummaries, setRawSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+
+  useEffect(() => {
+    getTags().then(setAllTags).catch(() => {});
+  }, []);
 
   // Edit requests tracking state
   const [editRequests, setEditRequests] = useState<Record<string, EditRequest>>({});
@@ -690,8 +695,45 @@ const ClientDetailsPage: React.FC = () => {
                 client.name.charAt(0).toUpperCase()
               )}
             </div>
-            <div className="client-name-status">
-              <h2 className="client-title">{client.name}</h2>
+            <div className="client-name-status" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <h2 className="client-title" style={{ margin: 0 }}>{client.name}</h2>
+                {client.projectName && (
+                  <span
+                    className="tag-badge"
+                    style={{
+                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                      color: 'var(--color-accent)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      fontSize: '0.75rem',
+                      padding: '4px 12px'
+                    }}
+                  >
+                    Project: {client.projectName}
+                  </span>
+                )}
+              </div>
+              {client.tags && client.tags.length > 0 && (
+                <div className="tags-list-container">
+                  {client.tags.map(tagId => {
+                    const tag = allTags.find(t => t.id === tagId);
+                    if (!tag) return null;
+                    return (
+                      <span
+                        key={tag.id}
+                        className="tag-badge"
+                        style={{
+                          backgroundColor: `${tag.color}1c`,
+                          color: tag.color,
+                          border: `1px solid ${tag.color}33`,
+                        }}
+                      >
+                        {tag.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           <div className="client-actions" style={{ display: 'flex', gap: '8px' }}>

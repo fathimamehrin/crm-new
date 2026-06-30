@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { MessageCircle, ExternalLink } from 'lucide-react';
-import type { Client, User } from '../../types';
+import type { Client, User, Tag } from '../../types';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'badge-success',
@@ -18,9 +18,10 @@ interface ClientTableProps {
   onRefresh?: () => void;
   onClearFilters?: () => void;
   isAdminView?: boolean;
+  allTags: Tag[];
 }
 
-const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onClearFilters, isAdminView }) => {
+const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onClearFilters, isAdminView, allTags = [] }) => {
   const navigate = useNavigate();
   const agentMap = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
@@ -88,9 +89,46 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
                       }
                     </div>
                     <div>
-                      <div className="font-medium text-sm">{client.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="font-medium text-sm">{client.name}</div>
+                        {client.projectName && (
+                          <span
+                            className="tag-badge sm"
+                            style={{
+                              backgroundColor: 'rgba(59, 130, 246, 0.06)',
+                              color: 'var(--color-accent)',
+                              border: '1px solid rgba(59, 130, 246, 0.15)',
+                              padding: '2px 8px',
+                              fontWeight: 600
+                            }}
+                          >
+                            {client.projectName}
+                          </span>
+                        )}
+                      </div>
                       {client.email && (
                         <div className="text-xs text-muted">{client.email}</div>
+                      )}
+                      {client.tags && client.tags.length > 0 && (
+                        <div className="tags-list-container" style={{ marginTop: 4 }}>
+                          {client.tags.map((tagId) => {
+                            const tag = allTags.find((t) => t.id === tagId);
+                            if (!tag) return null;
+                            return (
+                              <span
+                                key={tag.id}
+                                className="tag-badge sm"
+                                style={{
+                                  backgroundColor: `${tag.color}1c`,
+                                  color: tag.color,
+                                  border: `1px solid ${tag.color}33`,
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -166,8 +204,46 @@ const ClientTable: React.FC<ClientTableProps> = ({ clients, loading, agents, onC
                   }
                 </div>
                 <div>
-                  <div className="font-semibold text-sm text-primary">{client.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <div className="font-semibold text-sm text-primary">{client.name}</div>
+                    {client.projectName && (
+                      <span
+                        className="tag-badge sm"
+                        style={{
+                          backgroundColor: 'rgba(59, 130, 246, 0.06)',
+                          color: 'var(--color-accent)',
+                          border: '1px solid rgba(59, 130, 246, 0.15)',
+                          padding: '2px 6px',
+                          fontSize: '9px',
+                          fontWeight: 600
+                        }}
+                      >
+                        {client.projectName}
+                      </span>
+                    )}
+                  </div>
                   {client.email && <div className="text-xs text-muted truncate" style={{ maxWidth: 180 }}>{client.email}</div>}
+                  {client.tags && client.tags.length > 0 && (
+                    <div className="tags-list-container" style={{ marginTop: 4 }}>
+                      {client.tags.map((tagId) => {
+                        const tag = allTags.find((t) => t.id === tagId);
+                        if (!tag) return null;
+                        return (
+                          <span
+                            key={tag.id}
+                            className="tag-badge sm"
+                            style={{
+                              backgroundColor: `${tag.color}1c`,
+                              color: tag.color,
+                              border: `1px solid ${tag.color}33`,
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
               <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ fontSize: '10px' }}>

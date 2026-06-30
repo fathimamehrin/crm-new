@@ -99,5 +99,11 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
+
+    // Tags collection
+    match /tags/{tagId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 }

@@ -4,12 +4,13 @@ import {
   updateEditRequestStatus, 
   getAllClientEditRequests, 
   updateClientEditRequestStatus, 
-  logActivity 
+  logActivity,
+  getTags
 } from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
 import { Check, X, ClipboardList, Clock, ChevronDown, ChevronUp, User, AlertCircle, AlertTriangle, Trash2, Edit3, UserCheck } from 'lucide-react';
-import type { EditRequest, ClientEditRequest } from '../../types';
+import type { EditRequest, ClientEditRequest, Tag } from '../../types';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -104,7 +105,7 @@ const SummaryDiffView: React.FC<{ req: EditRequest }> = ({ req }) => {
 };
 
 /* Helper: Render proposed changes for a client edit request */
-const ClientDiffView: React.FC<{ req: ClientEditRequest }> = ({ req }) => {
+const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[] }> = ({ req, allTags }) => {
   if (req.requestType === 'delete') {
     return (
       <div style={{ padding: '10px 12px', background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: 'var(--radius-md)', marginTop: 6 }}>
@@ -128,7 +129,10 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest }> = ({ req }) => {
     { key: 'alternateContact', label: 'Alternate Contact' },
     { key: 'address', label: 'Address' },
     { key: 'notes', label: 'Notes' },
-    { key: 'status', label: 'Status' },
+    {key: 'status', label: 'Status'},
+    {key: 'tags', label: 'Tags'},
+    {key: 'projectName', label: 'Project Name'},
+    {key: 'createdAt', label: 'Creation Date'},
     { key: 'assignedAgent', label: 'Assigned Agent ID' },
     { key: 'assignedAgentName', label: 'Assigned Agent' },
   ];
@@ -141,6 +145,29 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest }> = ({ req }) => {
 
   // Check if this is a takeover/claim request
   const isTakeover = changedFields.some(f => f.key === 'assignedAgent' || f.key === 'assignedAgentName');
+
+  const renderProposedValue = (key: string, val: any) => {
+    if (key === 'tags') {
+      if (!Array.isArray(val) || val.length === 0) return '(none)';
+      return val.map(id => {
+        const tag = allTags.find(t => t.id === id);
+        return tag ? tag.name : id;
+      }).join(', ');
+    }
+    if (key === 'createdAt') {
+      if (!val) return '(none)';
+      // handle Firebase Timestamp structure or string
+      let dateVal: Date;
+      if (val && typeof val === 'object' && 'seconds' in val) {
+        // Firebase timestamp object
+        dateVal = new Date(val.seconds * 1000);
+      } else {
+        dateVal = val instanceof Date ? val : (val.toDate ? val.toDate() : new Date(val));
+      }
+      return format(dateVal, 'dd MMM yyyy');
+    }
+    return String(val ?? '');
+  };
 
   return (
     <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
@@ -156,7 +183,7 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest }> = ({ req }) => {
         Proposed Changes
       </span>
       {changedFields.map(f => (
-        <DiffRow key={f.key} label={f.label} proposed={String((pc as any)[f.key] ?? '')} />
+        <DiffRow key={f.key} label={f.label} proposed={renderProposedValue(f.key, (pc as any)[f.key])} />
       ))}
     </div>
   );
@@ -175,19 +202,22 @@ const EditRequestsPage: React.FC = () => {
   const [requestType, setRequestType] = useState<'summary' | 'client' | 'claim'>('summary');
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
+  const [tags, setTags] = useState<Tag[]>([]);
 
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const [summariesData, clientsData] = await Promise.all([
+      const [sumReqs, cliReqs, allTags] = await Promise.all([
         getAllEditRequests(),
         getAllClientEditRequests(),
+        getTags()
       ]);
-      setSummaryRequests(summariesData);
-      setClientRequests(clientsData);
+      setSummaryRequests(sumReqs);
+      setClientRequests(cliReqs);
+      setTags(allTags);
     } catch (err) {
-      console.error('Failed to load edit requests:', err);
-      toast.error('Failed to load edit requests');
+      console.error('Failed to load requests:', err);
+      toast.error('Failed to load requests');
     } finally {
       setLoading(false);
     }
@@ -458,7 +488,7 @@ const EditRequestsPage: React.FC = () => {
                               {requestType === 'summary' ? (
                                 <SummaryDiffView req={req as EditRequest} />
                               ) : (
-                                <ClientDiffView req={req as ClientEditRequest} />
+                                <ClientDiffView req={req as ClientEditRequest} allTags={tags} />
                               )}
                             </td>
                           </tr>
@@ -541,7 +571,7 @@ const EditRequestsPage: React.FC = () => {
                         {requestType === 'summary' ? (
                           <SummaryDiffView req={req as EditRequest} />
                         ) : (
-                          <ClientDiffView req={req as ClientEditRequest} />
+                          <ClientDiffView req={req as ClientEditRequest} allTags={tags} />
                         )}
                       </div>
                     )}
