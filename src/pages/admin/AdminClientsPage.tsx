@@ -72,7 +72,7 @@ const AdminClientsPage: React.FC = () => {
   // Keyword highlighting helper
   const highlightText = (text: string, keyword: string) => {
     if (!keyword.trim()) return <span>{text}</span>;
-    const regex = new RegExp(`(${keyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
+    const regex = new RegExp(`(${keyword.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
     return (
       <span>

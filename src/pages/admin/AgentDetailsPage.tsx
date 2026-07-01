@@ -108,7 +108,11 @@ const AgentDetailsPage: React.FC = () => {
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.whatsappNumber.includes(q) ||
-        c.email?.toLowerCase().includes(q)
+        c.email?.toLowerCase().includes(q) ||
+        c.projectName?.toLowerCase().includes(q) ||
+        c.alternateContact?.toLowerCase().includes(q) ||
+        c.notes?.toLowerCase().includes(q) ||
+        c.address?.toLowerCase().includes(q)
     );
     setFilteredClients(filtered);
   }, [search, clients]);
@@ -197,7 +201,7 @@ const AgentDetailsPage: React.FC = () => {
               id="client-search"
               type="search"
               className="form-input"
-              placeholder="Search clients…"
+              placeholder="Search by name, project, notes, address…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
