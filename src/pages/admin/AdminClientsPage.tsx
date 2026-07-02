@@ -44,7 +44,7 @@ const AdminClientsPage: React.FC = () => {
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
     agentId: '',
-    status: '',
+    status: 'active',
     paymentStatus: '',
     dateFrom: '',
     dateTo: '',
@@ -281,7 +281,12 @@ const AdminClientsPage: React.FC = () => {
           >
             <Filter size={16} />
             Filters
-            {(filters.agentId || filters.status || filters.dateFrom || (filters.tags && filters.tags.length > 0)) && (
+            {(filters.agentId || 
+              (filters.status && filters.status !== 'active') || 
+              filters.paymentStatus || 
+              filters.dateFrom || 
+              filters.dateTo ||
+              (filters.tags && filters.tags.length > 0)) && (
               <span style={{
                 width: 18, height: 18, borderRadius: '50%',
                 background: 'var(--color-accent)', color: '#fff',
@@ -399,7 +404,7 @@ const AdminClientsPage: React.FC = () => {
               isAdminView={true}
               onRefresh={loadClients}
               onClearFilters={() => {
-                setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
+                setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
                 setPage(1);
               }}
               allTags={allTags}
@@ -431,7 +436,7 @@ const AdminClientsPage: React.FC = () => {
             onChange={(f) => { setFilters(f); setPage(1); }}
             onClose={() => setShowFilters(false)}
             onClear={() => {
-              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
+              setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
               setPage(1);
             }}
             allTags={allTags}

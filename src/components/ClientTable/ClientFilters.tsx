@@ -23,6 +23,22 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClos
 
       <div className="filter-drawer-body">
 
+        {/* Client Status */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="filter-status">Client Status</label>
+          <select
+            id="filter-status"
+            className="form-input form-select"
+            value={filters.status}
+            onChange={(e) => set('status', e.target.value)}
+          >
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="lead">Lead</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
 
         {/* Payment Status */}
         <div className="form-group">
