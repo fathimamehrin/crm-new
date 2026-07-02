@@ -5,8 +5,11 @@ import {
   getAllClientEditRequests, 
   updateClientEditRequestStatus, 
   logActivity,
-  getTags
+  getTags,
+  getAllSummaries,
+  getClients
 } from '../../lib/firestore';
+import type { Client, Summary } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
 import { Check, X, ClipboardList, Clock, ChevronDown, ChevronUp, User, AlertCircle, AlertTriangle, Trash2, Edit3, UserCheck } from 'lucide-react';
@@ -27,18 +30,19 @@ const REQUEST_TYPE_BADGE: Record<string, { cls: string; label: string; icon: Rea
 
 /* Helper: Render a single field diff row */
 const DiffRow: React.FC<{ label: string; original?: string; proposed?: string }> = ({ label, original, proposed }) => {
-  if (original === proposed) return null;
+  const normOriginal = original ? String(original).trim() : '';
+  const normProposed = proposed ? String(proposed).trim() : '';
+  if (normOriginal === normProposed) return null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
       <span className="text-xs font-semibold" style={{ textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.04em' }}>{label}</span>
       <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-        {original !== undefined && (
-          <span className="text-xs" style={{ color: 'var(--color-danger)', textDecoration: 'line-through', opacity: 0.8, wordBreak: 'break-word', flex: 1, minWidth: 120 }}>
-            {original || '(empty)'}
-          </span>
-        )}
+        <span className="text-xs" style={{ color: 'var(--color-danger)', textDecoration: 'line-through', opacity: 0.8, wordBreak: 'break-word', flex: 1, minWidth: 120 }}>
+          {normOriginal || '(empty)'}
+        </span>
         <span className="text-xs" style={{ color: 'var(--color-success)', fontWeight: 500, wordBreak: 'break-word', flex: 1, minWidth: 120 }}>
-          → {proposed || '(empty)'}
+          → {normProposed || '(empty)'}
         </span>
       </div>
     </div>
@@ -46,7 +50,7 @@ const DiffRow: React.FC<{ label: string; original?: string; proposed?: string }>
 };
 
 /* Helper: Render proposed changes for a summary edit request */
-const SummaryDiffView: React.FC<{ req: EditRequest }> = ({ req }) => {
+const SummaryDiffView: React.FC<{ req: EditRequest; originalSummaries: Summary[] }> = ({ req, originalSummaries }) => {
   if (req.requestType === 'delete') {
     return (
       <div style={{ padding: '10px 12px', background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: 'var(--radius-md)', marginTop: 6 }}>
@@ -69,12 +73,14 @@ const SummaryDiffView: React.FC<{ req: EditRequest }> = ({ req }) => {
 
   if (!req.proposedChanges) return null;
   const pc = req.proposedChanges;
-  const hasSummaryChange = pc.summaryText !== undefined && pc.summaryText !== req.summaryText;
-  const hasPaymentChanges = pc.paymentDetails !== undefined;
+  const origSummary = originalSummaries.find(s => s.id === req.summaryId);
 
-  if (!hasSummaryChange && !hasPaymentChanges) {
-    return <span className="text-xs text-muted">No visible changes in this request.</span>;
-  }
+  const origSummaryText = origSummary ? origSummary.summaryText : req.summaryText;
+  const proposedSummaryText = pc.summaryText;
+  const hasSummaryChange = proposedSummaryText !== undefined && proposedSummaryText !== origSummaryText;
+
+  const origPayment = origSummary?.paymentDetails;
+  const proposedPayment = pc.paymentDetails;
 
   return (
     <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
@@ -82,21 +88,46 @@ const SummaryDiffView: React.FC<{ req: EditRequest }> = ({ req }) => {
         Proposed Changes
       </span>
       {hasSummaryChange && (
-        <DiffRow label="Call Notes" original={req.summaryText} proposed={pc.summaryText} />
+        <DiffRow label="Call Notes" original={origSummaryText} proposed={proposedSummaryText} />
       )}
-      {hasPaymentChanges && pc.paymentDetails && (
+      
+      {pc.voiceUrl !== undefined && pc.voiceUrl !== (origSummary?.voiceUrl || null) && (
+        <DiffRow 
+          label="Voice Recording" 
+          original={origSummary?.voiceUrl ? 'Has voice recording' : 'No voice recording'} 
+          proposed={pc.voiceUrl ? 'Has voice recording' : 'No voice recording'} 
+        />
+      )}
+
+      {proposedPayment !== undefined && (
         <>
-          {pc.paymentDetails.status && (
-            <DiffRow label="Payment Status" proposed={pc.paymentDetails.status} />
-          )}
-          {pc.paymentDetails.amount !== undefined && (
-            <DiffRow label="Amount" proposed={`₹${pc.paymentDetails.amount}`} />
-          )}
-          {pc.paymentDetails.transactionId && (
-            <DiffRow label="Transaction ID" proposed={pc.paymentDetails.transactionId} />
-          )}
-          {pc.paymentDetails.notes && (
-            <DiffRow label="Payment Notes" proposed={pc.paymentDetails.notes} />
+          {proposedPayment === null ? (
+            <div style={{ color: 'var(--color-danger)', fontSize: '0.75rem', padding: '4px 0' }}>
+              <strong>Payment Details:</strong> Deleted (Was: {origPayment?.status || 'None'} status, Amount: ₹{origPayment?.amount || 0})
+            </div>
+          ) : (
+            <>
+              <DiffRow 
+                label="Payment Status" 
+                original={origPayment?.status || ''} 
+                proposed={proposedPayment.status || ''} 
+              />
+              <DiffRow 
+                label="Amount" 
+                original={origPayment?.amount !== undefined ? `₹${origPayment.amount}` : ''} 
+                proposed={proposedPayment.amount !== undefined ? `₹${proposedPayment.amount}` : ''} 
+              />
+              <DiffRow 
+                label="Transaction ID" 
+                original={origPayment?.transactionId || ''} 
+                proposed={proposedPayment.transactionId || ''} 
+              />
+              <DiffRow 
+                label="Payment Notes" 
+                original={origPayment?.notes || ''} 
+                proposed={proposedPayment.notes || ''} 
+              />
+            </>
           )}
         </>
       )}
@@ -105,7 +136,7 @@ const SummaryDiffView: React.FC<{ req: EditRequest }> = ({ req }) => {
 };
 
 /* Helper: Render proposed changes for a client edit request */
-const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[] }> = ({ req, allTags }) => {
+const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[]; originalClients: Client[] }> = ({ req, allTags, originalClients }) => {
   if (req.requestType === 'delete') {
     return (
       <div style={{ padding: '10px 12px', background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: 'var(--radius-md)', marginTop: 6 }}>
@@ -122,6 +153,8 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[] }> = ({ 
 
   if (!req.proposedChanges) return null;
   const pc = req.proposedChanges;
+  const origClient = originalClients.find(c => c.id === req.clientId);
+
   const fields: { key: string; label: string }[] = [
     { key: 'name', label: 'Name' },
     { key: 'whatsappNumber', label: 'WhatsApp Number' },
@@ -129,45 +162,49 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[] }> = ({ 
     { key: 'alternateContact', label: 'Alternate Contact' },
     { key: 'address', label: 'Address' },
     { key: 'notes', label: 'Notes' },
-    {key: 'status', label: 'Status'},
-    {key: 'tags', label: 'Tags'},
-    {key: 'projectName', label: 'Project Name'},
-    {key: 'createdAt', label: 'Creation Date'},
-    { key: 'assignedAgent', label: 'Assigned Agent ID' },
-    { key: 'assignedAgentName', label: 'Assigned Agent' },
+    { key: 'status', label: 'Status' },
+    { key: 'tags', label: 'Tags' },
+    { key: 'projectName', label: 'Project Name' },
+    { key: 'createdAt', label: 'Creation Date' },
+    { key: 'assignedAgent', label: 'Assigned Agent' },
+    { key: 'assignedAgentName', label: 'Assigned Agent Name' },
   ];
 
-  const changedFields = fields.filter(f => (pc as any)[f.key] !== undefined);
-
-  if (changedFields.length === 0) {
-    return <span className="text-xs text-muted">No visible changes in this request.</span>;
-  }
-
-  // Check if this is a takeover/claim request
-  const isTakeover = changedFields.some(f => f.key === 'assignedAgent' || f.key === 'assignedAgentName');
-
-  const renderProposedValue = (key: string, val: any) => {
+  const getFieldStringValue = (key: string, val: any) => {
     if (key === 'tags') {
-      if (!Array.isArray(val) || val.length === 0) return '(none)';
-      return val.map(id => {
+      if (!Array.isArray(val) || val.length === 0) return '';
+      return [...val].sort().map(id => {
         const tag = allTags.find(t => t.id === id);
         return tag ? tag.name : id;
       }).join(', ');
     }
     if (key === 'createdAt') {
-      if (!val) return '(none)';
-      // handle Firebase Timestamp structure or string
+      if (!val) return '';
       let dateVal: Date;
       if (val && typeof val === 'object' && 'seconds' in val) {
-        // Firebase timestamp object
         dateVal = new Date(val.seconds * 1000);
       } else {
         dateVal = val instanceof Date ? val : (val.toDate ? val.toDate() : new Date(val));
       }
       return format(dateVal, 'dd MMM yyyy');
     }
-    return String(val ?? '');
+    if (key === 'assignedAgent') {
+      return '';
+    }
+    return String(val ?? '').trim();
   };
+
+  const changedFields = fields.filter(f => {
+    if ((pc as any)[f.key] === undefined) return false;
+    if (f.key === 'assignedAgent') return false;
+
+    const originalValStr = getFieldStringValue(f.key, origClient ? (origClient as any)[f.key] : '');
+    const proposedValStr = getFieldStringValue(f.key, (pc as any)[f.key]);
+
+    return originalValStr !== proposedValStr;
+  });
+
+  const isTakeover = !!(pc.assignedAgent || pc.assignedAgentName);
 
   return (
     <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
@@ -182,9 +219,22 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[] }> = ({ 
       <span className="text-xs font-semibold" style={{ textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
         Proposed Changes
       </span>
-      {changedFields.map(f => (
-        <DiffRow key={f.key} label={f.label} proposed={renderProposedValue(f.key, (pc as any)[f.key])} />
-      ))}
+      {changedFields.length === 0 && !isTakeover ? (
+        <span className="text-xs text-muted">No modified fields found.</span>
+      ) : (
+        changedFields.map(f => {
+          const originalValStr = getFieldStringValue(f.key, origClient ? (origClient as any)[f.key] : '');
+          const proposedValStr = getFieldStringValue(f.key, (pc as any)[f.key]);
+          return (
+            <DiffRow 
+              key={f.key} 
+              label={f.label} 
+              original={originalValStr} 
+              proposed={proposedValStr} 
+            />
+          );
+        })
+      )}
     </div>
   );
 };
@@ -195,11 +245,13 @@ const EditRequestsPage: React.FC = () => {
   // Data states
   const [summaryRequests, setSummaryRequests] = useState<EditRequest[]>([]);
   const [clientRequests, setClientRequests] = useState<ClientEditRequest[]>([]);
+  const [originalClients, setOriginalClients] = useState<Client[]>([]);
+  const [originalSummaries, setOriginalSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   
   // Tab selectors
-  const [requestType, setRequestType] = useState<'summary' | 'client' | 'claim'>('summary');
+  const [requestType, setRequestType] = useState<'all' | 'summary' | 'client' | 'claim'>('all');
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
   const [tags, setTags] = useState<Tag[]>([]);
@@ -207,14 +259,18 @@ const EditRequestsPage: React.FC = () => {
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const [sumReqs, cliReqs, allTags] = await Promise.all([
+      const [sumReqs, cliReqs, allTags, allSummaries, clientsData] = await Promise.all([
         getAllEditRequests(),
         getAllClientEditRequests(),
-        getTags()
+        getTags(),
+        getAllSummaries(),
+        getClients([], 1000)
       ]);
       setSummaryRequests(sumReqs);
       setClientRequests(cliReqs);
       setTags(allTags);
+      setOriginalSummaries(allSummaries);
+      setOriginalClients(clientsData.clients);
     } catch (err) {
       console.error('Failed to load requests:', err);
       toast.error('Failed to load requests');
@@ -231,13 +287,14 @@ const EditRequestsPage: React.FC = () => {
     setExpandedRequests(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleAction = async (request: EditRequest | ClientEditRequest, status: 'approved' | 'rejected') => {
+  const handleAction = async (request: (EditRequest | ClientEditRequest) & { category?: 'summary' | 'client' | 'claim' }, status: 'approved' | 'rejected') => {
     const reqId = request.id;
     setProcessingId(reqId);
     try {
       const reqTypeLabel = request.requestType === 'delete' ? 'deletion' : 'edit';
+      const isSummary = request.category === 'summary' || ('summaryId' in request);
 
-      if (requestType === 'summary') {
+      if (isSummary) {
         const req = request as EditRequest;
         await updateEditRequestStatus(req.summaryId, status);
         
@@ -285,12 +342,23 @@ const EditRequestsPage: React.FC = () => {
     return !!(req.proposedChanges && req.proposedChanges.assignedAgent !== undefined);
   };
 
-  const activeRequests = 
-    requestType === 'summary' 
-      ? summaryRequests 
-      : requestType === 'client' 
-        ? clientRequests.filter(r => !isClaimRequest(r)) 
-        : clientRequests.filter(r => isClaimRequest(r));
+  const activeRequests = React.useMemo(() => {
+    let list: ((EditRequest & { category: 'summary' }) | (ClientEditRequest & { category: 'client' }) | (ClientEditRequest & { category: 'claim' }))[] = [];
+    if (requestType === 'summary') {
+      list = summaryRequests.map(r => ({ ...r, category: 'summary' as const }));
+    } else if (requestType === 'client') {
+      list = clientRequests.filter(r => !isClaimRequest(r)).map(r => ({ ...r, category: 'client' as const }));
+    } else if (requestType === 'claim') {
+      list = clientRequests.filter(r => isClaimRequest(r)).map(r => ({ ...r, category: 'claim' as const }));
+    } else {
+      list = [
+        ...summaryRequests.map(r => ({ ...r, category: 'summary' as const })),
+        ...clientRequests.filter(r => !isClaimRequest(r)).map(r => ({ ...r, category: 'client' as const })),
+        ...clientRequests.filter(r => isClaimRequest(r)).map(r => ({ ...r, category: 'claim' as const }))
+      ];
+    }
+    return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [requestType, summaryRequests, clientRequests]);
 
   const counts = {
     all: activeRequests.length,
@@ -304,6 +372,21 @@ const EditRequestsPage: React.FC = () => {
     if (activeTab === 'all') return true;
     return req.status === activeTab;
   });
+
+  const CATEGORY_BADGE: Record<string, { cls: string; label: string }> = {
+    summary: { cls: 'badge-info', label: 'Call Summary' },
+    client: { cls: 'badge-success', label: 'Client Info' },
+    claim: { cls: 'badge-warning', label: 'Claim Request' },
+  };
+
+  const getCategoryBadge = (category: 'summary' | 'client' | 'claim') => {
+    const config = CATEGORY_BADGE[category];
+    return (
+      <span className={`badge ${config.cls}`} style={{ fontSize: '9px', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', textTransform: 'uppercase' }}>
+        {config.label}
+      </span>
+    );
+  };
 
   const getRequestTypeBadge = (reqType?: 'edit' | 'delete') => {
     const type = reqType || 'edit';
@@ -324,6 +407,12 @@ const EditRequestsPage: React.FC = () => {
 
       {/* Top Level Category Tabs */}
       <div className="tabs" style={{ marginBottom: 'var(--space-5)' }}>
+        <button
+          className={`tab-btn ${requestType === 'all' ? 'active' : ''}`}
+          onClick={() => { setRequestType('all'); setActiveTab('all'); }}
+        >
+          All Requests
+        </button>
         <button
           className={`tab-btn ${requestType === 'summary' ? 'active' : ''}`}
           onClick={() => { setRequestType('summary'); setActiveTab('all'); }}
@@ -419,7 +508,10 @@ const EditRequestsPage: React.FC = () => {
 
                           {/* Request Type */}
                           <td data-label="Type">
-                            {getRequestTypeBadge(req.requestType)}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {getRequestTypeBadge(req.requestType)}
+                              {getCategoryBadge(req.category)}
+                            </div>
                           </td>
 
                           {/* Details: Reason + expand toggle */}
@@ -485,10 +577,10 @@ const EditRequestsPage: React.FC = () => {
                         {isExpanded && (
                           <tr>
                             <td colSpan={7} style={{ padding: '0 var(--space-4) var(--space-4)', background: 'var(--color-bg-elevated)' }}>
-                              {requestType === 'summary' ? (
-                                <SummaryDiffView req={req as EditRequest} />
+                              {req.category === 'summary' ? (
+                                <SummaryDiffView req={req as EditRequest} originalSummaries={originalSummaries} />
                               ) : (
-                                <ClientDiffView req={req as ClientEditRequest} allTags={tags} />
+                                <ClientDiffView req={req as ClientEditRequest} allTags={tags} originalClients={originalClients} />
                               )}
                             </td>
                           </tr>
@@ -529,6 +621,7 @@ const EditRequestsPage: React.FC = () => {
                         {req.status}
                       </span>
                       {getRequestTypeBadge(req.requestType)}
+                      {getCategoryBadge(req.category)}
                     </div>
                   </div>
 
@@ -568,10 +661,10 @@ const EditRequestsPage: React.FC = () => {
                     {/* Diff view */}
                     {isExpanded && (
                       <div style={{ marginTop: 4 }}>
-                        {requestType === 'summary' ? (
-                          <SummaryDiffView req={req as EditRequest} />
+                        {req.category === 'summary' ? (
+                          <SummaryDiffView req={req as EditRequest} originalSummaries={originalSummaries} />
                         ) : (
-                          <ClientDiffView req={req as ClientEditRequest} allTags={tags} />
+                          <ClientDiffView req={req as ClientEditRequest} allTags={tags} originalClients={originalClients} />
                         )}
                       </div>
                     )}
