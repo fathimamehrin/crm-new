@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, Edit3, Search, Tag as TagIcon, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, X, Edit3, Search, Tag as TagIcon, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getTags, createTag, updateTag, logActivity } from '../../lib/firestore';
+import { getTags, createTag, updateTag, deleteTag, logActivity } from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tag } from '../../types';
 import toast from 'react-hot-toast';
@@ -26,7 +26,6 @@ const AdminTagsPage: React.FC = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   
   // Add tag modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -143,23 +142,28 @@ const AdminTagsPage: React.FC = () => {
     }
   };
 
-  const toggleTagStatus = async (tag: Tag) => {
-    const newStatus = tag.status === 'active' ? 'disabled' : 'active';
+  const handleDeleteTag = async (tag: Tag) => {
+    if (!window.confirm(`Are you sure you want to delete the tag "${tag.name}"? This will also remove it from all assigned clients.`)) {
+      return;
+    }
+    
     try {
-      await updateTag(tag.id, { status: newStatus });
+      await deleteTag(tag.id);
+      
       await logActivity({
         userId: currentUser!.uid,
         userName: userProfile?.name,
-        action: newStatus === 'active' ? 'tag_enabled' : 'tag_disabled',
+        action: 'tag_deleted' as any,
         entityType: 'tag',
         entityId: tag.id,
         entityName: tag.name,
       });
-      toast.success(`Tag "${tag.name}" ${newStatus}`);
+      
+      toast.success(`Tag "${tag.name}" deleted successfully`);
       loadTags();
     } catch (err) {
-      console.error('Failed to toggle tag status:', err);
-      toast.error('Failed to update tag status');
+      console.error('Failed to delete tag:', err);
+      toast.error('Failed to delete tag');
     }
   };
 
@@ -171,9 +175,7 @@ const AdminTagsPage: React.FC = () => {
 
   const filteredTags = tags.filter((tag) => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch = tag.name.toLowerCase().includes(q);
-    const matchesStatus = statusFilter === 'all' || tag.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return tag.name.toLowerCase().includes(q);
   });
 
   return (
@@ -200,18 +202,6 @@ const AdminTagsPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-        </div>
-        <div style={{ width: '180px' }}>
-          <select
-            className="form-input form-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled')}
-            aria-label="Filter by Status"
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="disabled">Disabled Only</option>
-          </select>
         </div>
       </div>
 
@@ -240,7 +230,6 @@ const AdminTagsPage: React.FC = () => {
                 <tr>
                   <th>Tag Name</th>
                   <th>Visual Preview</th>
-                  <th>Status</th>
                   <th>Created At</th>
                   <th style={{ width: 180 }}>Actions</th>
                 </tr>
@@ -266,11 +255,6 @@ const AdminTagsPage: React.FC = () => {
                         {tag.name}
                       </span>
                     </td>
-                    <td>
-                      <span className={`badge ${tag.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
-                        {tag.status}
-                      </span>
-                    </td>
                     <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -278,15 +262,11 @@ const AdminTagsPage: React.FC = () => {
                           <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
                         </button>
                         <button
-                          className={`btn btn-sm ${tag.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                          onClick={() => toggleTagStatus(tag)}
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteTag(tag)}
                           style={{ minHeight: 32 }}
                         >
-                          {tag.status === 'active' ? (
-                            <><ToggleLeft size={14} /> Disable</>
-                          ) : (
-                            <><ToggleRight size={14} /> Enable</>
-                          )}
+                          <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
                         </button>
                       </div>
                     </td>

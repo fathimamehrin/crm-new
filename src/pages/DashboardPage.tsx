@@ -421,6 +421,7 @@ const DashboardPage: React.FC = () => {
       {showFilters && (
         <>
           <div
+            className="filter-drawer-overlay"
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400 }}
             onClick={() => setShowFilters(false)}
           />

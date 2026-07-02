@@ -19,6 +19,7 @@ import AdminTagsPage from '../pages/admin/AdminTagsPage';
 
 import StaffDurationPage from '../pages/admin/StaffDurationPage';
 import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
+import LeadAnalyticsPage from '../pages/admin/LeadAnalyticsPage';
 
 const router = createBrowserRouter([
   {
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
 
                   { path: '/admin/duration', element: <StaffDurationPage /> },
                   { path: '/admin/revenue', element: <RevenueAnalyticsPage /> },
+                  { path: '/admin/analytics', element: <LeadAnalyticsPage /> },
                 ],
               },
             ],

@@ -1440,8 +1440,13 @@ h1, h2, h3, h4, h5, h6 {
     min-width: 0;
   }
 
+  .filter-drawer-overlay {
+    z-index: 1050 !important;
+  }
+
   .filter-drawer {
     width: 100%;
+    z-index: 1100 !important;
   }
   .notification-panel {
     width: 100vw;
@@ -2614,9 +2619,10 @@ h1, h2, h3, h4, h5, h6 {
 .col-span-8 { grid-column: span 8 / span 8; }
 .col-span-4 { grid-column: span 4 / span 4; }
 .col-span-6 { grid-column: span 6 / span 6; }
+.col-span-3 { grid-column: span 3 / span 3; }
 
 @media (max-width: 1024px) {
-  .col-span-8, .col-span-4, .col-span-6 {
+  .col-span-8, .col-span-4, .col-span-6, .col-span-3 {
     grid-column: span 12 / span 12;
   }
 }

@@ -21,6 +21,9 @@ const ACTION_LABELS: Record<string, { label: string; badge: string }> = {
   admin_disabled: { label: 'Admin Disabled', badge: 'badge-danger' },
   user_login: { label: 'User Login', badge: 'badge-muted' },
   user_logout: { label: 'User Logout', badge: 'badge-muted' },
+  tag_created: { label: 'Tag Created', badge: 'badge-success' },
+  tag_updated: { label: 'Tag Updated', badge: 'badge-info' },
+  tag_deleted: { label: 'Tag Deleted', badge: 'badge-danger' },
 };
 
 const ActivityLogPage: React.FC = () => {

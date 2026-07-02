@@ -1,0 +1,570 @@
+import React, { useEffect, useState } from 'react';
+import { getClients, getUsers, getTags } from '../../lib/firestore';
+import { format, subDays, startOfDay, isAfter, isBefore, startOfWeek } from 'date-fns';
+import { Users, TrendingUp, BarChart3, PieChart, Calendar, UserCheck, Tag as TagIcon, CheckCircle } from 'lucide-react';
+import type { Client, User as AppUser, Tag } from '../../types';
+import toast from 'react-hot-toast';
+
+interface LeadTimeSeries {
+  key: string;
+  label: string;
+  date: Date;
+  total: number;
+  converted: number;
+  rate: number;
+}
+
+interface AgentLeadPerformance {
+  id: string;
+  name: string;
+  total: number;
+  converted: number;
+  rate: number;
+}
+
+const LeadAnalyticsPage: React.FC = () => {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [agents, setAgents] = useState<AppUser[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [dateRange, setDateRange] = useState<'today' | '7days' | '30days' | 'custom' | 'all'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
+  const [selectedTagId, setSelectedTagId] = useState<string>('all');
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('week');
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [clientsRes, allAgents, allTags] = await Promise.all([
+        getClients([], 1000),
+        getUsers('agent'),
+        getTags()
+      ]);
+      setClients(clientsRes.clients);
+      setAgents(allAgents);
+      setTags(allTags);
+    } catch (err) {
+      console.error('Failed to load lead analytics:', err);
+      toast.error('Failed to load leads data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Filter clients in-memory
+  const getFilteredClients = (): Client[] => {
+    let filtered = [...clients];
+
+    // 1. Date range filter
+    const now = new Date();
+    if (dateRange === 'today') {
+      const todayStart = startOfDay(now);
+      filtered = filtered.filter(c => isAfter(c.createdAt, todayStart));
+    } else if (dateRange === '7days') {
+      const sevenDaysAgo = startOfDay(subDays(now, 7));
+      filtered = filtered.filter(c => isAfter(c.createdAt, sevenDaysAgo));
+    } else if (dateRange === '30days') {
+      const thirtyDaysAgo = startOfDay(subDays(now, 30));
+      filtered = filtered.filter(c => isAfter(c.createdAt, thirtyDaysAgo));
+    } else if (dateRange === 'custom' && customStartDate && customEndDate) {
+      const start = new Date(customStartDate + 'T00:00:00');
+      const end = new Date(customEndDate + 'T23:59:59');
+      filtered = filtered.filter(c => isAfter(c.createdAt, start) && isBefore(c.createdAt, end));
+    }
+
+    // 2. Agent filter
+    if (selectedAgentId !== 'all') {
+      filtered = filtered.filter(c => c.assignedAgent === selectedAgentId);
+    }
+
+    // 3. Tag filter
+    if (selectedTagId !== 'all') {
+      filtered = filtered.filter(c => c.tags?.includes(selectedTagId));
+    }
+
+    return filtered;
+  };
+
+  const filteredClients = getFilteredClients();
+
+  // Compute metrics and analytics
+  const getAnalytics = () => {
+    const totalLeads = filteredClients.length;
+    const statusCounts = { lead: 0, active: 0, closed: 0, inactive: 0 };
+
+    filteredClients.forEach(c => {
+      if (c.status in statusCounts) {
+        statusCounts[c.status]++;
+      } else {
+        statusCounts.lead++;
+      }
+    });
+
+    const convertedCount = statusCounts.active + statusCounts.closed;
+    const conversionRate = totalLeads > 0 ? Math.round((convertedCount / totalLeads) * 100) : 0;
+
+    // Percentages for Donut Chart
+    const totalCount = totalLeads || 1;
+    const activePct = Math.round((statusCounts.active / totalCount) * 100);
+    const closedPct = Math.round((statusCounts.closed / totalCount) * 100);
+    const leadPct = Math.round((statusCounts.lead / totalCount) * 100);
+    const inactivePct = 100 - activePct - closedPct - leadPct;
+
+    const p1 = activePct;
+    const p2 = p1 + closedPct;
+    const p3 = p2 + leadPct;
+
+    const conicGradientStyle = {
+      background: `conic-gradient(
+        var(--color-success) 0% ${p1}%,
+        var(--color-accent) ${p1}% ${p2}%,
+        var(--color-warning) ${p2}% ${p3}%,
+        var(--color-text-muted) ${p3}% 100%
+      )`
+    };
+
+    // Grouped Time Series
+    const timeGroups: Record<string, { label: string; date: Date; total: number; converted: number }> = {};
+    filteredClients.forEach(c => {
+      let groupKey = '';
+      let groupLabel = '';
+
+      if (groupBy === 'day') {
+        groupKey = format(c.createdAt, 'yyyy-MM-dd');
+        groupLabel = format(c.createdAt, 'dd MMM yyyy');
+      } else if (groupBy === 'week') {
+        const start = startOfWeek(c.createdAt, { weekStartsOn: 1 });
+        groupKey = format(start, 'yyyy-MM-dd');
+        groupLabel = `W/c ${format(start, 'dd MMM')}`;
+      } else { // month
+        groupKey = format(c.createdAt, 'yyyy-MM');
+        groupLabel = format(c.createdAt, 'MMM yyyy');
+      }
+
+      if (!timeGroups[groupKey]) {
+        timeGroups[groupKey] = {
+          label: groupLabel,
+          date: c.createdAt,
+          total: 0,
+          converted: 0
+        };
+      }
+      timeGroups[groupKey].total++;
+      if (c.status === 'active' || c.status === 'closed') {
+        timeGroups[groupKey].converted++;
+      }
+    });
+
+    const timeSeriesList: LeadTimeSeries[] = Object.entries(timeGroups)
+      .map(([key, item]) => ({
+        key,
+        label: item.label,
+        date: item.date,
+        total: item.total,
+        converted: item.converted,
+        rate: item.total > 0 ? Math.round((item.converted / item.total) * 100) : 0
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // Agent performance list
+    const agentPerformanceMap: Record<string, { name: string; total: number; converted: number }> = {};
+    
+    // Initialize active agents
+    agents.forEach(a => {
+      agentPerformanceMap[a.id] = { name: a.name, total: 0, converted: 0 };
+    });
+    // Add unassigned
+    agentPerformanceMap['unassigned'] = { name: 'Unassigned', total: 0, converted: 0 };
+
+    filteredClients.forEach(c => {
+      const agentId = c.assignedAgent || 'unassigned';
+      const agentName = c.assignedAgentName || 'Unassigned';
+      if (!agentPerformanceMap[agentId]) {
+        agentPerformanceMap[agentId] = { name: agentName, total: 0, converted: 0 };
+      }
+      agentPerformanceMap[agentId].total++;
+      if (c.status === 'active' || c.status === 'closed') {
+        agentPerformanceMap[agentId].converted++;
+      }
+    });
+
+    const agentPerformanceList: AgentLeadPerformance[] = Object.entries(agentPerformanceMap)
+      .map(([id, item]) => ({
+        id,
+        name: item.name,
+        total: item.total,
+        converted: item.converted,
+        rate: item.total > 0 ? Math.round((item.converted / item.total) * 100) : 0
+      }))
+      .filter(item => item.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      totalLeads,
+      statusCounts,
+      conversionRate,
+      percentages: { active: activePct, closed: closedPct, lead: leadPct, inactive: inactivePct },
+      conicGradientStyle,
+      timeSeriesList,
+      agentPerformanceList,
+    };
+  };
+
+  const analytics = getAnalytics();
+
+  return (
+    <div>
+      {/* Page Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+        <div className="page-header" style={{ marginBottom: 0 }}>
+          <h1 className="page-title">Lead Analytics</h1>
+          <p className="page-subtitle">Track incoming leads volume, conversion rates, and agent registration performance</p>
+        </div>
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="analytics-dashboard-grid">
+        <div className="card col-span-3" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--color-accent-light)', color: 'var(--color-accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Users size={22} />
+          </div>
+          <div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Leads Received</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-text-primary)', marginTop: 2 }}>{analytics.totalLeads}</div>
+          </div>
+        </div>
+
+        <div className="card col-span-3" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--color-success-light)', color: 'var(--color-success)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <CheckCircle size={22} />
+          </div>
+          <div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Conversion Rate</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-success)', marginTop: 2 }}>{analytics.conversionRate}%</div>
+          </div>
+        </div>
+
+        <div className="card col-span-3" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--color-warning-light)', color: 'var(--color-warning)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <TrendingUp size={22} />
+          </div>
+          <div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pipeline Leads</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-warning)', marginTop: 2 }}>{analytics.statusCounts.lead}</div>
+          </div>
+        </div>
+
+        <div className="card col-span-3" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--color-success-light)', color: 'var(--color-success)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <BarChart3 size={22} />
+          </div>
+          <div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Converted Leads</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-success)', marginTop: 2 }}>{analytics.statusCounts.active + analytics.statusCounts.closed}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters Toolbar */}
+      <div className="card" style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4) var(--space-5)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          
+          {/* Agent Filter */}
+          <div className="form-group" style={{ minWidth: 160, marginBottom: 0 }}>
+            <div className="search-wrapper">
+              <UserCheck className="search-icon" size={14} style={{ color: 'var(--color-text-muted)' }} />
+              <select
+                className="form-input form-select"
+                style={{ paddingLeft: '2rem' }}
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                aria-label="Filter by Agent"
+              >
+                <option value="all">All Agents</option>
+                {agents.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tag Filter */}
+          <div className="form-group" style={{ minWidth: 160, marginBottom: 0 }}>
+            <div className="search-wrapper">
+              <TagIcon className="search-icon" size={14} style={{ color: 'var(--color-text-muted)' }} />
+              <select
+                className="form-input form-select"
+                style={{ paddingLeft: '2rem' }}
+                value={selectedTagId}
+                onChange={(e) => setSelectedTagId(e.target.value)}
+                aria-label="Filter by Tag"
+              >
+                <option value="all">All Tags</option>
+                {tags.map(tag => (
+                  <option key={tag.id} value={tag.id}>{tag.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Date range filter buttons */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(['today', '7days', '30days', 'custom', 'all'] as const).map(range => (
+              <button
+                key={range}
+                className={`btn btn-sm ${dateRange === range ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setDateRange(range)}
+              >
+                {range === 'today' && 'Today'}
+                {range === '7days' && 'Last 7 Days'}
+                {range === '30days' && 'Last 30 Days'}
+                {range === 'custom' && 'Custom Range'}
+                {range === 'all' && 'All Time'}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom Dates */}
+          {dateRange === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <input
+                type="date"
+                className="form-input"
+                style={{ width: 140, padding: '6px 12px' }}
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                aria-label="Start date"
+              />
+              <span className="text-xs text-muted">to</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ width: 140, padding: '6px 12px' }}
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                aria-label="End date"
+              />
+            </div>
+          )}
+
+          {/* Grouping Select */}
+          <div className="form-group" style={{ minWidth: 140, marginBottom: 0, marginLeft: 'auto' }}>
+            <div className="search-wrapper">
+              <Calendar className="search-icon" size={14} style={{ color: 'var(--color-text-muted)' }} />
+              <select
+                className="form-input form-select"
+                style={{ paddingLeft: '2rem' }}
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as any)}
+                aria-label="Group by interval"
+              >
+                <option value="day">Group by Day</option>
+                <option value="week">Group by Week</option>
+                <option value="month">Group by Month</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Charts Grid */}
+      <div className="analytics-dashboard-grid">
+        
+        {/* Lead Status Split Donut */}
+        <div className="card col-span-4" style={{ display: 'flex', flexDirection: 'column' }}>
+          <h3 className="card-title" style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <PieChart size={16} style={{ color: 'var(--color-accent)' }} /> Status Distribution
+          </h3>
+          <div className="donut-chart-wrapper" style={{ flex: 1 }}>
+            <div className="donut-chart-radial" style={analytics.conicGradientStyle} />
+            <div className="donut-legend">
+              <div className="donut-legend-item">
+                <span className="donut-legend-label">
+                  <span className="donut-legend-dot" style={{ background: 'var(--color-success)' }} /> Active
+                </span>
+                <span className="donut-legend-value">{analytics.statusCounts.active} ({analytics.percentages.active}%)</span>
+              </div>
+              <div className="donut-legend-item">
+                <span className="donut-legend-label">
+                  <span className="donut-legend-dot" style={{ background: 'var(--color-accent)' }} /> Closed
+                </span>
+                <span className="donut-legend-value">{analytics.statusCounts.closed} ({analytics.percentages.closed}%)</span>
+              </div>
+              <div className="donut-legend-item">
+                <span className="donut-legend-label">
+                  <span className="donut-legend-dot" style={{ background: 'var(--color-warning)' }} /> Lead (Pipeline)
+                </span>
+                <span className="donut-legend-value">{analytics.statusCounts.lead} ({analytics.percentages.lead}%)</span>
+              </div>
+              <div className="donut-legend-item">
+                <span className="donut-legend-label">
+                  <span className="donut-legend-dot" style={{ background: 'var(--color-text-muted)' }} /> Inactive
+                </span>
+                <span className="donut-legend-value">{analytics.statusCounts.inactive} ({analytics.percentages.inactive}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Lead Timelines Trend */}
+        <div className="card col-span-8">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-5)' }}>
+            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <BarChart3 size={16} style={{ color: 'var(--color-accent)' }} /> Leads Volume & Conversion Trend
+            </h3>
+            <span className="text-xs text-muted" style={{ fontWeight: 500 }}>Grouped by {groupBy}s</span>
+          </div>
+
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-10)' }}>
+              <div className="spinner" />
+            </div>
+          ) : analytics.timeSeriesList.length === 0 ? (
+            <div className="text-center text-xs text-muted" style={{ padding: 'var(--space-10) 0' }}>
+              No leads registered in this period.
+            </div>
+          ) : (
+            <div className="horizontal-bar-chart" style={{ gap: 'var(--space-5)' }}>
+              {analytics.timeSeriesList.map((row, idx) => {
+                const maxLeads = Math.max(...analytics.timeSeriesList.map(t => t.total), 1);
+                const leadPercent = Math.min(100, Math.round((row.total / maxLeads) * 100));
+                
+                return (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-size-xs)' }}>
+                      <span className="font-semibold text-primary">{row.label}</span>
+                      <span className="text-muted font-medium">
+                        {row.total} leads <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>({row.converted} converted - {row.rate}%)</span>
+                      </span>
+                    </div>
+                    {/* Visual Dual Bars */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {/* Total Leads Bar */}
+                      <div className="leaderboard-bar-bg" style={{ height: 6 }}>
+                        <div 
+                          className="leaderboard-bar-fill" 
+                          style={{ 
+                            width: `${leadPercent}%`, 
+                            background: 'linear-gradient(90deg, var(--color-accent-light), var(--color-accent))' 
+                          }} 
+                        />
+                      </div>
+                      {/* Converted Leads Ratio Indicator */}
+                      <div className="leaderboard-bar-bg" style={{ height: 4 }}>
+                        <div 
+                          className="leaderboard-bar-fill" 
+                          style={{ 
+                            width: `${row.rate}%`, 
+                            background: 'linear-gradient(90deg, #a7f3d0, var(--color-success))' 
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Agent Performance Leaderboard Table */}
+      <div className="card" style={{ padding: 0 }}>
+        <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="card-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UserCheck size={16} style={{ color: 'var(--color-accent)' }} /> Agent Lead Registration & Conversion
+          </h3>
+          <span className="badge badge-muted text-xs">{analytics.agentPerformanceList.length} active logs</span>
+        </div>
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-10)' }}>
+            <div className="spinner" />
+          </div>
+        ) : analytics.agentPerformanceList.length === 0 ? (
+          <div className="empty-state">
+            <h3 className="empty-state-title">No Lead Data Logged</h3>
+            <p className="empty-state-desc">There are no leads assigned to active agents in this range.</p>
+          </div>
+        ) : (
+          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Agent Name</th>
+                  <th style={{ textAlign: 'center' }}>Leads Assigned</th>
+                  <th style={{ textAlign: 'center' }}>Leads Converted (Active/Closed)</th>
+                  <th>Conversion Performance</th>
+                  <th style={{ textAlign: 'right' }}>Conversion Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.agentPerformanceList.map((row) => {
+                  
+                  return (
+                    <tr key={row.id}>
+                      <td data-label="Agent Name">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                          <div className="avatar avatar-sm">{row.name.charAt(0).toUpperCase()}</div>
+                          <span className="text-sm font-semibold text-primary">{row.name}</span>
+                        </div>
+                      </td>
+                      <td data-label="Leads Assigned" style={{ textAlign: 'center' }} className="monospaced font-medium">
+                        {row.total}
+                      </td>
+                      <td data-label="Leads Converted" style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
+                        {row.converted}
+                      </td>
+                      <td data-label="Conversion Performance">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <div className="leaderboard-bar-bg" style={{ flex: 1, height: 6 }}>
+                            <div 
+                              className="leaderboard-bar-fill" 
+                              style={{ 
+                                width: `${row.rate}%`, 
+                                background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
+                              }} 
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td data-label="Conversion Rate" style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
+                        {row.rate}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default LeadAnalyticsPage;

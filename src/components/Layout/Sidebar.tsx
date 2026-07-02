@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
-  Clock, DollarSign, X, MoreHorizontal, Tag
+  Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -94,6 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/analytics" icon={BarChart3} label="Lead Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/duration" icon={Clock} label="Staff Durations" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 
                 {/* More button visible on mobile bottom nav only */}
@@ -170,6 +171,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Clock size={18} />
                 <span>Staff Durations</span>
+              </NavLink>
+
+              <NavLink 
+                to="/admin/analytics" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <BarChart3 size={18} />
+                <span>Lead Analytics</span>
               </NavLink>
               
               <button 

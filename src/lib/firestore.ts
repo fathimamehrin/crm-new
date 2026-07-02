@@ -225,6 +225,22 @@ export const updateTag = async (id: string, data: Partial<Tag>): Promise<void> =
   await updateDoc(doc(db, 'tags', id), cleanObject(data));
 };
 
+export const deleteTag = async (id: string): Promise<void> => {
+  // Delete the tag document
+  await deleteDoc(doc(db, 'tags', id));
+  
+  // Find and update all clients with this tag
+  const q = query(clientsColRef(), where('tags', 'array-contains', id));
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(docSnap => {
+    const clientData = docSnap.data();
+    const updatedTags = (clientData.tags || []).filter((tagId: string) => tagId !== id);
+    batch.update(docSnap.ref, { tags: updatedTags });
+  });
+  await batch.commit();
+};
+
 // ─── Payments ────────────────────────────────────────────────────────────────
 export const createPayment = async (data: Omit<Payment, 'id' | 'createdAt'>): Promise<string> => {
   const ref = await addDoc(paymentsColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
