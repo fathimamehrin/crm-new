@@ -19,7 +19,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -31,6 +31,8 @@ const logsColRef     = () => collection(db, 'activityLogs');
 const editRequestsColRef = () => collection(db, 'editRequests');
 const clientEditRequestsColRef = () => collection(db, 'clientEditRequests');
 const tagsColRef = () => collection(db, 'tags');
+const clientStatusesColRef = () => collection(db, 'clientStatuses');
+const tasksColRef = () => collection(db, 'tasks');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -84,6 +86,25 @@ export const tagFromDoc = (snap: AnySnap): Tag => ({
   ...snap.data(),
   createdAt: toDate(snap.data().createdAt),
 } as Tag);
+
+export const customStatusFromDoc = (snap: AnySnap): CustomStatus => ({
+  id: snap.id,
+  name: snap.data().name,
+  createdAt: toDate(snap.data().createdAt),
+} as CustomStatus);
+
+export const taskFromDoc = (snap: AnySnap): Task => {
+  const data = snap.data();
+  return {
+    id: snap.id,
+    ...data,
+    createdAt: toDate(data.createdAt),
+    history: (data.history || []).map((h: any) => ({
+      ...h,
+      timestamp: toDate(h.timestamp),
+    })),
+  } as Task;
+};
 
 // Helper to recursively strip undefined properties so Firestore doesn't reject them
 const cleanObject = (obj: any): any => {
@@ -223,6 +244,21 @@ export const createTag = async (data: Omit<Tag, 'id' | 'createdAt'>): Promise<st
 
 export const updateTag = async (id: string, data: Partial<Tag>): Promise<void> => {
   await updateDoc(doc(db, 'tags', id), cleanObject(data));
+};
+
+// ─── Client Statuses ──────────────────────────────────────────────────────────
+export const getClientStatuses = async (): Promise<CustomStatus[]> => {
+  const snap = await getDocs(clientStatusesColRef());
+  const statuses = snap.docs.map(customStatusFromDoc);
+  return statuses.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+};
+
+export const createClientStatus = async (name: string): Promise<string> => {
+  const ref = await addDoc(clientStatusesColRef(), cleanObject({
+    name,
+    createdAt: serverTimestamp(),
+  }));
+  return ref.id;
 };
 
 export const deleteTag = async (id: string): Promise<void> => {
@@ -397,6 +433,250 @@ export const getAllActivityLogs = async (): Promise<ActivityLog[]> => {
   const snap = await getDocs(logsColRef());
   const logs = snap.docs.map(activityLogFromDoc);
   return logs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+// ─── Tasks Workflow Helpers ──────────────────────────────────────────────────
+export const createTask = async (
+  title: string,
+  description: string,
+  assignedTo: string,
+  assignedToName: string,
+  createdBy: string,
+  createdByName: string
+): Promise<string> => {
+  const history: TaskHistoryItem[] = [
+    {
+      timestamp: new Date(),
+      action: 'created',
+      performedBy: createdBy,
+      performedByName: createdByName,
+      details: `Assigned to ${assignedToName}`,
+    },
+  ];
+
+  const taskData: Omit<Task, 'id'> = {
+    title,
+    description,
+    createdBy,
+    createdByName,
+    assignedTo,
+    assignedToName,
+    status: 'pending_acceptance',
+    createdAt: new Date(),
+    history,
+  };
+
+  const ref = await addDoc(tasksColRef(), cleanObject(taskData));
+
+  // Log activity
+  await logActivity({
+    userId: createdBy,
+    userName: createdByName,
+    action: 'task_created',
+    entityType: 'task',
+    entityId: ref.id,
+    entityName: title,
+  });
+
+  return ref.id;
+};
+
+export const updateTaskStatus = async (
+  taskId: string,
+  status: Task['status'],
+  userId: string,
+  userName: string,
+  details?: string,
+  completionSummary?: string
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  let historyAction: 'accepted' | 'rejected' | 'completed' = 'accepted';
+  let activityAction: 'task_accepted' | 'task_rejected' | 'task_completed' = 'task_accepted';
+
+  if (status === 'rejected') {
+    historyAction = 'rejected';
+    activityAction = 'task_rejected';
+  } else if (status === 'completed') {
+    historyAction = 'completed';
+    activityAction = 'task_completed';
+  }
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: historyAction,
+    performedBy: userId,
+    performedByName: userName,
+    details: details || completionSummary || undefined,
+  };
+
+  const updateData: Partial<Task> = {
+    status,
+    history: [...task.history, historyItem],
+  };
+
+  if (status === 'rejected') {
+    updateData.rejectReason = details;
+  } else if (status === 'completed') {
+    updateData.completionSummary = completionSummary;
+  }
+
+  await updateDoc(taskRef, cleanObject(updateData));
+
+  await logActivity({
+    userId,
+    userName,
+    action: activityAction,
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const reassignTaskRequest = async (
+  taskId: string,
+  reassignToUid: string,
+  reassignToName: string,
+  reason: string,
+  userId: string,
+  userName: string
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: 'reassign_requested',
+    performedBy: userId,
+    performedByName: userName,
+    details: `Request to reassign to ${reassignToName}. Reason: ${reason}`,
+  };
+
+  const updateData: Partial<Task> = {
+    status: 'pending_reassignment',
+    reassignRequestedTo: reassignToUid,
+    reassignRequestedToName: reassignToName,
+    reassignReason: reason,
+    history: [...task.history, historyItem],
+  };
+
+  await updateDoc(taskRef, cleanObject(updateData));
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'task_reassign_requested',
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const approveReassignment = async (
+  taskId: string,
+  userId: string,
+  userName: string
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  const targetUid = task.reassignRequestedTo;
+  const targetName = task.reassignRequestedToName;
+
+  if (!targetUid || !targetName) throw new Error('Reassignment details missing');
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: 'reassign_approved',
+    performedBy: userId,
+    performedByName: userName,
+    details: `Approved reassignment to ${targetName}`,
+  };
+
+  const updateData: Partial<Task> = {
+    status: 'pending_acceptance',
+    assignedTo: targetUid,
+    assignedToName: targetName,
+    history: [...task.history, historyItem],
+  };
+
+  const clearedFields = {
+    reassignRequestedTo: null,
+    reassignRequestedToName: null,
+    reassignReason: null,
+  };
+
+  await updateDoc(taskRef, cleanObject({
+    ...updateData,
+    ...clearedFields,
+  }));
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'task_reassign_approved',
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const rejectReassignment = async (
+  taskId: string,
+  userId: string,
+  userName: string,
+  reason: string
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: 'reassign_rejected',
+    performedBy: userId,
+    performedByName: userName,
+    details: `Rejected reassignment request. Reason: ${reason}`,
+  };
+
+  const updateData: Partial<Task> = {
+    status: 'accepted',
+    history: [...task.history, historyItem],
+  };
+
+  const clearedFields = {
+    reassignRequestedTo: null,
+    reassignRequestedToName: null,
+    reassignReason: null,
+  };
+
+  await updateDoc(taskRef, cleanObject({
+    ...updateData,
+    ...clearedFields,
+  }));
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'task_reassign_rejected',
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const getTasks = async (constraints: QueryConstraint[] = []): Promise<Task[]> => {
+  const snap = await getDocs(query(tasksColRef(), ...constraints));
+  const tasks = snap.docs.map(taskFromDoc);
+  return tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 };
 
 // ─── Re-exports for convenience ───────────────────────────────────────────────

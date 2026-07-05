@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
-import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags } from '../../lib/firestore';
+import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags, getClientStatuses } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User, Tag } from '../../types';
+import type { Client, FilterOptions, User, Tag, CustomStatus } from '../../types';
 import { format } from 'date-fns';
 
 import ClientTable from '../../components/ClientTable/ClientTable';
 import ClientFilters from '../../components/ClientTable/ClientFilters';
 import Pagination from '../../components/Pagination';
 import AddClientModal from '../../components/AddClientModal';
+import CalendarView from '../../components/CalendarView';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -32,6 +33,27 @@ interface ClientSearchResult {
 
 const AdminClientsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Helper to parse location state or search params
+  const getInitialAgentId = () => {
+    if (location.state && typeof location.state === 'object' && 'agentId' in location.state) {
+      return (location.state as any).agentId || '';
+    }
+    const params = new URLSearchParams(location.search);
+    return params.get('agentId') || '';
+  };
+
+  const getInitialStatus = () => {
+    if (location.state && typeof location.state === 'object' && 'status' in location.state) {
+      return (location.state as any).status;
+    }
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    if (statusParam !== null) return statusParam as any;
+    return 'active'; // Default active status
+  };
+
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,19 +63,38 @@ const AdminClientsPage: React.FC = () => {
   const [totalClients, setTotalClients] = useState(0);
   const PAGE_SIZE = 25;
 
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+  const [allFilteredClients, setAllFilteredClients] = useState<Client[]>([]);
+
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
-    agentId: '',
-    status: 'active',
+    agentId: getInitialAgentId(),
+    status: getInitialStatus(),
     paymentStatus: '',
     dateFrom: '',
     dateTo: '',
     tags: [],
   });
 
-  const [allTags, setAllTags] = useState<Tag[]>([]);
+  useEffect(() => {
+    const initialAgentId = getInitialAgentId();
+    const initialStatus = getInitialStatus();
+    setFilters((prev) => {
+      if (prev.agentId === initialAgentId && prev.status === initialStatus) {
+        return prev;
+      }
+      return {
+        ...prev,
+        agentId: initialAgentId,
+        status: initialStatus,
+      };
+    });
+    setPage(1);
+  }, [location.state, location.search]);
 
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
 
   // Snippet generator
   const matchSnippet = (text: string, q: string): string | null => {
@@ -93,7 +134,9 @@ const AdminClientsPage: React.FC = () => {
     setLoading(true);
     try {
       const constraints = [];
-      if (filters.agentId) constraints.push(where('assignedAgent', '==', filters.agentId));
+      if (filters.agentId && filters.agentId !== 'unassigned') {
+        constraints.push(where('assignedAgent', '==', filters.agentId));
+      }
       if (filters.status) constraints.push(where('status', '==', filters.status));
 
       const [clientsRes, summariesData, logsData] = await Promise.all([
@@ -103,6 +146,10 @@ const AdminClientsPage: React.FC = () => {
       ]);
 
       let data = clientsRes.clients;
+
+      if (filters.agentId === 'unassigned') {
+        data = data.filter((c) => !c.assignedAgent || c.assignedAgent === 'unassigned');
+      }
 
       if (filters.tags && filters.tags.length > 0) {
         data = data.filter((c) =>
@@ -198,6 +245,7 @@ const AdminClientsPage: React.FC = () => {
 
         setSearchResults(results);
         setTotalClients(results.length);
+        setAllFilteredClients(results.map(r => r.client));
       } else {
         // Fallback to basic date filtering for client list when search is empty
         let filtered = data;
@@ -212,6 +260,7 @@ const AdminClientsPage: React.FC = () => {
         const start = (page - 1) * PAGE_SIZE;
         setClients(filtered.slice(start, start + PAGE_SIZE));
         setSearchResults([]);
+        setAllFilteredClients(filtered);
       }
     } catch (err) {
       console.error(err);
@@ -228,6 +277,7 @@ const AdminClientsPage: React.FC = () => {
   useEffect(() => {
     getUsers('agent').then(setAgents).catch(() => {});
     getTags().then(setAllTags).catch(() => {});
+    getClientStatuses().then(setCustomStatuses).catch(() => {});
   }, []);
 
   return (
@@ -273,6 +323,26 @@ const AdminClientsPage: React.FC = () => {
             />
           </div>
 
+          {/* View Mode Toggle */}
+          <div className="tabs" style={{ marginLeft: 'var(--space-2)' }}>
+            <button
+              type="button"
+              className={`tab-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              className={`tab-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+              onClick={() => setViewMode('calendar')}
+              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
+            >
+              Calendar
+            </button>
+          </div>
+
           {/* Filter button */}
           <button
             id="filter-btn"
@@ -299,6 +369,10 @@ const AdminClientsPage: React.FC = () => {
         {loading ? (
           <div style={{ padding: 'var(--space-12)', display: 'flex', justifyContent: 'center' }}>
             <div className="spinner spinner-lg" />
+          </div>
+        ) : viewMode === 'calendar' ? (
+          <div style={{ padding: 'var(--space-5)' }}>
+            <CalendarView clients={allFilteredClients} isAdminView={true} />
           </div>
         ) : filters.search ? (
           searchResults.length === 0 ? (
@@ -441,6 +515,8 @@ const AdminClientsPage: React.FC = () => {
               setPage(1);
             }}
             allTags={allTags}
+            agents={agents}
+            customStatuses={customStatuses}
           />
         </>
       )}

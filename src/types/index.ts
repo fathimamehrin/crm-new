@@ -1,7 +1,7 @@
 export type UserRole = 'admin' | 'agent';
 export type UserStatus = 'active' | 'disabled';
 export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'failed';
-export type ClientStatus = 'active' | 'inactive' | 'lead' | 'closed';
+export type ClientStatus = string;
 
 export interface User {
   id: string;
@@ -29,6 +29,7 @@ export interface Client {
   createdBy: string;
   tags?: string[];
   projectName?: string;
+  leadSource?: string;
 }
 
 export interface PaymentDetails {
@@ -90,9 +91,16 @@ export type ActivityAction =
   | 'tag_created'
   | 'tag_updated'
   | 'tag_enabled'
-  | 'tag_disabled';
+  | 'tag_disabled'
+  | 'task_created'
+  | 'task_accepted'
+  | 'task_rejected'
+  | 'task_completed'
+  | 'task_reassign_requested'
+  | 'task_reassign_approved'
+  | 'task_reassign_rejected';
 
-export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag';
+export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag' | 'task';
 
 export interface ActivityLog {
   id: string;
@@ -166,6 +174,7 @@ export interface ClientEditRequest {
     status?: ClientStatus;
     assignedAgent?: string;
     assignedAgentName?: string;
+    leadSource?: string;
   };
   agentId: string;
   agentName: string;
@@ -181,6 +190,55 @@ export interface Tag {
   color: string; // Hex color code
   status: 'active' | 'disabled';
   createdAt: Date;
+}
+
+export interface CustomStatus {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+
+// ─── Task Workflow Types ───
+export type TaskStatus =
+  | 'pending_acceptance'
+  | 'accepted'
+  | 'rejected'
+  | 'completed'
+  | 'pending_reassignment';
+
+export type TaskHistoryAction =
+  | 'created'
+  | 'accepted'
+  | 'rejected'
+  | 'completed'
+  | 'reassign_requested'
+  | 'reassign_approved'
+  | 'reassign_rejected';
+
+export interface TaskHistoryItem {
+  timestamp: Date;
+  action: TaskHistoryAction;
+  performedBy: string; // user ID
+  performedByName: string; // user name
+  details?: string; // reason or reassign info
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string;
+  assignedToName: string;
+  status: TaskStatus;
+  rejectReason?: string;
+  reassignReason?: string;
+  reassignRequestedTo?: string;
+  reassignRequestedToName?: string;
+  completionSummary?: string;
+  createdAt: Date;
+  history: TaskHistoryItem[];
 }
 
 

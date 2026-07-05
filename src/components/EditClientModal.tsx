@@ -3,9 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X, User, Phone, Mail, ClipboardList, Folder } from 'lucide-react';
-import { updateClient, getUsers, logActivity, createClientEditRequest, getTags } from '../lib/firestore';
+import { updateClient, getUsers, logActivity, createClientEditRequest, getTags, getClientStatuses, createClientStatus } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, User as UserType, Tag } from '../types';
+import type { Client, User as UserType, Tag, CustomStatus } from '../types';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
@@ -18,11 +18,12 @@ const schema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   alternateContact: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
-  status: z.enum(['active', 'inactive', 'lead', 'closed']),
+  status: z.string(),
   assignedAgent: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
   createdAt: z.string().optional(),
   projectName: z.string().optional().or(z.literal('')),
+  leadSource: z.string().optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -78,6 +79,22 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
   const [saving, setSaving] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>(client.tags || []);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [showCustomStatusInput, setShowCustomStatusInput] = useState(false);
+  const [newStatusName, setNewStatusName] = useState('');
+  const [creatingStatus, setCreatingStatus] = useState(false);
+
+  useEffect(() => {
+    const loadStatuses = async () => {
+      try {
+        const list = await getClientStatuses();
+        setCustomStatuses(list);
+      } catch (err) {
+        console.error('Failed to load custom statuses:', err);
+      }
+    };
+    loadStatuses();
+  }, []);
 
   useEffect(() => {
     getTags().then(tags => {
@@ -112,7 +129,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
   const { countryCode, digits } = parseWhatsApp(client.whatsappNumber);
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: client.name,
@@ -126,8 +143,12 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       address: client.address || '',
       createdAt: client.createdAt ? new Date(client.createdAt).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10),
       projectName: client.projectName || '',
+      leadSource: client.leadSource || '',
     },
   });
+
+  const selectedStatus = watch('status');
+  const isLead = selectedStatus?.toLowerCase().includes('lead');
 
   useEffect(() => {
     if (userRole === 'admin') {
@@ -177,6 +198,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         tags: selectedTags,
         createdAt: selectedDate,
         projectName: data.projectName || '',
+        leadSource: isLead ? (data.leadSource || '') : '',
       };
 
       if (userRole === 'admin') {
@@ -387,15 +409,130 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                     id="client-status-select"
                     className="form-input form-select"
                     style={{ paddingLeft: '2.5rem' }}
-                    {...register('status')}
+                    {...register('status', {
+                      onChange: (e) => {
+                        if (e.target.value === 'add-custom-status') {
+                          setShowCustomStatusInput(true);
+                          // Temporarily restore the select value to match client status so form is not dirty/invalid
+                          setValue('status', client.status);
+                        }
+                      }
+                    })}
                   >
                     <option value="active">Active</option>
                     <option value="lead">Lead</option>
                     <option value="inactive">Inactive</option>
                     <option value="closed">Closed</option>
+                    {customStatuses.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                    <option value="add-custom-status">+ Add Custom Status...</option>
                   </select>
                 </div>
+                {showCustomStatusInput && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    marginTop: '8px',
+                    padding: '12px',
+                    background: 'var(--color-bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px dashed var(--color-border)'
+                  }}>
+                    <label className="form-label required" htmlFor="new-status-name-input" style={{ fontSize: 'var(--font-size-xs)' }}>
+                      New Custom Status Name
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        id="new-status-name-input"
+                        type="text"
+                        className="form-input"
+                        style={{ flex: 1, padding: '6px 12px', fontSize: 'var(--font-size-sm)' }}
+                        placeholder="e.g. Follow-up"
+                        value={newStatusName}
+                        onChange={(e) => setNewStatusName(e.target.value)}
+                        maxLength={30}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '0 12px', minHeight: 'auto' }}
+                        disabled={creatingStatus}
+                        onClick={async () => {
+                          const nameTrimmed = newStatusName.trim();
+                          if (!nameTrimmed) {
+                            toast.error('Status name cannot be empty');
+                            return;
+                          }
+                          
+                          // Check for duplicates
+                          const isDup = ['active', 'inactive', 'lead', 'closed'].includes(nameTrimmed.toLowerCase()) ||
+                            customStatuses.some(s => s.name.toLowerCase() === nameTrimmed.toLowerCase());
+                          if (isDup) {
+                            toast.error('This status already exists');
+                            return;
+                          }
+
+                          setCreatingStatus(true);
+                          try {
+                            await createClientStatus(nameTrimmed);
+                            toast.success('Custom status added');
+                            const updatedList = await getClientStatuses();
+                            setCustomStatuses(updatedList);
+                            setValue('status', nameTrimmed, { shouldDirty: true, shouldValidate: true });
+                            setNewStatusName('');
+                            setShowCustomStatusInput(false);
+                          } catch (err) {
+                            console.error('Failed to create status:', err);
+                            toast.error('Failed to create status');
+                          } finally {
+                            setCreatingStatus(false);
+                          }
+                        }}
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0 12px', minHeight: 'auto' }}
+                        onClick={() => {
+                          setShowCustomStatusInput(false);
+                          setNewStatusName('');
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {isLead && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="client-lead-source-input">Lead Source</label>
+                  <input
+                    id="client-lead-source-input"
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Google, Facebook, Instagram, Referral"
+                    list="edit-lead-sources-list"
+                    {...register('leadSource')}
+                  />
+                  <datalist id="edit-lead-sources-list">
+                    <option value="Google Search" />
+                    <option value="Facebook Ads" />
+                    <option value="Instagram" />
+                    <option value="LinkedIn" />
+                    <option value="Referral" />
+                    <option value="Cold Call" />
+                    <option value="WhatsApp" />
+                    <option value="Website" />
+                    <option value="Event/Exhibition" />
+                  </datalist>
+                </div>
+              )}
 
               {/* Assigned Agent (Admin Only) */}
               {isAdmin ? (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Settings, Menu } from 'lucide-react';
+import { LogOut, Settings, Menu, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import logo from '../../assets/logo.png';
 
@@ -14,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
+  const isTasksPage = location.pathname === '/tasks';
 
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -66,8 +67,23 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
 
       {/* User badge */}
       {userProfile && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
-          {userRole === 'admin' && !isAdminPage && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          {userRole === 'agent' && (
+            <button
+              onClick={() => navigate('/tasks')}
+              className={`btn btn-secondary btn-sm ${location.pathname === '/tasks' ? 'btn-primary' : ''}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <ClipboardList size={15} />
+              <span>Tasks</span>
+            </button>
+          )}
+
+          {userRole === 'admin' && !isAdminPage && !isTasksPage && (
             <button
               onClick={() => navigate('/admin/agents')}
               className="btn btn-primary btn-sm"

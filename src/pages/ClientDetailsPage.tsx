@@ -4,7 +4,8 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
-  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload
+  MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload,
+  Share2
 } from 'lucide-react';
 import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags } from '../lib/firestore';
 import { logActivity } from '../lib/firestore';
@@ -860,6 +861,13 @@ const ClientDetailsPage: React.FC = () => {
             <div className="client-meta-item">
               <MapPin size={16} style={{ flexShrink: 0 }} />
               <span className="truncate" title={client.address}>{client.address}</span>
+            </div>
+          )}
+
+          {client.leadSource && (
+            <div className="client-meta-item" title={`Lead Source: ${client.leadSource}`}>
+              <Share2 size={16} style={{ flexShrink: 0, color: 'var(--color-accent)' }} />
+              <span className="truncate">Source: <strong>{client.leadSource}</strong></span>
             </div>
           )}
 

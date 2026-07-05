@@ -93,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/analytics" icon={BarChart3} label="Lead Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/duration" icon={Clock} label="Staff Durations" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />

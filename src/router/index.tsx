@@ -20,6 +20,7 @@ import AdminTagsPage from '../pages/admin/AdminTagsPage';
 import StaffDurationPage from '../pages/admin/StaffDurationPage';
 import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
 import LeadAnalyticsPage from '../pages/admin/LeadAnalyticsPage';
+import TasksPage from '../pages/TasksPage';
 
 const router = createBrowserRouter([
   {
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
           { path: '/clients/new', element: <NewClientFormPage /> },
           { path: '/clients/:id', element: <ClientDetailsPage /> },
           { path: '/clients/:id/summary', element: <AddSummaryPage /> },
+          { path: '/tasks', element: <TasksPage /> },
           {
             element: <ProtectedRoute requiredRole="admin" />,
             children: [

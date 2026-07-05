@@ -1,6 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import type { FilterOptions, Tag } from '../../types';
+import type { FilterOptions, Tag, User, CustomStatus } from '../../types';
 
 interface ClientFiltersProps {
   filters: FilterOptions;
@@ -8,9 +8,11 @@ interface ClientFiltersProps {
   onClose: () => void;
   onClear: () => void;
   allTags: Tag[];
+  agents: User[];
+  customStatuses?: CustomStatus[];
 }
 
-const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear, allTags = [] }) => {
+const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear, allTags = [], agents = [], customStatuses = [] }) => {
   const set = (key: keyof FilterOptions, value: string) =>
     onChange({ ...filters, [key]: value });
 
@@ -22,6 +24,25 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClos
       </div>
 
       <div className="filter-drawer-body">
+
+        {/* Assigned Agent */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="filter-agent">Assigned Agent</label>
+          <select
+            id="filter-agent"
+            className="form-input form-select"
+            value={filters.agentId}
+            onChange={(e) => set('agentId', e.target.value)}
+          >
+            <option value="">All Agents</option>
+            <option value="unassigned">Unassigned</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Client Status */}
         <div className="form-group">
@@ -37,6 +58,9 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClos
             <option value="inactive">Inactive</option>
             <option value="lead">Lead</option>
             <option value="closed">Closed</option>
+            {customStatuses.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
           </select>
         </div>
 

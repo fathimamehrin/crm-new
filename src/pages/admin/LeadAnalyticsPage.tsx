@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getClients, getUsers, getTags } from '../../lib/firestore';
 import { format, subDays, startOfDay, isAfter, isBefore, startOfWeek } from 'date-fns';
 import { Users, TrendingUp, BarChart3, PieChart, Calendar, UserCheck, Tag as TagIcon, CheckCircle } from 'lucide-react';
@@ -23,6 +24,7 @@ interface AgentLeadPerformance {
 }
 
 const LeadAnalyticsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<AppUser[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -98,7 +100,7 @@ const LeadAnalyticsPage: React.FC = () => {
   // Compute metrics and analytics
   const getAnalytics = () => {
     const totalLeads = filteredClients.length;
-    const statusCounts = { lead: 0, active: 0, closed: 0, inactive: 0 };
+    const statusCounts: Record<string, number> = { lead: 0, active: 0, closed: 0, inactive: 0 };
 
     filteredClients.forEach(c => {
       if (c.status in statusCounts) {
@@ -207,6 +209,37 @@ const LeadAnalyticsPage: React.FC = () => {
       .filter(item => item.total > 0)
       .sort((a, b) => b.total - a.total);
 
+    // Lead source performance map
+    const sourcePerformanceMap: Record<string, { name: string; total: number; converted: number; statuses: Record<string, number> }> = {};
+
+    filteredClients.forEach(c => {
+      const source = c.leadSource ? c.leadSource.trim() : 'Unknown';
+      const sourceKey = source.toLowerCase();
+      if (!sourcePerformanceMap[sourceKey]) {
+        sourcePerformanceMap[sourceKey] = { name: source, total: 0, converted: 0, statuses: {} };
+      }
+      sourcePerformanceMap[sourceKey].total++;
+      if (c.status === 'active' || c.status === 'closed') {
+        sourcePerformanceMap[sourceKey].converted++;
+      }
+      
+      const statusLabel = c.status.charAt(0).toUpperCase() + c.status.slice(1);
+      if (!sourcePerformanceMap[sourceKey].statuses[statusLabel]) {
+        sourcePerformanceMap[sourceKey].statuses[statusLabel] = 0;
+      }
+      sourcePerformanceMap[sourceKey].statuses[statusLabel]++;
+    });
+
+    const sourcePerformanceList = Object.values(sourcePerformanceMap)
+      .map(item => ({
+        name: item.name,
+        total: item.total,
+        converted: item.converted,
+        statuses: item.statuses,
+        rate: item.total > 0 ? Math.round((item.converted / item.total) * 100) : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       totalLeads,
       statusCounts,
@@ -215,6 +248,7 @@ const LeadAnalyticsPage: React.FC = () => {
       conicGradientStyle,
       timeSeriesList,
       agentPerformanceList,
+      sourcePerformanceList,
     };
   };
 
@@ -526,7 +560,12 @@ const LeadAnalyticsPage: React.FC = () => {
                 {analytics.agentPerformanceList.map((row) => {
                   
                   return (
-                    <tr key={row.id}>
+                    <tr 
+                      key={row.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate('/admin/clients', { state: { agentId: row.id, status: '' } })}
+                      title={`View clients for ${row.name}`}
+                    >
                       <td data-label="Agent Name">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                           <div className="avatar avatar-sm">{row.name.charAt(0).toUpperCase()}</div>
@@ -558,6 +597,91 @@ const LeadAnalyticsPage: React.FC = () => {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Lead Source Performance Table */}
+      <div className="card" style={{ padding: 0, marginTop: 'var(--space-6)' }}>
+        <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="card-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <TrendingUp size={16} style={{ color: 'var(--color-accent)' }} /> Lead Source Performance & Conversion Funnel
+          </h3>
+          <span className="badge badge-muted text-xs">{analytics.sourcePerformanceList.length} sources tracked</span>
+        </div>
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-10)' }}>
+            <div className="spinner" />
+          </div>
+        ) : analytics.sourcePerformanceList.length === 0 ? (
+          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
+            <h3 className="empty-state-title">No Lead Source Data</h3>
+            <p className="empty-state-desc">There are no leads with source information in this range.</p>
+          </div>
+        ) : (
+          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Source Channel</th>
+                  <th style={{ textAlign: 'center' }}>Total Leads</th>
+                  <th style={{ textAlign: 'center' }}>Leads Converted</th>
+                  <th>Conversion Funnel</th>
+                  <th style={{ textAlign: 'right' }}>Conversion Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.sourcePerformanceList.map((row, idx) => (
+                  <tr key={idx}>
+                    <td data-label="Source Channel">
+                      <div className="font-semibold text-sm text-primary">{row.name}</div>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                        {Object.entries(row.statuses).map(([statusName, count]) => {
+                          let badgeClass = 'badge-muted';
+                          const lowerStatus = statusName.toLowerCase();
+                          if (lowerStatus === 'active') badgeClass = 'badge-success';
+                          else if (lowerStatus === 'lead') badgeClass = 'badge-warning';
+                          else if (lowerStatus === 'closed') badgeClass = 'badge-danger';
+                          
+                          return (
+                            <span 
+                              key={statusName} 
+                              className={`badge ${badgeClass}`} 
+                              style={{ fontSize: '9px', padding: '1px 5px', textTransform: 'capitalize' }}
+                            >
+                              {statusName}: {count}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td data-label="Total Leads" style={{ textAlign: 'center' }} className="monospaced font-medium">
+                      {row.total}
+                    </td>
+                    <td data-label="Leads Converted" style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
+                      {row.converted}
+                    </td>
+                    <td data-label="Conversion Funnel">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <div className="leaderboard-bar-bg" style={{ flex: 1, height: 6 }}>
+                          <div 
+                            className="leaderboard-bar-fill" 
+                            style={{ 
+                              width: `${row.rate}%`, 
+                              background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td data-label="Conversion Rate" style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
+                      {row.rate}%
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

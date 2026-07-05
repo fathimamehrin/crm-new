@@ -3,16 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getClients, getUsers, getTags, getAllSummaries,
+  getClients, getUsers, getTags, getAllSummaries, getClientStatuses,
 } from '../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User, Tag } from '../types';
+import type { Client, FilterOptions, User, Tag, CustomStatus } from '../types';
 import { format } from 'date-fns';
 
 import ClientTable from '../components/ClientTable/ClientTable';
 import ClientFilters from '../components/ClientTable/ClientFilters';
 import Pagination from '../components/Pagination';
 import AddClientModal from '../components/AddClientModal';
+import CalendarView from '../components/CalendarView';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -52,6 +53,9 @@ const DashboardPage: React.FC = () => {
   const [totalClients, setTotalClients] = useState(0);
   const PAGE_SIZE = 25;
 
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+  const [allFilteredClients, setAllFilteredClients] = useState<Client[]>([]);
+
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
     agentId: '',
@@ -64,6 +68,7 @@ const DashboardPage: React.FC = () => {
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
 
   // Snippet generator
   const matchSnippet = (text: string, q: string): string | null => {
@@ -193,6 +198,7 @@ const DashboardPage: React.FC = () => {
 
         setSearchResults(results);
         setTotalClients(results.length);
+        setAllFilteredClients(results.map(r => r.client));
       } else {
         // Fallback to basic date filtering for client list when search is empty
         let filtered = data;
@@ -207,6 +213,7 @@ const DashboardPage: React.FC = () => {
         const start = (page - 1) * PAGE_SIZE;
         setClients(filtered.slice(start, start + PAGE_SIZE));
         setSearchResults([]);
+        setAllFilteredClients(filtered);
       }
     } catch {
       toast.error('Failed to load clients');
@@ -222,6 +229,7 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     getUsers('agent').then(setAgents).catch(() => {});
     getTags().then(setAllTags).catch(() => {});
+    getClientStatuses().then(setCustomStatuses).catch(() => {});
   }, []);
 
   return (
@@ -267,6 +275,26 @@ const DashboardPage: React.FC = () => {
             />
           </div>
 
+          {/* View Mode Toggle */}
+          <div className="tabs" style={{ marginLeft: 'var(--space-2)' }}>
+            <button
+              type="button"
+              className={`tab-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              className={`tab-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+              onClick={() => setViewMode('calendar')}
+              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
+            >
+              Calendar
+            </button>
+          </div>
+
           {/* Filter button */}
           <button
             id="filter-btn"
@@ -293,6 +321,10 @@ const DashboardPage: React.FC = () => {
         {loading ? (
           <div style={{ padding: 'var(--space-12)', display: 'flex', justifyContent: 'center' }}>
             <div className="spinner spinner-lg" />
+          </div>
+        ) : viewMode === 'calendar' ? (
+          <div style={{ padding: 'var(--space-5)' }}>
+            <CalendarView clients={allFilteredClients} isAdminView={false} />
           </div>
         ) : filters.search ? (
           searchResults.length === 0 ? (
@@ -434,6 +466,8 @@ const DashboardPage: React.FC = () => {
               setPage(1);
             }}
             allTags={allTags}
+            agents={agents}
+            customStatuses={customStatuses}
           />
         </>
       )}
