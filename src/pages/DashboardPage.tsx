@@ -59,7 +59,7 @@ const DashboardPage: React.FC = () => {
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
     agentId: '',
-    status: 'active',
+    status: '',
     paymentStatus: '',
     dateFrom: '',
     dateTo: '',

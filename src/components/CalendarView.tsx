@@ -52,6 +52,97 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        .calendar-layout-grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: var(--space-5);
+          align-items: start;
+        }
+        .calendar-grid-wrapper {
+          grid-column: 1 / span 8;
+        }
+        .calendar-detail-panel {
+          grid-column: 9 / span 4;
+        }
+        .calendar-days-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          grid-auto-rows: minmax(96px, 1fr);
+          border-top: 1px solid var(--color-border);
+          border-left: 1px solid var(--color-border);
+        }
+        .calendar-event-pill {
+          font-size: 0.675rem;
+          padding: 2px 6px;
+          border-radius: 4px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 550;
+          text-align: left;
+        }
+        .calendar-event-more {
+          font-size: 0.625rem;
+          color: var(--color-text-muted);
+          font-weight: 650;
+          text-align: left;
+          padding-left: 6px;
+        }
+        .calendar-day-events-container {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          flex: 1;
+          overflow: hidden;
+          margin-top: 4px;
+        }
+
+        @media (max-width: 1024px) {
+          .calendar-layout-grid {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-5);
+            width: 100%;
+          }
+          .calendar-grid-wrapper,
+          .calendar-detail-panel {
+            width: 100%;
+            grid-column: auto;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .calendar-detail-panel {
+            padding: 16px !important;
+            min-height: auto !important;
+          }
+          .calendar-days-grid {
+            grid-auto-rows: minmax(64px, 1fr);
+          }
+          .event-pill-name {
+            display: none;
+          }
+          .calendar-event-pill {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            padding: 0 !important;
+            min-height: auto;
+            border: none !important;
+          }
+          .calendar-event-more {
+            display: none;
+          }
+          .calendar-day-events-container {
+            flex-direction: row;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 4px;
+          }
+        }
+      `}} />
+
       {/* Calendar Top Controls */}
       <div 
         style={{ 
@@ -101,10 +192,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
       </div>
 
       {/* Main Grid: Calendar left, Side detail panel right */}
-      <div className="grid grid-3" style={{ gridTemplateColumns: 'repeat(12, 1fr)', gap: 'var(--space-5)', alignItems: 'start' }}>
+      <div className="calendar-layout-grid">
         
         {/* Monthly Grid Table Wrapper */}
-        <div className="card" style={{ gridColumn: '1 / span 8', padding: '16px', overflow: 'hidden' }}>
+        <div className="card calendar-grid-wrapper" style={{ padding: '16px', overflow: 'hidden' }}>
           {/* Weekdays Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: '8px' }}>
             {WEEKDAYS.map((dayName) => (
@@ -125,15 +216,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
           </div>
 
           {/* Days Grid */}
-          <div 
-            style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(7, 1fr)', 
-              gridAutoRows: 'minmax(96px, 1fr)',
-              borderTop: '1px solid var(--color-border)',
-              borderLeft: '1px solid var(--color-border)'
-            }}
-          >
+          <div className="calendar-days-grid">
             {days.map((day, idx) => {
               const dayClients = getClientsForDay(day);
               const isSelected = isSameDay(day, selectedDate);
@@ -210,14 +293,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
                   </div>
 
                   {/* Day Clients Events Pills */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, overflow: 'hidden', marginTop: '4px' }}>
+                  <div className="calendar-day-events-container">
                     {dayClients.slice(0, 2).map((c) => (
                       <div
                         key={c.id}
+                        className="calendar-event-pill"
                         style={{
-                          fontSize: '0.675rem',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
                           background: c.status.toLowerCase() === 'active' 
                             ? 'rgba(16, 185, 129, 0.12)' 
                             : (c.status.toLowerCase().includes('lead') ? 'rgba(245, 158, 11, 0.12)' : 'var(--color-bg-secondary)'),
@@ -227,26 +308,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
                           border: c.status.toLowerCase() === 'active'
                             ? '1px solid rgba(16, 185, 129, 0.2)'
                             : (c.status.toLowerCase().includes('lead') ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid var(--color-border)'),
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          fontWeight: 550,
-                          textAlign: 'left'
                         }}
                       >
-                        {c.name}
+                        <span className="event-pill-name">{c.name}</span>
                       </div>
                     ))}
                     {dayClients.length > 2 && (
-                      <div 
-                        style={{ 
-                          fontSize: '0.625rem', 
-                          color: 'var(--color-text-muted)', 
-                          fontWeight: 650, 
-                          textAlign: 'left',
-                          paddingLeft: '6px'
-                        }}
-                      >
+                      <div className="calendar-event-more">
                         +{dayClients.length - 2} more
                       </div>
                     )}
@@ -259,7 +327,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
 
         {/* Selected Day Clients Panel */}
         <div 
-          className="card" 
+          className="card calendar-detail-panel" 
           style={{ 
             gridColumn: '9 / span 4', 
             minHeight: '400px', 

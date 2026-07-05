@@ -51,7 +51,7 @@ const AdminClientsPage: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const statusParam = params.get('status');
     if (statusParam !== null) return statusParam as any;
-    return 'active'; // Default active status
+    return ''; // Default empty (All Statuses)
   };
 
   const [clients, setClients] = useState<Client[]>([]);

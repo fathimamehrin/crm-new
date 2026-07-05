@@ -3066,6 +3066,53 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 2px currentColor;
 }
 
+/* ─── Global Mobile Responsive Table & Stacking Rules ────────────────────────── */
+@media (max-width: 768px) {
+  /* Prevent squeezing and force minimum width for horizontal scrollable fallback */
+  .table-wrapper {
+    overflow-x: auto !important;
+    display: block;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table {
+    min-width: 750px !important; /* Force minimum width to prevent cell squeezing */
+  }
+
+  /* Support for Stacking Tables */
+  .table-responsive-stack thead {
+    display: none !important; /* Hide column headers */
+  }
+  .table-responsive-stack tr {
+    display: block !important;
+    border-bottom: 2px solid var(--color-border) !important;
+    padding: 12px 0 !important;
+  }
+  .table-responsive-stack td {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    border-bottom: none !important;
+    padding: 8px 16px !important;
+    text-align: right !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .table-responsive-stack td::before {
+    content: attr(data-label);
+    font-weight: 650;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-align: left;
+    margin-right: 12px;
+  }
+  .table-responsive-stack td:last-child {
+    text-align: right !important;
+  }
+}
+
 
 
 
