@@ -287,7 +287,15 @@ const NewClientFormPage: React.FC = () => {
           toast.success('Existing client found. Redirecting to profile...');
         }
       } else {
-        const selectedDate = data.createdAt ? new Date(data.createdAt + 'T00:00:00') : new Date();
+        let selectedDate = new Date();
+        if (data.createdAt) {
+          const parts = data.createdAt.split('-');
+          if (parts.length === 3) {
+            selectedDate.setFullYear(parseInt(parts[0], 10));
+            selectedDate.setMonth(parseInt(parts[1], 10) - 1);
+            selectedDate.setDate(parseInt(parts[2], 10));
+          }
+        }
         const now = new Date();
         clientId = await createClient({
           name: data.name,

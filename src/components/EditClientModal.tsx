@@ -186,7 +186,15 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         }
       }
 
-      const selectedDate = data.createdAt ? new Date(data.createdAt + 'T00:00:00') : new Date();
+      let selectedDate = client.createdAt ? new Date(client.createdAt) : new Date();
+      if (data.createdAt) {
+        const parts = data.createdAt.split('-');
+        if (parts.length === 3) {
+          selectedDate.setFullYear(parseInt(parts[0], 10));
+          selectedDate.setMonth(parseInt(parts[1], 10) - 1);
+          selectedDate.setDate(parseInt(parts[2], 10));
+        }
+      }
       const updatedFields: Partial<Client> & { createdAt?: Date } = {
         name: data.name,
         whatsappNumber: fullWhatsAppNumber,
