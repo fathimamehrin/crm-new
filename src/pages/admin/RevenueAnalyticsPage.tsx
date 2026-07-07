@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getAllSummaries, getUsers } from '../../lib/firestore';
 import { format, subDays, startOfDay, isAfter, isBefore } from 'date-fns';
 import { DollarSign, Search, TrendingUp } from 'lucide-react';
@@ -530,7 +530,7 @@ const RevenueAnalyticsPage: React.FC = () => {
                     </div>
                     <span 
                       className="font-bold text-sm monospaced" 
-                      style={{ color: STATUS_COLOR[row.status], background: `${STATUS_COLOR[row.status]}10`, padding: '4px 10px', borderRadius: 'var(--radius-sm)' }}
+                      style={{ color: STATUS_COLOR[row.status], background: `color-mix(in srgb, ${STATUS_COLOR[row.status]} 10%, transparent)`, padding: '4px 10px', borderRadius: 'var(--radius-sm)' }}
                     >
                       ₹{row.amount.toLocaleString('en-IN')}
                     </span>

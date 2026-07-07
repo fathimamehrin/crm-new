@@ -228,7 +228,7 @@ const AgentDetailsPage: React.FC = () => {
                   const slNo = index + 1;
                   const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
                   const statusColor = statusObj?.color || 'transparent';
-                  const rowBg = statusColor !== 'transparent' ? `${statusColor}10` : undefined;
+                  const rowBg = statusColor !== 'transparent' ? `color-mix(in srgb, ${statusColor} 10%, transparent)` : undefined;
                   const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
 
                   return (
@@ -236,7 +236,7 @@ const AgentDetailsPage: React.FC = () => {
                       key={client.id}
                       style={{ 
                         cursor: 'pointer',
-                        backgroundColor: rowBg
+                        background: rowBg
                       }}
                       onClick={() => navigate(`/admin/clients/${client.id}`)}
                     >
@@ -349,7 +349,7 @@ const AgentDetailsPage: React.FC = () => {
               const slNo = index + 1;
               const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
               const statusColor = statusObj?.color || 'transparent';
-              const cardBg = statusColor !== 'transparent' ? `${statusColor}10` : 'var(--color-bg-card)';
+              const cardBg = statusColor !== 'transparent' ? `color-mix(in srgb, ${statusColor} 8%, var(--color-bg-card))` : 'var(--color-bg-card)';
               const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
 
               return (

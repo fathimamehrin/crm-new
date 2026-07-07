@@ -86,7 +86,7 @@ const ClientTable: React.FC<ClientTableProps> = ({
               const statusColor = statusObj?.color || 'transparent';
               
               // Full-tile background tint (using ~6% opacity) & left status color border
-              const rowBg = statusColor !== 'transparent' ? `${statusColor}10` : undefined;
+              const rowBg = statusColor !== 'transparent' ? `color-mix(in srgb, ${statusColor} 10%, transparent)` : undefined;
               const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
 
               return (
@@ -94,7 +94,7 @@ const ClientTable: React.FC<ClientTableProps> = ({
                   key={client.id}
                   style={{ 
                     cursor: 'pointer',
-                    backgroundColor: rowBg
+                    background: rowBg
                   }}
                   onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
                 >
@@ -251,7 +251,7 @@ const ClientTable: React.FC<ClientTableProps> = ({
           const statusColor = statusObj?.color || 'transparent';
 
           // Full-card background tint (using ~6% opacity) & left status color border
-          const cardBg = statusColor !== 'transparent' ? `${statusColor}10` : 'var(--color-bg-card)';
+          const cardBg = statusColor !== 'transparent' ? `color-mix(in srgb, ${statusColor} 8%, var(--color-bg-card))` : 'var(--color-bg-card)';
           const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
 
           return (
