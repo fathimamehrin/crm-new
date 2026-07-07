@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => setShowMore(false)}
               >
                 <Calendar size={18} />
-                <span>Lead Calendar</span>
+                <span>Calendar</span>
               </NavLink>
 
               <NavLink 

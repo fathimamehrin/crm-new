@@ -72,7 +72,7 @@ const AdminCalendarPage: React.FC = () => {
         </button>
         <div className="page-header" style={{ marginBottom: 0 }}>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CalendarIcon size={24} style={{ color: 'var(--color-accent)' }} /> Lead Calendar
+            <CalendarIcon size={24} style={{ color: 'var(--color-accent)' }} /> Calendar
           </h1>
           <p className="page-subtitle">Interactive Google Calendar overview of your lead operations</p>
         </div>
