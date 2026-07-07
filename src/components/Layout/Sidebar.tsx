@@ -4,7 +4,7 @@ import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
   Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3,
-  Sliders, Share2
+  Sliders, Share2, Calendar
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -90,6 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {userRole === 'admin' && (
               <>
                 <NavItem to="/admin/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/admin/calendar" icon={Calendar} label="Calendar" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
@@ -141,6 +142,14 @@ const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
             <div className="mobile-drawer-body">
+              <NavLink 
+                to="/admin/calendar" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <Calendar size={18} />
+                <span>Lead Calendar</span>
+              </NavLink>
 
               <NavLink 
                 to="/admin/agents" 
