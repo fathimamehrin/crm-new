@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Check, X, ArrowLeftRight, ClipboardList, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getClients, getUsers, getTags, getAllSummaries, getClientStatuses,
+  getClients, getUsers, getTags, getAllSummaries, getClientStatuses, getLeadSources, getTasks, updateTaskStatus, reassignTaskRequest
 } from '../lib/firestore';
 import { where } from 'firebase/firestore';
-import type { Client, FilterOptions, User, Tag, CustomStatus } from '../types';
+import type { Client, FilterOptions, User, Tag, CustomStatus, LeadSource, Task } from '../types';
 import { format } from 'date-fns';
 
 import ClientTable from '../components/ClientTable/ClientTable';
@@ -16,12 +16,6 @@ import AddClientModal from '../components/AddClientModal';
 import CalendarView from '../components/CalendarView';
 import toast from 'react-hot-toast';
 
-const STATUS_BADGE: Record<string, string> = {
-  active: 'badge-success',
-  inactive: 'badge-muted',
-  lead: 'badge-warning',
-  closed: 'badge-danger',
-};
 
 interface SearchMatch {
   type: 'client_info' | 'summary';
@@ -64,11 +58,131 @@ const DashboardPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     tags: [],
+    leadSource: '',
   });
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
+
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [activeTaskTab, setActiveTaskTab] = useState<'assigned' | 'verify'>('assigned');
+
+  // Modal dialog states for task actions
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completionSummary, setCompletionSummary] = useState('');
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassignToUid, setReassignToUid] = useState('');
+  const [reassignReason, setReassignReason] = useState('');
+
+  // Fetch tasks
+  const loadTasks = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const data = await getTasks();
+      setAllTasks(data);
+    } catch (err) {
+      console.error('Failed to load tasks', err);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  // Inline Actions
+  const handleAcceptTask = async (taskId: string) => {
+    if (!currentUser) return;
+    try {
+      await updateTaskStatus(taskId, 'accepted', currentUser.uid, currentUser.displayName || 'Agent');
+      toast.success('Task claimed successfully!');
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to accept task');
+    }
+  };
+
+  const handleOpenReject = (task: Task) => {
+    setSelectedTask(task);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleRejectTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !currentUser) return;
+    try {
+      await updateTaskStatus(selectedTask.id, 'rejected', currentUser.uid, currentUser.displayName || 'Agent', rejectReason);
+      toast.success('Task rejected successfully');
+      setShowRejectModal(false);
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to reject task');
+    }
+  };
+
+  const handleOpenComplete = (task: Task) => {
+    setSelectedTask(task);
+    setCompletionSummary('');
+    setShowCompleteModal(true);
+  };
+
+  const handleCompleteTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !currentUser) return;
+    try {
+      await updateTaskStatus(selectedTask.id, 'completed', currentUser.uid, currentUser.displayName || 'Agent', undefined, completionSummary);
+      toast.success('Task marked completed successfully!');
+      setShowCompleteModal(false);
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to complete task');
+    }
+  };
+
+  const handleOpenReassign = (task: Task) => {
+    setSelectedTask(task);
+    setReassignToUid('');
+    setReassignReason('');
+    setShowReassignModal(true);
+  };
+
+  const handleRequestReassignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !currentUser) return;
+    const targetAgent = agents.find(u => u.id === reassignToUid);
+    if (!targetAgent) return;
+    try {
+      await reassignTaskRequest(
+        selectedTask.id,
+        targetAgent.id,
+        targetAgent.name,
+        reassignReason,
+        currentUser.uid,
+        currentUser.displayName || 'Agent'
+      );
+      toast.success('Reassignment request sent to creator!');
+      setShowReassignModal(false);
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to request reassignment');
+    }
+  };
+
+  const handleVerifyTask = async (taskId: string) => {
+    if (!currentUser) return;
+    try {
+      await updateTaskStatus(taskId, 'verified', currentUser.uid, currentUser.displayName || 'Agent');
+      toast.success('Task verified & officially closed!');
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to verify task');
+    }
+  };
   const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [allSources, setAllSources] = useState<LeadSource[]>([]);
 
   // Snippet generator
   const matchSnippet = (text: string, q: string): string | null => {
@@ -113,6 +227,7 @@ const DashboardPage: React.FC = () => {
       }
       if (filters.agentId) constraints.push(where('assignedAgent', '==', filters.agentId));
       if (filters.status) constraints.push(where('status', '==', filters.status));
+      if (filters.leadSource) constraints.push(where('leadSource', '==', filters.leadSource));
 
       const [clientsRes, summariesData] = await Promise.all([
         getClients(constraints, 500),
@@ -227,17 +342,47 @@ const DashboardPage: React.FC = () => {
   }, [loadClients]);
 
   useEffect(() => {
-    getUsers('agent').then(setAgents).catch(() => {});
+    getUsers().then(setAgents).catch(() => {});
     getTags().then(setAllTags).catch(() => {});
     getClientStatuses().then(setCustomStatuses).catch(() => {});
+    getLeadSources().then(setAllSources).catch(() => {});
   }, []);
+
+  const isFilterApplied = !!(
+    filters.status ||
+    filters.leadSource ||
+    (filters.tags && filters.tags.length > 0) ||
+    filters.search ||
+    filters.agentId ||
+    filters.paymentStatus ||
+    filters.dateFrom ||
+    filters.dateTo
+  );
 
   return (
     <div>
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">Dashboard</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <h1 className="page-title">Dashboard</h1>
+            {isFilterApplied && (
+              <span 
+                className="badge" 
+                style={{ 
+                  backgroundColor: 'var(--color-accent-light)', 
+                  color: 'var(--color-accent)', 
+                  border: '1px solid var(--color-accent)', 
+                  fontSize: '12px', 
+                  padding: '4px 12px', 
+                  borderRadius: '100px', 
+                  fontWeight: 750 
+                }}
+              >
+                Filtered Match: {totalClients} {totalClients === 1 ? 'lead' : 'leads'}
+              </span>
+            )}
+          </div>
           <p className="page-subtitle">Manage and track all your clients</p>
         </div>
         <button
@@ -248,6 +393,119 @@ const DashboardPage: React.FC = () => {
           <Plus size={18} />
           <span className="desktop-only">Add Client</span>
         </button>
+      </div>
+
+      {/* Agent's Task Queue Section */}
+      <div className="card" style={{ padding: 'var(--space-5)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', marginBottom: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ClipboardList size={20} style={{ color: 'var(--color-accent)' }} />
+            <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--color-text-primary)' }}>My Operations Task Queue</h3>
+          </div>
+          <div className="tabs" style={{ margin: 0 }}>
+            <button
+              className={`tab-btn ${activeTaskTab === 'assigned' ? 'active' : ''}`}
+              onClick={() => setActiveTaskTab('assigned')}
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+            >
+              Assigned to Me ({allTasks.filter(t => t.assignedTo === currentUser?.uid && t.status !== 'verified').length})
+            </button>
+            <button
+              className={`tab-btn ${activeTaskTab === 'verify' ? 'active' : ''}`}
+              onClick={() => setActiveTaskTab('verify')}
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+            >
+              Verify Completed ({allTasks.filter(t => t.createdBy === currentUser?.uid && t.status === 'completed').length})
+            </button>
+          </div>
+        </div>
+
+        {activeTaskTab === 'assigned' ? (
+          (() => {
+            const myTasksList = allTasks.filter(t => t.assignedTo === currentUser?.uid && t.status !== 'verified');
+            if (myTasksList.length === 0) {
+              return <p className="text-muted text-xs text-center" style={{ padding: 'var(--space-4)' }}>No pending tasks assigned to you.</p>;
+            }
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {myTasksList.map((task) => (
+                  <div key={task.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>{task.title}</h4>
+                        <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{task.description}</p>
+                      </div>
+                      <span className={`badge badge-${task.status === 'accepted' ? 'primary' : task.status === 'rejected' ? 'danger' : 'accent'}`} style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 750 }}>
+                        {task.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <span className="text-xs text-muted">Created by: <strong>{task.createdByName}</strong></span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {task.status === 'pending_acceptance' && (
+                          <>
+                            <button className="btn btn-secondary btn-sm" style={{ padding: '3px 8px', fontSize: '11px', color: 'var(--color-success)' }} onClick={() => handleAcceptTask(task.id)}>
+                              <Check size={12} /> Claim
+                            </button>
+                            <button className="btn btn-secondary btn-sm" style={{ padding: '3px 8px', fontSize: '11px', color: 'var(--color-danger)' }} onClick={() => handleOpenReject(task)}>
+                              <X size={12} /> Reject
+                            </button>
+                          </>
+                        )}
+                        {task.status === 'accepted' && (
+                          <>
+                            <button className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => handleOpenComplete(task)}>
+                              <CheckCircle2 size={12} /> Complete
+                            </button>
+                            <button className="btn btn-secondary btn-sm" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => handleOpenReassign(task)}>
+                              <ArrowLeftRight size={12} /> Reassign
+                            </button>
+                          </>
+                        )}
+                        {task.status === 'pending_reassignment' && (
+                          <span className="text-xs text-muted italic">Reassignment approval pending...</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()
+        ) : (
+          (() => {
+            const verifyList = allTasks.filter(t => t.createdBy === currentUser?.uid && t.status === 'completed');
+            if (verifyList.length === 0) {
+              return <p className="text-muted text-xs text-center" style={{ padding: 'var(--space-4)' }}>No tasks completed by others awaiting your verification.</p>;
+            }
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {verifyList.map((task) => (
+                  <div key={task.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>{task.title}</h4>
+                        <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{task.description}</p>
+                      </div>
+                      <button className="btn btn-success btn-sm" style={{ fontSize: '11px', padding: '4px 10px', background: 'var(--color-success)', color: '#fff' }} onClick={() => handleVerifyTask(task.id)}>
+                        <Check size={12} /> Verify & Close
+                      </button>
+                    </div>
+                    {task.completionSummary && (
+                      <div style={{ padding: '8px 12px', background: 'var(--color-bg-elevated)', borderRadius: '6px', fontSize: '12px', borderLeft: '3px solid var(--color-success)' }}>
+                        <strong>Assignee Work Summary:</strong> {task.completionSummary}
+                      </div>
+                    )}
+                    <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: '8px', fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Completed by: <strong>{task.assignedToName}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()
+        )}
       </div>
 
       {/* Table Card */}
@@ -390,9 +648,25 @@ const DashboardPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ textTransform: 'capitalize' }}>
-                      {client.status}
-                    </span>
+                    {(() => {
+                      const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                      const statusColor = statusObj?.color || '#6b7280';
+                      return (
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: `${statusColor}1c`,
+                            color: statusColor,
+                            border: `1px solid ${statusColor}33`,
+                            fontWeight: 750,
+                            fontSize: '11px',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          {client.status}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Matching snippets */}
@@ -424,57 +698,188 @@ const DashboardPage: React.FC = () => {
           <>
             {/* Client Table */}
             <ClientTable
-              clients={clients}
-              loading={loading}
-              agents={agents}
-              onRefresh={loadClients}
-              onClearFilters={() => {
-                setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
-                setPage(1);
-              }}
-              allTags={allTags}
-            />
-
-            {/* Pagination */}
-            {totalClients > PAGE_SIZE && (
-              <div style={{ borderTop: '1px solid var(--color-border)', padding: 'var(--space-4)' }}>
-                <Pagination
-                  page={page}
-                  totalPages={Math.ceil(totalClients / PAGE_SIZE)}
-                  onPageChange={setPage}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Filter Drawer */}
-      {showFilters && (
-        <>
-          <div
-            className="filter-drawer-overlay"
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400 }}
-            onClick={() => setShowFilters(false)}
-          />
-          <ClientFilters
-            filters={filters}
-            onChange={(f) => { setFilters(f); setPage(1); }}
-            onClose={() => setShowFilters(false)}
-            onClear={() => {
-              setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
+            clients={clients}
+            loading={loading}
+            agents={agents}
+            onRefresh={loadClients}
+            onClearFilters={() => {
+              setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [], leadSource: '' });
               setPage(1);
             }}
             allTags={allTags}
-            agents={agents}
             customStatuses={customStatuses}
+            allSources={allSources}
+            startIndex={(page - 1) * PAGE_SIZE}
           />
+ 
+          {/* Pagination */}
+          {totalClients > PAGE_SIZE && (
+            <div style={{ borderTop: '1px solid var(--color-border)', padding: 'var(--space-4)' }}>
+              <Pagination
+                page={page}
+                totalPages={Math.ceil(totalClients / PAGE_SIZE)}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </>
       )}
+    </div>
+ 
+    {/* Filter Drawer */}
+    {showFilters && (
+      <>
+        <div
+          className="filter-drawer-overlay"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400 }}
+          onClick={() => setShowFilters(false)}
+        />
+        <ClientFilters
+          filters={filters}
+          onChange={(f) => { setFilters(f); setPage(1); }}
+          onClose={() => setShowFilters(false)}
+          onClear={() => {
+            setFilters({ search: '', agentId: '', status: '', paymentStatus: '', dateFrom: '', dateTo: '', tags: [], leadSource: '' });
+            setPage(1);
+          }}
+          allTags={allTags}
+          agents={agents}
+          customStatuses={customStatuses}
+          allSources={allSources}
+        />
+      </>
+    )}
 
       {/* Add Client Modal */}
       {showAddModal && (
         <AddClientModal onClose={() => setShowAddModal(false)} />
+      )}
+
+      {/* REJECT TASK DIALOG MODAL */}
+      {showRejectModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reject Task</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowRejectModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleRejectTask}>
+              <div className="form-group" style={{ padding: 'var(--space-4) 0' }}>
+                <label className="form-label required" htmlFor="agent-reject-reason-input">Rejection Reason</label>
+                <textarea
+                  id="agent-reject-reason-input"
+                  className="form-input"
+                  rows={3}
+                  placeholder="Provide reason for rejecting this task..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-danger">
+                  Submit Rejection
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETION SUMMARY DIALOG MODAL */}
+      {showCompleteModal && (
+        <div className="modal-overlay" onClick={() => setShowCompleteModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Complete Task</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowCompleteModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleCompleteTask}>
+              <div className="form-group" style={{ padding: 'var(--space-4) 0' }}>
+                <label className="form-label required" htmlFor="agent-completion-summary-input">What did you do?</label>
+                <textarea
+                  id="agent-completion-summary-input"
+                  className="form-input"
+                  rows={4}
+                  placeholder="Summarize task completion details..."
+                  value={completionSummary}
+                  onChange={(e) => setCompletionSummary(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCompleteModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Mark Done
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REASSIGN TASK DIALOG MODAL */}
+      {showReassignModal && (
+        <div className="modal-overlay" onClick={() => setShowReassignModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Request Reassignment</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowReassignModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleRequestReassignment}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: 'var(--space-4) 0' }}>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="agent-reassign-assignee-select">Reassign To</label>
+                  <select
+                     id="agent-reassign-assignee-select"
+                     className="form-input form-select"
+                     value={reassignToUid}
+                     onChange={(e) => setReassignToUid(e.target.value)}
+                     required
+                  >
+                    <option value="">Select Assignee...</option>
+                    {agents
+                      .filter(u => u.id !== currentUser?.uid && u.id !== selectedTask?.assignedTo)
+                      .map(user => (
+                        <option key={user.id} value={user.id}>{user.name} ({user.role})</option>
+                      ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="agent-reassign-reason-input">Reason for Reassignment</label>
+                  <textarea
+                    id="agent-reassign-reason-input"
+                    className="form-input"
+                    rows={3}
+                    placeholder="Provide reason for transfer request..."
+                    value={reassignReason}
+                    onChange={(e) => setReassignReason(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowReassignModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

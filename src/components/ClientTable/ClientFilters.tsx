@@ -1,6 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import type { FilterOptions, Tag, User, CustomStatus } from '../../types';
+import type { FilterOptions, Tag, User, CustomStatus, LeadSource } from '../../types';
 
 interface ClientFiltersProps {
   filters: FilterOptions;
@@ -10,9 +10,19 @@ interface ClientFiltersProps {
   allTags: Tag[];
   agents: User[];
   customStatuses?: CustomStatus[];
+  allSources?: LeadSource[];
 }
 
-const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClose, onClear, allTags = [], agents = [], customStatuses = [] }) => {
+const ClientFilters: React.FC<ClientFiltersProps> = ({ 
+  filters, 
+  onChange, 
+  onClose, 
+  onClear, 
+  allTags = [], 
+  agents = [], 
+  customStatuses = [],
+  allSources = []
+}) => {
   const set = (key: keyof FilterOptions, value: string) =>
     onChange({ ...filters, [key]: value });
 
@@ -54,11 +64,23 @@ const ClientFilters: React.FC<ClientFiltersProps> = ({ filters, onChange, onClos
             onChange={(e) => set('status', e.target.value)}
           >
             <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="lead">Lead</option>
-            <option value="closed">Closed</option>
-            {customStatuses.map(s => (
+            {customStatuses.filter(s => s.status === 'active').map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Lead Source Filter */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="filter-source">Lead Source</label>
+          <select
+            id="filter-source"
+            className="form-input form-select"
+            value={filters.leadSource || ''}
+            onChange={(e) => set('leadSource', e.target.value)}
+          >
+            <option value="">All Lead Sources</option>
+            {allSources.filter(s => s.status === 'active').map(s => (
               <option key={s.id} value={s.name}>{s.name}</option>
             ))}
           </select>

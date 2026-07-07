@@ -3,9 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X, User, Phone, Mail, ClipboardList, Folder } from 'lucide-react';
-import { updateClient, getUsers, logActivity, createClientEditRequest, getTags, getClientStatuses, createClientStatus } from '../lib/firestore';
+import { updateClient, getUsers, logActivity, createClientEditRequest, getTags, getClientStatuses, getLeadSources } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, User as UserType, Tag, CustomStatus } from '../types';
+import type { Client, User as UserType, Tag, CustomStatus, LeadSource } from '../types';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
@@ -80,20 +80,20 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>(client.tags || []);
   const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
-  const [showCustomStatusInput, setShowCustomStatusInput] = useState(false);
-  const [newStatusName, setNewStatusName] = useState('');
-  const [creatingStatus, setCreatingStatus] = useState(false);
+  const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
 
   useEffect(() => {
-    const loadStatuses = async () => {
-      try {
-        const list = await getClientStatuses();
-        setCustomStatuses(list);
-      } catch (err) {
-        console.error('Failed to load custom statuses:', err);
-      }
-    };
-    loadStatuses();
+    getClientStatuses().then(list => {
+      setCustomStatuses(list);
+    }).catch(err => {
+      console.error('Failed to load custom statuses:', err);
+    });
+
+    getLeadSources().then(list => {
+      setLeadSources(list);
+    }).catch(err => {
+      console.error('Failed to load lead sources:', err);
+    });
   }, []);
 
   useEffect(() => {
@@ -204,6 +204,11 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
       if (userRole === 'admin') {
         updatedFields.assignedAgent = data.assignedAgent || '';
         updatedFields.assignedAgentName = assignedAgentName;
+
+        // Track assignment timestamp independently when the agent changes
+        if (data.assignedAgent && data.assignedAgent !== client.assignedAgent) {
+          updatedFields.assignedAt = new Date();
+        }
         
         await updateClient(client.id, updatedFields);
 
@@ -362,38 +367,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 </div>
                 {errors.whatsappNumber && <span className="form-error">{errors.whatsappNumber.message}</span>}
               </div>
-
-              {/* Email */}
-              <div className="form-group">
-                <label className="form-label" htmlFor="client-email-input">Email Address</label>
-                <div className="search-wrapper">
-                  <Mail className="search-icon" size={16} />
-                  <input
-                    id="client-email-input"
-                    type="text"
-                    className={`form-input ${errors.email ? 'error' : ''}`}
-                    placeholder="name@example.com"
-                    {...register('email')}
-                  />
-                </div>
-                {errors.email && <span className="form-error">{errors.email.message}</span>}
-              </div>
-
-              {/* Alternate Contact */}
-              <div className="form-group">
-                <label className="form-label" htmlFor="client-alt-input">Alternate Contact</label>
-                <div className="search-wrapper">
-                  <Phone className="search-icon" size={16} />
-                  <input
-                    id="client-alt-input"
-                    type="tel"
-                    className={`form-input ${errors.alternateContact ? 'error' : ''}`}
-                    placeholder="Alt number / Landline"
-                    {...register('alternateContact')}
-                  />
-                </div>
-                {errors.alternateContact && <span className="form-error">{errors.alternateContact.message}</span>}
-              </div>
             </div>
 
             {/* Right Side fields */}
@@ -409,128 +382,36 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                     id="client-status-select"
                     className="form-input form-select"
                     style={{ paddingLeft: '2.5rem' }}
-                    {...register('status', {
-                      onChange: (e) => {
-                        if (e.target.value === 'add-custom-status') {
-                          setShowCustomStatusInput(true);
-                          // Temporarily restore the select value to match client status so form is not dirty/invalid
-                          setValue('status', client.status);
-                        }
-                      }
-                    })}
+                    {...register('status')}
                   >
-                    <option value="active">Active</option>
-                    <option value="lead">Lead</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="closed">Closed</option>
-                    {customStatuses.map(s => (
-                      <option key={s.id} value={s.name}>{s.name}</option>
-                    ))}
-                    <option value="add-custom-status">+ Add Custom Status...</option>
+                    {customStatuses
+                      .filter(s => s.status === 'active' || s.name.toLowerCase() === client.status.toLowerCase())
+                      .map(s => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
                   </select>
                 </div>
-                {showCustomStatusInput && (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    marginTop: '8px',
-                    padding: '12px',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px dashed var(--color-border)'
-                  }}>
-                    <label className="form-label required" htmlFor="new-status-name-input" style={{ fontSize: 'var(--font-size-xs)' }}>
-                      New Custom Status Name
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        id="new-status-name-input"
-                        type="text"
-                        className="form-input"
-                        style={{ flex: 1, padding: '6px 12px', fontSize: 'var(--font-size-sm)' }}
-                        placeholder="e.g. Follow-up"
-                        value={newStatusName}
-                        onChange={(e) => setNewStatusName(e.target.value)}
-                        maxLength={30}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        style={{ padding: '0 12px', minHeight: 'auto' }}
-                        disabled={creatingStatus}
-                        onClick={async () => {
-                          const nameTrimmed = newStatusName.trim();
-                          if (!nameTrimmed) {
-                            toast.error('Status name cannot be empty');
-                            return;
-                          }
-                          
-                          // Check for duplicates
-                          const isDup = ['active', 'inactive', 'lead', 'closed'].includes(nameTrimmed.toLowerCase()) ||
-                            customStatuses.some(s => s.name.toLowerCase() === nameTrimmed.toLowerCase());
-                          if (isDup) {
-                            toast.error('This status already exists');
-                            return;
-                          }
-
-                          setCreatingStatus(true);
-                          try {
-                            await createClientStatus(nameTrimmed);
-                            toast.success('Custom status added');
-                            const updatedList = await getClientStatuses();
-                            setCustomStatuses(updatedList);
-                            setValue('status', nameTrimmed, { shouldDirty: true, shouldValidate: true });
-                            setNewStatusName('');
-                            setShowCustomStatusInput(false);
-                          } catch (err) {
-                            console.error('Failed to create status:', err);
-                            toast.error('Failed to create status');
-                          } finally {
-                            setCreatingStatus(false);
-                          }
-                        }}
-                      >
-                        Add
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '0 12px', minHeight: 'auto' }}
-                        onClick={() => {
-                          setShowCustomStatusInput(false);
-                          setNewStatusName('');
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {isLead && (
                 <div className="form-group">
-                  <label className="form-label" htmlFor="client-lead-source-input">Lead Source</label>
-                  <input
+                  <label className="form-label required" htmlFor="client-lead-source-input">Lead Source</label>
+                  <select
                     id="client-lead-source-input"
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Google, Facebook, Instagram, Referral"
-                    list="edit-lead-sources-list"
+                    className="form-input form-select"
                     {...register('leadSource')}
-                  />
-                  <datalist id="edit-lead-sources-list">
-                    <option value="Google Search" />
-                    <option value="Facebook Ads" />
-                    <option value="Instagram" />
-                    <option value="LinkedIn" />
-                    <option value="Referral" />
-                    <option value="Cold Call" />
-                    <option value="WhatsApp" />
-                    <option value="Website" />
-                    <option value="Event/Exhibition" />
-                  </datalist>
+                    required
+                  >
+                    <option value="">Select Lead Source...</option>
+                    {leadSources
+                      .filter(s => s.status === 'active' || s.name.toLowerCase() === (client.leadSource || '').toLowerCase())
+                      .map(s => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                    Select the channel from which this lead originated.
+                  </p>
                 </div>
               )}
 
@@ -584,6 +465,41 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                   {...register('notes')}
                 />
               </div>
+          </div>
+        </div>
+
+        {/* Email & Alternative Number relocated to the very bottom of the form */}
+        <div className="grid grid-2" style={{ gap: 'var(--space-5)', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+          {/* Email */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="client-email-input">Email Address</label>
+            <div className="search-wrapper">
+              <Mail className="search-icon" size={16} />
+              <input
+                id="client-email-input"
+                type="text"
+                className={`form-input ${errors.email ? 'error' : ''}`}
+                placeholder="name@example.com"
+                {...register('email')}
+              />
+            </div>
+            {errors.email && <span className="form-error">{errors.email.message}</span>}
+          </div>
+
+          {/* Alternate Contact */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="client-alt-input">Alternate Contact</label>
+            <div className="search-wrapper">
+              <Phone className="search-icon" size={16} />
+              <input
+                id="client-alt-input"
+                type="tel"
+                className={`form-input ${errors.alternateContact ? 'error' : ''}`}
+                placeholder="Alt number / Landline"
+                {...register('alternateContact')}
+              />
+            </div>
+            {errors.alternateContact && <span className="form-error">{errors.alternateContact.message}</span>}
           </div>
         </div>
 

@@ -25,7 +25,9 @@ export interface Client {
   assignedAgent?: string;
   assignedAgentName?: string;
   status: ClientStatus;
-  createdAt: Date;
+  createdAt: Date;          // The "date of lead" — user-selectable, when the lead originally came in
+  addedByAgentAt?: Date;    // System timestamp of when the agent added/created this record
+  assignedAt?: Date;        // System timestamp of when the lead was (last) assigned to an agent
   createdBy: string;
   tags?: string[];
   projectName?: string;
@@ -98,9 +100,16 @@ export type ActivityAction =
   | 'task_completed'
   | 'task_reassign_requested'
   | 'task_reassign_approved'
-  | 'task_reassign_rejected';
+  | 'task_reassign_rejected'
+  | 'task_verified'
+  | 'status_created'
+  | 'status_updated'
+  | 'status_deleted'
+  | 'source_created'
+  | 'source_updated'
+  | 'source_deleted';
 
-export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag' | 'task';
+export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag' | 'task' | 'status' | 'source';
 
 export interface ActivityLog {
   id: string;
@@ -130,6 +139,7 @@ export interface FilterOptions {
   dateFrom: string;
   dateTo: string;
   tags: string[];
+  leadSource?: string;
 }
 
 export interface PaginationState {
@@ -195,6 +205,16 @@ export interface Tag {
 export interface CustomStatus {
   id: string;
   name: string;
+  color: string; // Hex color code
+  status: 'active' | 'disabled';
+  createdAt: Date;
+}
+
+export interface LeadSource {
+  id: string;
+  name: string;
+  color: string; // Hex color code
+  status: 'active' | 'disabled';
   createdAt: Date;
 }
 
@@ -204,7 +224,8 @@ export type TaskStatus =
   | 'accepted'
   | 'rejected'
   | 'completed'
-  | 'pending_reassignment';
+  | 'pending_reassignment'
+  | 'verified';
 
 export type TaskHistoryAction =
   | 'created'
@@ -213,7 +234,8 @@ export type TaskHistoryAction =
   | 'completed'
   | 'reassign_requested'
   | 'reassign_approved'
-  | 'reassign_rejected';
+  | 'reassign_rejected'
+  | 'verified';
 
 export interface TaskHistoryItem {
   timestamp: Date;

@@ -1,20 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, Calendar, UserCheck, Search, MessageCircle, ExternalLink, Key, X } from 'lucide-react';
-import { getUserById, getClients } from '../../lib/firestore';
+import { getUserById, getClients, getClientStatuses } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
 import { format } from 'date-fns';
-import type { User, Client } from '../../types';
+import type { User, Client, CustomStatus } from '../../types';
 import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
-
-const STATUS_BADGE: Record<string, string> = {
-  active: 'badge-success',
-  inactive: 'badge-muted',
-  lead: 'badge-warning',
-  closed: 'badge-danger',
-};
 
 const AgentDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +19,7 @@ const AgentDetailsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
 
   // Reset password modal state
   const [showResetModal, setShowResetModal] = useState(false);
@@ -95,6 +89,7 @@ const AgentDetailsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    getClientStatuses().then(setCustomStatuses).catch(() => {});
   }, [loadData]);
 
   // Handle local client search
@@ -220,6 +215,7 @@ const AgentDetailsPage: React.FC = () => {
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{ width: 50, paddingLeft: 'var(--space-4)' }}></th>
                   <th>Client</th>
                   <th>WhatsApp</th>
                   <th>Status</th>
@@ -228,16 +224,40 @@ const AgentDetailsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredClients.map((client) => (
-                  <tr
-                    key={client.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/admin/clients/${client.id}`)}
-                  >
-                    {/* Avatar + Name */}
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div className="avatar avatar-sm">
+                {filteredClients.map((client, index) => {
+                  const slNo = index + 1;
+                  const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                  const statusColor = statusObj?.color || 'transparent';
+                  const rowBg = statusColor !== 'transparent' ? `${statusColor}10` : undefined;
+                  const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
+
+                  return (
+                    <tr
+                      key={client.id}
+                      style={{ 
+                        cursor: 'pointer',
+                        backgroundColor: rowBg
+                      }}
+                      onClick={() => navigate(`/admin/clients/${client.id}`)}
+                    >
+                      {/* Serial Number Cell */}
+                      <td 
+                        className="text-sm font-bold text-muted" 
+                        style={{ 
+                          width: 50, 
+                          paddingLeft: 'var(--space-4)', 
+                          borderLeft: borderLeftStyle,
+                          verticalAlign: 'middle',
+                          textAlign: 'center'
+                        }}
+                      >
+                        {slNo}
+                      </td>
+
+                      {/* Avatar + Name */}
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <div className="avatar avatar-sm">
                           {client.profileImage
                             ? <img src={client.profileImage} alt={client.name} />
                             : client.name.charAt(0).toUpperCase()
@@ -270,9 +290,25 @@ const AgentDetailsPage: React.FC = () => {
 
                     {/* Status */}
                     <td>
-                      <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`}>
-                        {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
-                      </span>
+                      {(() => {
+                        const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                        const statusColor = statusObj?.color || '#6b7280';
+                        return (
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: `${statusColor}1c`,
+                              color: statusColor,
+                              border: `1px solid ${statusColor}33`,
+                              fontWeight: 750,
+                              fontSize: '11px',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            {client.status}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Date */}
@@ -283,7 +319,6 @@ const AgentDetailsPage: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* Actions */}
                     <td onClick={(e) => e.stopPropagation()}>
                       <button
                         className="btn btn-ghost btn-icon"
@@ -295,7 +330,8 @@ const AgentDetailsPage: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           )}
@@ -309,42 +345,75 @@ const AgentDetailsPage: React.FC = () => {
             <p className="empty-state-desc">No clients match your search criteria or are assigned to this agent.</p>
           </div>
         ) : (          <div className="mobile-client-list mobile-only-flex" style={{ flexDirection: 'column', gap: '12px', padding: '16px', width: '100%', boxSizing: 'border-box' }}>
-            {filteredClients.map((client) => (
-              <div
-                key={client.id}
-                className="client-card"
-                onClick={() => navigate(`/admin/clients/${client.id}`)}
-                style={{
-                  background: 'var(--color-bg-card)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-xl)',
-                  padding: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                  boxShadow: 'var(--shadow-sm)',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                }}
-              >
-                {/* Header: Avatar, Name, Status Badge */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: 0, flex: 1 }}>
-                    <div className="avatar avatar-md" style={{ width: 44, height: 44, flexShrink: 0, background: 'var(--color-accent-light)', color: 'var(--color-accent)', fontWeight: 600 }}>
-                      {client.profileImage ? (
-                        <img src={client.profileImage} alt={client.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                      ) : (
-                        client.name.charAt(0).toUpperCase()
-                      )}
+            {filteredClients.map((client, index) => {
+              const slNo = index + 1;
+              const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+              const statusColor = statusObj?.color || 'transparent';
+              const cardBg = statusColor !== 'transparent' ? `${statusColor}10` : 'var(--color-bg-card)';
+              const borderLeftStyle = statusColor !== 'transparent' ? `4px solid ${statusColor}` : undefined;
+
+              return (
+                <div
+                  key={client.id}
+                  className="client-card"
+                  onClick={() => navigate(`/admin/clients/${client.id}`)}
+                  style={{
+                    background: cardBg,
+                    borderLeft: borderLeftStyle,
+                    borderRight: '1px solid var(--color-border)',
+                    borderTop: '1px solid var(--color-border)',
+                    borderBottom: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-xl)',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    boxShadow: 'var(--shadow-sm)',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                  }}
+                >
+                  {/* Header: Avatar, Name, Status Badge */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 850, color: 'var(--color-text-muted)', minWidth: '20px' }}>
+                          {slNo}
+                        </span>
+                        <div className="avatar avatar-md" style={{ width: 44, height: 44, flexShrink: 0, background: 'var(--color-accent-light)', color: 'var(--color-accent)', fontWeight: 600 }}>
+                          {client.profileImage ? (
+                            <img src={client.profileImage} alt={client.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                          ) : (
+                            client.name.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                      </div>
+                      <h4 style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text-primary)', wordBreak: 'break-word', lineHeight: 1.25 }}>
+                        {client.name}
+                      </h4>
                     </div>
-                    <h4 style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text-primary)', wordBreak: 'break-word', lineHeight: 1.25 }}>
-                      {client.name}
-                    </h4>
-                  </div>
-                  <span className={`badge ${STATUS_BADGE[client.status] || 'badge-muted'}`} style={{ fontSize: '0.75rem', padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize', flexShrink: 0 }}>
-                    {client.status}
-                  </span>
+                  {(() => {
+                    const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                    const statusColor = statusObj?.color || '#6b7280';
+                    return (
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: `${statusColor}1c`,
+                          color: statusColor,
+                          border: `1px solid ${statusColor}33`,
+                          fontSize: '0.75rem',
+                          padding: '4px 8px',
+                          fontWeight: 750,
+                          textTransform: 'uppercase',
+                          flexShrink: 0
+                        }}
+                      >
+                        {client.status}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* Metadata List / Grid (styled like ClientDetailsPage) */}
@@ -375,8 +444,9 @@ const AgentDetailsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
         )}
       </div>
       {/* Reset Password Modal */}

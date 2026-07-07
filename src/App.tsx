@@ -1,7 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
 import AppRouter from './router';
 import { isFirebaseConfigured } from './lib/firebase';
 
@@ -72,31 +71,30 @@ const App: React.FC = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppRouter />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#1e2740',
-              color: '#f1f5f9',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: '10px',
-              fontSize: '14px',
-            },
-            success: {
-              iconTheme: { primary: '#10b981', secondary: '#1e2740' },
-            },
-            error: {
-              iconTheme: { primary: '#ef4444', secondary: '#1e2740' },
-            },
-          }}
-        />
-      </AuthProvider>
+      {/* AuthProvider is now inside the router (AuthRoot layout) so useAuth()
+          works on ALL routes including /login */}
+      <AppRouter />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#1e2740',
+            color: '#f1f5f9',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '10px',
+            fontSize: '14px',
+          },
+          success: {
+            iconTheme: { primary: '#10b981', secondary: '#1e2740' },
+          },
+          error: {
+            iconTheme: { primary: '#ef4444', secondary: '#1e2740' },
+          },
+        }}
+      />
     </QueryClientProvider>
   );
 };
 
 export default App;
-

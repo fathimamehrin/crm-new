@@ -10,9 +10,21 @@
     <meta property="og:title" content="VN CRM" />
     <meta property="og:description" content="Professional CRM system for managing clients, agents, and summaries." />
     <meta property="og:type" content="website" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#3b82f6" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('ServiceWorker registered:', reg))
+            .catch((err) => console.error('ServiceWorker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

@@ -1,16 +1,98 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import SessionWarningModal from '../SessionWarningModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useInactivity } from '../../hooks/useInactivity';
+import { collection, query, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import toast from 'react-hot-toast';
 
 const AppLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSessionWarning, setShowSessionWarning] = useState(false);
   const { logout, currentUser, userProfile, userRole } = useAuth();
+  const prevTasksRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!currentUser || !db) return;
+
+    const q = query(collection(db, 'tasks'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const currentMap: Record<string, string> = {};
+      const prevMap = prevTasksRef.current;
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const id = doc.id;
+        const status = data.status;
+        const title = data.title;
+        const createdBy = data.createdBy;
+        const assignedTo = data.assignedTo;
+
+        currentMap[id] = status;
+
+        const oldStatus = prevMap[id];
+        
+        const isRecent = data.createdAt ? (Date.now() - new Date(data.createdAt).getTime() < 15000) : false;
+
+        if (oldStatus !== status) {
+          if (oldStatus !== undefined || isRecent) {
+            // Action required gates:
+            if (status === 'completed' && createdBy === currentUser.uid) {
+              toast.custom(
+                (t) => (
+                  <div className={`toast-custom toast-success ${t.visible ? 'animate-enter' : 'animate-leave'}`} style={{
+                    padding: '12px 16px', background: '#1e293b', border: '1px solid var(--color-success)',
+                    borderRadius: '8px', color: '#fff', display: 'flex', flexDirection: 'column', gap: '4px',
+                    boxShadow: 'var(--shadow-lg)', zIndex: 9999
+                  }}>
+                    <strong style={{ color: 'var(--color-success)', fontSize: '13px' }}>Task Completed! Action Required</strong>
+                    <span style={{ fontSize: '12px' }}>"{title}" is completed. Please verify and close.</span>
+                  </div>
+                ),
+                { id: `verify-${id}`, duration: 5000 }
+              );
+            } else if (status === 'pending_reassignment' && createdBy === currentUser.uid) {
+              toast.custom(
+                (t) => (
+                  <div className={`toast-custom toast-warning ${t.visible ? 'animate-enter' : 'animate-leave'}`} style={{
+                    padding: '12px 16px', background: '#1e293b', border: '1px solid var(--color-warning)',
+                    borderRadius: '8px', color: '#fff', display: 'flex', flexDirection: 'column', gap: '4px',
+                    boxShadow: 'var(--shadow-lg)', zIndex: 9999
+                  }}>
+                    <strong style={{ color: 'var(--color-warning)', fontSize: '13px' }}>Reassignment Request!</strong>
+                    <span style={{ fontSize: '12px' }}>"{title}" has a transfer request awaiting your approval.</span>
+                  </div>
+                ),
+                { id: `reassign-${id}`, duration: 5000 }
+              );
+            } else if (status === 'pending_acceptance' && assignedTo === currentUser.uid) {
+              toast.custom(
+                (t) => (
+                  <div className={`toast-custom toast-info ${t.visible ? 'animate-enter' : 'animate-leave'}`} style={{
+                    padding: '12px 16px', background: '#1e293b', border: '1px solid var(--color-accent)',
+                    borderRadius: '8px', color: '#fff', display: 'flex', flexDirection: 'column', gap: '4px',
+                    boxShadow: 'var(--shadow-lg)', zIndex: 9999
+                  }}>
+                    <strong style={{ color: 'var(--color-accent)', fontSize: '13px' }}>New Task Assigned!</strong>
+                    <span style={{ fontSize: '12px' }}>You have been assigned: "{title}". Please claim it.</span>
+                  </div>
+                ),
+                { id: `assign-${id}`, duration: 5000 }
+              );
+            }
+          }
+        }
+      });
+
+      prevTasksRef.current = currentMap;
+    });
+
+    return () => unsub();
+  }, [currentUser]);
 
   const handleMenuClick = () => {
     setSidebarOpen((prev) => !prev);

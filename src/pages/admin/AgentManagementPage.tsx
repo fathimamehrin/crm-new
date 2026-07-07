@@ -321,6 +321,7 @@ const AgentManagementPage: React.FC = () => {
               <table className="table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
                     <th>Agent</th>
                     <th>Email</th>
                     <th>Phone</th>
@@ -330,7 +331,7 @@ const AgentManagementPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAgents.map((agent) => (
+                  {filteredAgents.map((agent, index) => (
                     <tr 
                       key={agent.id}
                       onClick={(e) => {
@@ -341,6 +342,9 @@ const AgentManagementPage: React.FC = () => {
                       }}
                       style={{ cursor: editingId === agent.id ? 'default' : 'pointer' }}
                     >
+                      <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center', verticalAlign: 'middle' }}>
+                        {index + 1}
+                      </td>
                       <td data-label="Agent">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                           <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
@@ -399,7 +403,7 @@ const AgentManagementPage: React.FC = () => {
 
             {/* Mobile View Cards */}
             <div className="mobile-only" style={{ padding: 'var(--space-4) var(--space-3)' }}>
-              {filteredAgents.map((agent) => (
+              {filteredAgents.map((agent, index) => (
                 <div 
                   key={agent.id}
                   className="mobile-card"
@@ -412,6 +416,9 @@ const AgentManagementPage: React.FC = () => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 850, color: 'var(--color-text-muted)', minWidth: '20px', textAlign: 'center' }}>
+                        {index + 1}
+                      </span>
                       <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
                       <div>
                         {editingId === agent.id ? (

@@ -5,12 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { Upload, User, Phone, Mail, FileText, ArrowLeft, Mic, DollarSign, X, Folder } from 'lucide-react';
-import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient, getTags, getClientStatuses, createClientStatus } from '../lib/firestore';
+import { createClient, createSummary, createPayment, getClientByWhatsApp, updateClient, getTags, getClientStatuses, getLeadSources } from '../lib/firestore';
 import { uploadFile, generateStoragePath } from '../lib/storage';
 import { logActivity } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import type { Tag, CustomStatus } from '../types';
+import type { Tag, CustomStatus, LeadSource } from '../types';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -89,9 +89,7 @@ const NewClientFormPage: React.FC = () => {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
-  const [showCustomStatusInput, setShowCustomStatusInput] = useState(false);
-  const [newStatusName, setNewStatusName] = useState('');
-  const [creatingStatus, setCreatingStatus] = useState(false);
+  const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
 
   useEffect(() => {
     getTags().then(tags => {
@@ -100,15 +98,17 @@ const NewClientFormPage: React.FC = () => {
       console.error('Failed to load tags:', err);
     });
 
-    const loadStatuses = async () => {
-      try {
-        const list = await getClientStatuses();
-        setCustomStatuses(list);
-      } catch (err) {
-        console.error('Failed to load custom statuses:', err);
-      }
-    };
-    loadStatuses();
+    getClientStatuses().then(list => {
+      setCustomStatuses(list);
+    }).catch(err => {
+      console.error('Failed to load custom statuses:', err);
+    });
+
+    getLeadSources().then(list => {
+      setLeadSources(list.filter(s => s.status === 'active'));
+    }).catch(err => {
+      console.error('Failed to load lead sources:', err);
+    });
   }, []);
 
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
@@ -119,7 +119,7 @@ const NewClientFormPage: React.FC = () => {
       paymentStatus: '',
       createdAt: new Date().toISOString().substring(0, 10),
       projectName: '',
-      status: 'active',
+      status: 'Active',
       leadSource: '',
     },
   });
@@ -288,6 +288,7 @@ const NewClientFormPage: React.FC = () => {
         }
       } else {
         const selectedDate = data.createdAt ? new Date(data.createdAt + 'T00:00:00') : new Date();
+        const now = new Date();
         clientId = await createClient({
           name: data.name,
           whatsappNumber: data.countryCode + data.whatsappNumber,
@@ -302,6 +303,8 @@ const NewClientFormPage: React.FC = () => {
           createdBy: currentUser.uid,
           tags: selectedTags,
           createdAt: selectedDate,
+          addedByAgentAt: now,
+          assignedAt: (isAgent || isAdmin) ? now : undefined,
           projectName: data.projectName || '',
           leadSource: isLead ? (data.leadSource || '') : '',
         });
@@ -498,34 +501,7 @@ const NewClientFormPage: React.FC = () => {
               {errors.whatsappNumber && <span className="form-error">{errors.whatsappNumber.message}</span>}
             </div>
 
-            {/* Email */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="client-email">Email</label>
-              <div className="search-wrapper">
-                <Mail className="search-icon" size={16} />
-                <input
-                  id="client-email"
-                  type="email"
-                  className={`form-input ${errors.email ? 'error' : ''}`}
-                  style={{ paddingLeft: '2.5rem' }}
-                  placeholder="optional"
-                  {...register('email')}
-                />
-              </div>
-              {errors.email && <span className="form-error">{errors.email.message}</span>}
-            </div>
 
-            {/* Alternate Contact */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="client-alt-contact">Alternate Contact</label>
-              <input
-                id="client-alt-contact"
-                type="tel"
-                className="form-input"
-                placeholder="optional"
-                {...register('alternateContact')}
-              />
-            </div>
 
             {/* Lead Creation Date */}
             <div className="form-group">
@@ -547,130 +523,30 @@ const NewClientFormPage: React.FC = () => {
               <select
                 id="client-status-select"
                 className="form-input form-select"
-                {...register('status', {
-                  onChange: (e) => {
-                    if (e.target.value === 'add-custom-status') {
-                      setShowCustomStatusInput(true);
-                      // Default back to active temporarily
-                      setValue('status', 'active');
-                    }
-                  }
-                })}
+                {...register('status')}
               >
-                <option value="active">Active</option>
-                <option value="lead">Lead</option>
-                <option value="inactive">Inactive</option>
-                <option value="closed">Closed</option>
-                {customStatuses.map(s => (
+                {customStatuses.filter(s => s.status === 'active').map(s => (
                   <option key={s.id} value={s.name}>{s.name}</option>
                 ))}
-                <option value="add-custom-status">+ Add Custom Status...</option>
               </select>
-              {showCustomStatusInput && (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  marginTop: '8px',
-                  padding: '12px',
-                  background: 'var(--color-bg-secondary)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px dashed var(--color-border)',
-                  gridColumn: '1 / -1'
-                }}>
-                  <label className="form-label required" htmlFor="new-status-name-input" style={{ fontSize: 'var(--font-size-xs)' }}>
-                    New Custom Status Name
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      id="new-status-name-input"
-                      type="text"
-                      className="form-input"
-                      style={{ flex: 1, padding: '6px 12px', fontSize: 'var(--font-size-sm)' }}
-                      placeholder="e.g. Follow-up"
-                      value={newStatusName}
-                      onChange={(e) => setNewStatusName(e.target.value)}
-                      maxLength={30}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      style={{ padding: '0 12px', minHeight: 'auto' }}
-                      disabled={creatingStatus}
-                      onClick={async () => {
-                        const nameTrimmed = newStatusName.trim();
-                        if (!nameTrimmed) {
-                          toast.error('Status name cannot be empty');
-                          return;
-                        }
-                        
-                        // Check for duplicates
-                        const isDup = ['active', 'inactive', 'lead', 'closed'].includes(nameTrimmed.toLowerCase()) ||
-                          customStatuses.some(s => s.name.toLowerCase() === nameTrimmed.toLowerCase());
-                        if (isDup) {
-                          toast.error('This status already exists');
-                          return;
-                        }
-
-                        setCreatingStatus(true);
-                        try {
-                          await createClientStatus(nameTrimmed);
-                          toast.success('Custom status added');
-                          const updatedList = await getClientStatuses();
-                          setCustomStatuses(updatedList);
-                          setValue('status', nameTrimmed, { shouldDirty: true, shouldValidate: true });
-                          setNewStatusName('');
-                          setShowCustomStatusInput(false);
-                        } catch (err) {
-                          console.error('Failed to create status:', err);
-                          toast.error('Failed to create status');
-                        } finally {
-                          setCreatingStatus(false);
-                        }
-                      }}
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '0 12px', minHeight: 'auto' }}
-                      onClick={() => {
-                        setShowCustomStatusInput(false);
-                        setNewStatusName('');
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
-
+ 
             {isLead && (
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label" htmlFor="client-lead-source">Lead Source</label>
-                <input
+                <label className="form-label required" htmlFor="client-lead-source">Lead Source</label>
+                <select
                   id="client-lead-source"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Google, Facebook, Instagram, LinkedIn, Referral"
-                  list="lead-sources-list"
+                  className="form-input form-select"
                   {...register('leadSource')}
-                />
-                <datalist id="lead-sources-list">
-                  <option value="Google Search" />
-                  <option value="Facebook Ads" />
-                  <option value="Instagram" />
-                  <option value="LinkedIn" />
-                  <option value="Referral" />
-                  <option value="Cold Call" />
-                  <option value="WhatsApp" />
-                  <option value="Website" />
-                  <option value="Event/Exhibition" />
-                </datalist>
+                  required
+                >
+                  <option value="">Select Lead Source...</option>
+                  {leadSources.map(s => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted" style={{ marginTop: 4 }}>
-                  Select or type the channel from which this lead originated.
+                  Select the channel from which this lead originated.
                 </p>
               </div>
             )}
@@ -751,6 +627,35 @@ const NewClientFormPage: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Email (relocated to bottom) */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="client-email">Email</label>
+              <div className="search-wrapper">
+                <Mail className="search-icon" size={16} />
+                <input
+                  id="client-email"
+                  type="email"
+                  className={`form-input ${errors.email ? 'error' : ''}`}
+                  style={{ paddingLeft: '2.5rem' }}
+                  placeholder="optional"
+                  {...register('email')}
+                />
+              </div>
+              {errors.email && <span className="form-error">{errors.email.message}</span>}
+            </div>
+
+            {/* Alternate Contact (relocated to bottom) */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="client-alt-contact">Alternate Contact</label>
+              <input
+                id="client-alt-contact"
+                type="tel"
+                className="form-input"
+                placeholder="optional"
+                {...register('alternateContact')}
+              />
             </div>
           </div>
         </div>

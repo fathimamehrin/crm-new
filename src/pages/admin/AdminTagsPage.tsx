@@ -228,6 +228,7 @@ const AdminTagsPage: React.FC = () => {
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
                   <th>Tag Name</th>
                   <th>Visual Preview</th>
                   <th>Created At</th>
@@ -235,8 +236,11 @@ const AdminTagsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTags.map((tag) => (
+                {filteredTags.map((tag, index) => (
                   <tr key={tag.id}>
+                    <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
+                      {index + 1}
+                    </td>
                     <td className="font-semibold text-sm">{tag.name}</td>
                     <td>
                       <span

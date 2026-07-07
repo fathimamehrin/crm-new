@@ -3,7 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
-  Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3
+  Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3,
+  Sliders, Share2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -92,6 +93,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/statuses" icon={Sliders} label="Statuses" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/sources" icon={Share2} label="Lead Sources" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
@@ -138,6 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
             <div className="mobile-drawer-body">
+
               <NavLink 
                 to="/admin/agents" 
                 className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}

@@ -7,11 +7,12 @@ import {
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload,
   Share2
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags } from '../lib/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags, getClientStatuses, getLeadSources } from '../lib/firestore';
+import { getDocs, query, collection } from 'firebase/firestore';
 import { logActivity } from '../lib/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag, CustomStatus, LeadSource, ActivityLog } from '../types';
 import EditClientModal from '../components/EditClientModal';
 import { resolvePresignedUrls, uploadFile, deleteFile, generateStoragePath } from '../lib/storage';
 import { useDropzone } from 'react-dropzone';
@@ -36,9 +37,14 @@ const ClientDetailsPage: React.FC = () => {
   const [rawSummaries, setRawSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [allSources, setAllSources] = useState<LeadSource[]>([]);
+  const [clientLogs, setClientLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
     getTags().then(setAllTags).catch(() => {});
+    getClientStatuses().then(setCustomStatuses).catch(() => {});
+    getLeadSources().then(setAllSources).catch(() => {});
   }, []);
 
   // Edit requests tracking state
@@ -267,7 +273,7 @@ const ClientDetailsPage: React.FC = () => {
   const [selectedSummary, setSelectedSummary] = useState<Summary | null>(null);
 
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'summaries' | 'payments' | 'documents'>('summaries');
+  const [activeTab, setActiveTab] = useState<'summaries' | 'payments' | 'documents' | 'history'>('summaries');
   const [viewMode, setViewMode] = useState<'grid' | 'feed'>('grid');
 
   const handleCopyWhatsApp = () => {
@@ -631,6 +637,28 @@ const ClientDetailsPage: React.FC = () => {
         await Promise.all(requestPromises);
         setEditRequests(requestsMap);
 
+        // Load activity logs for this lead
+        try {
+          const logsSnap = await getDocs(query(collection(db, 'activityLogs')));
+          const logsData = logsSnap.docs.map(doc => {
+            const data = doc.data() as any;
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date()
+            } as ActivityLog;
+          });
+
+          const summaryIds = s.map(sum => sum.id);
+          const filteredLogs = logsData.filter(l => 
+            (l.entityType === 'client' && l.entityId === id) ||
+            (l.entityType === 'summary' && summaryIds.includes(l.entityId))
+          ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          setClientLogs(filteredLogs);
+        } catch (err) {
+          console.error('Failed to load activity logs for client:', err);
+        }
+
         const resolved = await resolveSummariesUrls(s);
         setSummaries(resolved);
         setRawSummaries(s);
@@ -699,6 +727,26 @@ const ClientDetailsPage: React.FC = () => {
             <div className="client-name-status" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <h2 className="client-title" style={{ margin: 0 }}>{client.name}</h2>
+                {(() => {
+                  const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                  const statusColor = statusObj?.color || '#6b7280';
+                  return (
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: `${statusColor}1c`,
+                        color: statusColor,
+                        border: `1px solid ${statusColor}33`,
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        padding: '3px 10px',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {client.status}
+                    </span>
+                  );
+                })()}
                 {client.projectName && (
                   <span
                     className="tag-badge"
@@ -866,8 +914,34 @@ const ClientDetailsPage: React.FC = () => {
 
           {client.leadSource && (
             <div className="client-meta-item" title={`Lead Source: ${client.leadSource}`}>
-              <Share2 size={16} style={{ flexShrink: 0, color: 'var(--color-accent)' }} />
-              <span className="truncate">Source: <strong>{client.leadSource}</strong></span>
+              {(() => {
+                const sourceObj = allSources.find(s => s.name.toLowerCase() === client.leadSource!.toLowerCase());
+                const sourceColor = sourceObj?.color || '#6b7280';
+                return (
+                  <>
+                    <Share2 size={16} style={{ flexShrink: 0, color: sourceColor }} />
+                    <span className="truncate">
+                      Source:{' '}
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: `${sourceColor}1c`,
+                          color: sourceColor,
+                          border: `1px solid ${sourceColor}33`,
+                          fontWeight: 700,
+                          fontSize: '10px',
+                          padding: '2px 8px',
+                          textTransform: 'uppercase',
+                          marginLeft: '4px',
+                          display: 'inline-block'
+                        }}
+                      >
+                        {client.leadSource}
+                      </span>
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -918,6 +992,13 @@ const ClientDetailsPage: React.FC = () => {
         >
           <FileText size={16} />
           <span>Documents ({allDocuments.length})</span>
+        </button>
+        <button
+          className={`client-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          <Clock size={16} />
+          <span>History Log ({clientLogs.length})</span>
         </button>
       </nav>
 
@@ -1265,6 +1346,53 @@ const ClientDetailsPage: React.FC = () => {
               );
             })
           }
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {clientLogs.length === 0 ? (
+            <div className="card empty-state" style={{ padding: 'var(--space-10)' }}>
+              <div className="empty-state-icon"><Clock size={28} /></div>
+              <h3 className="empty-state-title">No Audit History</h3>
+              <p className="empty-state-desc">There are no documented interaction logs for this lead yet.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingLeft: '20px', borderLeft: '2px dashed var(--color-border)', margin: 'var(--space-4) var(--space-4) var(--space-4) 10px' }}>
+              {clientLogs.map((log) => (
+                <div key={log.id} style={{ position: 'relative' }}>
+                  {/* Timeline dot */}
+                  <div style={{
+                    position: 'absolute',
+                    left: '-26px',
+                    top: '4px',
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    background: log.action.includes('created') ? 'var(--color-success)' : (log.action.includes('deleted') ? 'var(--color-danger)' : 'var(--color-accent)'),
+                    border: '2px solid var(--color-bg-card)',
+                    boxShadow: 'var(--shadow-sm)'
+                  }} />
+
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                      {log.action.replace(/_/g, ' ').toUpperCase()}
+                    </span>
+                    <span style={{ color: 'var(--color-text-muted)' }}> by </span>
+                    <strong style={{ color: 'var(--color-text-secondary)' }}>{log.userName || 'System'}</strong>
+                    <span style={{ color: 'var(--color-text-muted)', marginLeft: '8px', fontSize: '11px' }}>
+                      {format(new Date(log.createdAt), 'dd MMM yyyy HH:mm')}
+                    </span>
+                  </div>
+                  {log.entityName && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)', padding: '6px 12px', borderRadius: '6px', display: 'inline-block' }}>
+                      {log.entityName}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       </div> {/* close client-tab-panel-scroll */}

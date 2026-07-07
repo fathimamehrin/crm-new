@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   startOfMonth,
@@ -13,17 +13,60 @@ import {
   isToday,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, MessageCircle, ExternalLink, Calendar as CalendarIcon, Users } from 'lucide-react';
-import type { Client } from '../types';
+import type { Client, CustomStatus, LeadSource } from '../types';
+import { getClientStatuses, getLeadSources } from '../lib/firestore';
 
 interface CalendarViewProps {
   clients: Client[];
   isAdminView?: boolean;
+  onDateClick?: (date: Date) => void;
+  hideDetailPanel?: boolean;
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = false }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = false, onDateClick, hideDetailPanel = false }) => {
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [allSources, setAllSources] = useState<LeadSource[]>([]);
+
+  useEffect(() => {
+    getClientStatuses().then(setCustomStatuses).catch(() => {});
+    getLeadSources().then(setAllSources).catch(() => {});
+  }, []);
+
+  // Quick navigation lists
+  const currentYearNum = new Date().getFullYear();
+  const years = Array.from({ length: 11 }, (_, i) => currentYearNum - 5 + i);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newMonth = parseInt(e.target.value, 10);
+    const updated = new Date(currentMonth);
+    updated.setMonth(newMonth);
+    setCurrentMonth(updated);
+  };
+
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newYear = parseInt(e.target.value, 10);
+    const updated = new Date(currentMonth);
+    updated.setFullYear(newYear);
+    setCurrentMonth(updated);
+  };
+
+  const handleDateJump = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value) {
+      const jumped = new Date(e.target.value);
+      setCurrentMonth(jumped);
+      setSelectedDate(jumped);
+      if (onDateClick) {
+        onDateClick(jumped);
+      }
+    }
+  };
 
   // Calendar dates generation
   const monthStart = startOfMonth(currentMonth);
@@ -39,6 +82,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
     const today = new Date();
     setCurrentMonth(today);
     setSelectedDate(today);
+    if (onDateClick) {
+      onDateClick(today);
+    }
   };
 
   // Group clients by day
@@ -157,7 +203,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
           border: '1px solid rgba(15, 23, 42, 0.05)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, margin: 0, minWidth: '160px' }}>
             {format(currentMonth, 'MMMM yyyy')}
           </h2>
@@ -180,6 +226,41 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
             </button>
           </div>
         </div>
+
+        {/* Quick jump select controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span className="text-xs text-muted" style={{ fontWeight: 650 }}>Quick Jump:</span>
+          <select
+            value={currentMonth.getMonth()}
+            onChange={handleMonthChange}
+            className="form-input form-select"
+            style={{ width: '120px', height: '32px', padding: '4px 8px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '6px' }}
+            aria-label="Select Month"
+          >
+            {months.map((m, idx) => (
+              <option key={m} value={idx}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={currentMonth.getFullYear()}
+            onChange={handleYearChange}
+            className="form-input form-select"
+            style={{ width: '80px', height: '32px', padding: '4px 8px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '6px' }}
+            aria-label="Select Year"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            className="form-input"
+            style={{ width: '135px', height: '32px', padding: '4px 8px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '6px' }}
+            onChange={handleDateJump}
+            title="Jump to date"
+            aria-label="Jump to specific date"
+          />
+        </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="btn btn-secondary btn-sm" onClick={goToToday}>
@@ -195,7 +276,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
       <div className="calendar-layout-grid">
         
         {/* Monthly Grid Table Wrapper */}
-        <div className="card calendar-grid-wrapper" style={{ padding: '16px', overflow: 'hidden' }}>
+        <div className="card calendar-grid-wrapper" style={{ padding: '16px', overflow: 'hidden', gridColumn: hideDetailPanel ? '1 / span 12' : undefined }}>
           {/* Weekdays Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: '8px' }}>
             {WEEKDAYS.map((dayName) => (
@@ -226,7 +307,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
               return (
                 <div
                   key={idx}
-                  onClick={() => setSelectedDate(day)}
+                  onClick={() => {
+                    setSelectedDate(day);
+                    if (onDateClick) {
+                      onDateClick(day);
+                    }
+                  }}
                   style={{
                     padding: '6px',
                     borderRight: '1px solid var(--color-border)',
@@ -294,25 +380,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
 
                   {/* Day Clients Events Pills */}
                   <div className="calendar-day-events-container">
-                    {dayClients.slice(0, 2).map((c) => (
-                      <div
-                        key={c.id}
-                        className="calendar-event-pill"
-                        style={{
-                          background: c.status.toLowerCase() === 'active' 
-                            ? 'rgba(16, 185, 129, 0.12)' 
-                            : (c.status.toLowerCase().includes('lead') ? 'rgba(245, 158, 11, 0.12)' : 'var(--color-bg-secondary)'),
-                          color: c.status.toLowerCase() === 'active' 
-                            ? '#059669' 
-                            : (c.status.toLowerCase().includes('lead') ? '#d97706' : 'var(--color-text-secondary)'),
-                          border: c.status.toLowerCase() === 'active'
-                            ? '1px solid rgba(16, 185, 129, 0.2)'
-                            : (c.status.toLowerCase().includes('lead') ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid var(--color-border)'),
-                        }}
-                      >
-                        <span className="event-pill-name">{c.name}</span>
-                      </div>
-                    ))}
+                    {dayClients.slice(0, 2).map((c) => {
+                      const statusObj = customStatuses.find(s => s.name.toLowerCase() === c.status.toLowerCase());
+                      const statusColor = statusObj?.color || '#6b7280';
+                      return (
+                        <div
+                          key={c.id}
+                          className="calendar-event-pill"
+                          style={{
+                            background: `${statusColor}1c`,
+                            color: statusColor,
+                            border: `1px solid ${statusColor}33`,
+                          }}
+                        >
+                          <span className="event-pill-name">{c.name}</span>
+                        </div>
+                      );
+                    })}
                     {dayClients.length > 2 && (
                       <div className="calendar-event-more">
                         +{dayClients.length - 2} more
@@ -326,117 +410,143 @@ const CalendarView: React.FC<CalendarViewProps> = ({ clients, isAdminView = fals
         </div>
 
         {/* Selected Day Clients Panel */}
-        <div 
-          className="card calendar-detail-panel" 
-          style={{ 
-            gridColumn: '9 / span 4', 
-            minHeight: '400px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            padding: '20px' 
-          }}
-        >
-          {/* Panel Header */}
-          <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-accent)' }}>
-              <CalendarIcon size={18} />
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 700 }}>
-                {format(selectedDate, 'do MMMM yyyy')}
-              </h3>
-            </div>
-            <p className="text-xs text-muted" style={{ marginTop: '4px' }}>
-              {selectedDayClients.length} clients registered on this date
-            </p>
-          </div>
-
-          {/* Panel Content (Clients List) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', maxHeight: '500px' }}>
-            {selectedDayClients.length === 0 ? (
-              <div 
-                style={{ 
-                  flex: 1, 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  color: 'var(--color-text-muted)',
-                  textAlign: 'center',
-                  padding: '40px 0'
-                }}
-              >
-                <Users size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                <p className="text-sm font-medium">No clients added</p>
-                <p className="text-xs" style={{ marginTop: '2px' }}>Try selecting another date on the calendar.</p>
+        {!hideDetailPanel && (
+          <div 
+            className="card calendar-detail-panel" 
+            style={{ 
+              gridColumn: '9 / span 4', 
+              minHeight: '400px', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              padding: '20px' 
+            }}
+          >
+            {/* Panel Header */}
+            <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-accent)' }}>
+                <CalendarIcon size={18} />
+                <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 700 }}>
+                  {format(selectedDate, 'do MMMM yyyy')}
+                </h3>
               </div>
-            ) : (
-              selectedDayClients.map((client) => {
-                let badgeClass = 'badge-muted';
-                const lowerStatus = client.status.toLowerCase();
-                if (lowerStatus === 'active') badgeClass = 'badge-success';
-                else if (lowerStatus.includes('lead')) badgeClass = 'badge-warning';
-                else if (lowerStatus === 'closed') badgeClass = 'badge-danger';
+              <p className="text-xs text-muted" style={{ marginTop: '4px' }}>
+                {selectedDayClients.length} clients registered on this date
+              </p>
+            </div>
 
-                return (
-                  <div
-                    key={client.id}
-                    className="hover-card"
-                    style={{
-                      padding: '12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      background: 'var(--color-bg-elevated)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <div className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '160px' }}>
-                        {client.name}
+            {/* Panel Content (Clients List) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', maxHeight: '500px' }}>
+              {selectedDayClients.length === 0 ? (
+                <div 
+                  style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    color: 'var(--color-text-muted)',
+                    textAlign: 'center',
+                    padding: '40px 0'
+                  }}
+                >
+                  <Users size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                  <p className="text-sm font-medium">No clients added</p>
+                  <p className="text-xs" style={{ marginTop: '2px' }}>Try selecting another date on the calendar.</p>
+                </div>
+              ) : (
+                selectedDayClients.map((client) => {
+                  const statusObj = customStatuses.find(s => s.name.toLowerCase() === client.status.toLowerCase());
+                  const statusColor = statusObj?.color || '#6b7280';
+                  const sourceObj = allSources.find(s => s.name.toLowerCase() === (client.leadSource || '').toLowerCase());
+                  const sourceColor = sourceObj?.color || '#6b7280';
+
+                  return (
+                    <div
+                      key={client.id}
+                      className="hover-card"
+                      style={{
+                        padding: '12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)',
+                        background: 'var(--color-bg-elevated)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onClick={() => navigate(isAdminView ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '160px' }}>
+                          {client.name}
+                        </div>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: `${statusColor}1c`,
+                            color: statusColor,
+                            border: `1px solid ${statusColor}33`,
+                            fontSize: '9px',
+                            padding: '2px 6px',
+                            textTransform: 'uppercase',
+                            fontWeight: 700
+                          }}
+                        >
+                          {client.status}
+                        </span>
                       </div>
-                      <span className={`badge ${badgeClass}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
-                        {client.status}
-                      </span>
+
+                      {client.projectName && (
+                        <div className="text-xs text-muted" style={{ marginBottom: '6px' }}>
+                          Project: <strong style={{ color: 'var(--color-text-secondary)' }}>{client.projectName}</strong>
+                        </div>
+                      )}
+
+                      {client.leadSource && (
+                        <div className="text-xs text-muted" style={{ marginBottom: '8px' }}>
+                          Source:{' '}
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: `${sourceColor}1c`,
+                              color: sourceColor,
+                              border: `1px solid ${sourceColor}33`,
+                              fontSize: '9px',
+                              padding: '1px 6px',
+                              textTransform: 'uppercase',
+                              fontWeight: 700
+                            }}
+                          >
+                            {client.leadSource}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', marginTop: '4px' }}>
+                        <a
+                          href={`https://wa.me/${client.whatsappNumber}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs"
+                          style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 550 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MessageCircle size={12} />
+                          WhatsApp
+                        </a>
+                        <span
+                          className="text-xs text-accent"
+                          style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600 }}
+                        >
+                          Details
+                          <ExternalLink size={10} />
+                        </span>
+                      </div>
                     </div>
-
-                    {client.projectName && (
-                      <div className="text-xs text-muted" style={{ marginBottom: '6px' }}>
-                        Project: <strong style={{ color: 'var(--color-text-secondary)' }}>{client.projectName}</strong>
-                      </div>
-                    )}
-
-                    {client.leadSource && (
-                      <div className="text-xs text-muted" style={{ marginBottom: '8px' }}>
-                        Source: <strong style={{ color: 'var(--color-accent)' }}>{client.leadSource}</strong>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', marginTop: '4px' }}>
-                      <a
-                        href={`https://wa.me/${client.whatsappNumber}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs"
-                        style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 550 }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MessageCircle size={12} />
-                        WhatsApp
-                      </a>
-                      <span
-                        className="text-xs text-accent"
-                        style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600 }}
-                      >
-                        Details
-                        <ExternalLink size={10} />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>

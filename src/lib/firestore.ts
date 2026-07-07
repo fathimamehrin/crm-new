@@ -19,7 +19,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -33,6 +33,7 @@ const clientEditRequestsColRef = () => collection(db, 'clientEditRequests');
 const tagsColRef = () => collection(db, 'tags');
 const clientStatusesColRef = () => collection(db, 'clientStatuses');
 const tasksColRef = () => collection(db, 'tasks');
+const leadSourcesColRef = () => collection(db, 'leadSources');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -49,7 +50,11 @@ export const userFromDoc = (snap: AnySnap): User => ({
 } as User);
 
 export const clientFromDoc = (snap: AnySnap): Client => ({
-  id: snap.id, ...snap.data(), createdAt: toDate(snap.data().createdAt),
+  id: snap.id,
+  ...snap.data(),
+  createdAt: toDate(snap.data().createdAt),
+  addedByAgentAt: snap.data().addedByAgentAt ? toDate(snap.data().addedByAgentAt) : undefined,
+  assignedAt: snap.data().assignedAt ? toDate(snap.data().assignedAt) : undefined,
 } as Client);
 
 export const summaryFromDoc = (snap: AnySnap): Summary => ({
@@ -90,8 +95,18 @@ export const tagFromDoc = (snap: AnySnap): Tag => ({
 export const customStatusFromDoc = (snap: AnySnap): CustomStatus => ({
   id: snap.id,
   name: snap.data().name,
+  color: snap.data().color || '#6b7280',
+  status: snap.data().status || 'active',
   createdAt: toDate(snap.data().createdAt),
 } as CustomStatus);
+
+export const leadSourceFromDoc = (snap: AnySnap): LeadSource => ({
+  id: snap.id,
+  name: snap.data().name,
+  color: snap.data().color || '#6b7280',
+  status: snap.data().status || 'active',
+  createdAt: toDate(snap.data().createdAt),
+} as LeadSource);
 
 export const taskFromDoc = (snap: AnySnap): Task => {
   const data = snap.data();
@@ -249,16 +264,121 @@ export const updateTag = async (id: string, data: Partial<Tag>): Promise<void> =
 // ─── Client Statuses ──────────────────────────────────────────────────────────
 export const getClientStatuses = async (): Promise<CustomStatus[]> => {
   const snap = await getDocs(clientStatusesColRef());
-  const statuses = snap.docs.map(customStatusFromDoc);
+  let statuses = snap.docs.map(customStatusFromDoc);
+  if (statuses.length === 0) {
+    const defaults = [
+      { name: 'Active', color: '#10b981' },
+      { name: 'Inactive', color: '#6b7280' },
+      { name: 'Lead', color: '#f59e0b' },
+      { name: 'Closed', color: '#ef4444' },
+    ];
+    for (const d of defaults) {
+      await createClientStatus(d.name, d.color);
+    }
+    const snapRefreshed = await getDocs(clientStatusesColRef());
+    statuses = snapRefreshed.docs.map(customStatusFromDoc);
+  }
   return statuses.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 };
 
-export const createClientStatus = async (name: string): Promise<string> => {
+export const createClientStatus = async (name: string, color: string): Promise<string> => {
   const ref = await addDoc(clientStatusesColRef(), cleanObject({
     name,
+    color,
+    status: 'active',
     createdAt: serverTimestamp(),
   }));
   return ref.id;
+};
+
+export const updateClientStatus = async (
+  id: string, 
+  data: { name: string; color: string; status: 'active' | 'disabled' },
+  oldName?: string
+): Promise<void> => {
+  await updateDoc(doc(db, 'clientStatuses', id), cleanObject(data));
+
+  if (oldName && oldName.trim() !== data.name.trim()) {
+    const q = query(clientsColRef(), where('status', '==', oldName.trim()));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(docSnap => {
+      batch.update(docSnap.ref, { status: data.name.trim() });
+    });
+    await batch.commit();
+  }
+};
+
+export const deleteClientStatus = async (id: string, name: string): Promise<void> => {
+  await deleteDoc(doc(db, 'clientStatuses', id));
+
+  const q = query(clientsColRef(), where('status', '==', name));
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(docSnap => {
+    batch.update(docSnap.ref, { status: 'Active' });
+  });
+  await batch.commit();
+};
+
+// ─── Lead Sources ───────────────────────────────────────────────────────────
+export const getLeadSources = async (): Promise<LeadSource[]> => {
+  const snap = await getDocs(leadSourcesColRef());
+  let sources = snap.docs.map(leadSourceFromDoc);
+  if (sources.length === 0) {
+    const defaults = [
+      { name: 'Google', color: '#3b82f6' },
+      { name: 'Facebook', color: '#6366f1' },
+      { name: 'Referral', color: '#a855f7' },
+      { name: 'Other', color: '#6b7280' },
+    ];
+    for (const d of defaults) {
+      await createLeadSource(d.name, d.color);
+    }
+    const snapRefreshed = await getDocs(leadSourcesColRef());
+    sources = snapRefreshed.docs.map(leadSourceFromDoc);
+  }
+  return sources.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+};
+
+export const createLeadSource = async (name: string, color: string): Promise<string> => {
+  const ref = await addDoc(leadSourcesColRef(), cleanObject({
+    name,
+    color,
+    status: 'active',
+    createdAt: serverTimestamp(),
+  }));
+  return ref.id;
+};
+
+export const updateLeadSource = async (
+  id: string,
+  data: { name: string; color: string; status: 'active' | 'disabled' },
+  oldName?: string
+): Promise<void> => {
+  await updateDoc(doc(db, 'leadSources', id), cleanObject(data));
+
+  if (oldName && oldName.trim() !== data.name.trim()) {
+    const q = query(clientsColRef(), where('leadSource', '==', oldName.trim()));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(docSnap => {
+      batch.update(docSnap.ref, { leadSource: data.name.trim() });
+    });
+    await batch.commit();
+  }
+};
+
+export const deleteLeadSource = async (id: string, name: string): Promise<void> => {
+  await deleteDoc(doc(db, 'leadSources', id));
+
+  const q = query(clientsColRef(), where('leadSource', '==', name));
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(docSnap => {
+    batch.update(docSnap.ref, { leadSource: '' });
+  });
+  await batch.commit();
 };
 
 export const deleteTag = async (id: string): Promise<void> => {
@@ -494,8 +614,8 @@ export const updateTaskStatus = async (
   if (!snap.exists()) throw new Error('Task not found');
   const task = taskFromDoc(snap as AnySnap);
 
-  let historyAction: 'accepted' | 'rejected' | 'completed' = 'accepted';
-  let activityAction: 'task_accepted' | 'task_rejected' | 'task_completed' = 'task_accepted';
+  let historyAction: TaskHistoryAction = 'accepted';
+  let activityAction: ActivityAction = 'task_accepted';
 
   if (status === 'rejected') {
     historyAction = 'rejected';
@@ -503,6 +623,9 @@ export const updateTaskStatus = async (
   } else if (status === 'completed') {
     historyAction = 'completed';
     activityAction = 'task_completed';
+  } else if (status === 'verified') {
+    historyAction = 'verified';
+    activityAction = 'task_verified';
   }
 
   const historyItem: TaskHistoryItem = {

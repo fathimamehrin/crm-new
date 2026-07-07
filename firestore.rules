@@ -109,7 +109,13 @@ service cloud.firestore {
     // Client Statuses collection
     match /clientStatuses/{statusId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Lead Sources collection
+    match /leadSources/{sourceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // Tasks collection

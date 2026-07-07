@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { getAllSummaries, getUsers } from '../../lib/firestore';
 import { format, subDays, startOfDay, isAfter, isBefore } from 'date-fns';
 import { DollarSign, Search, TrendingUp } from 'lucide-react';
@@ -273,7 +273,7 @@ const RevenueAnalyticsPage: React.FC = () => {
 
       {/* Filters Toolbar */}
       <div className="card" style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4) var(--space-5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <div className="analytics-filters-bar" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           
           {/* Agent Dropdown */}
           <div className="form-group" style={{ minWidth: 160 }}>
@@ -291,7 +291,7 @@ const RevenueAnalyticsPage: React.FC = () => {
           </div>
 
           {/* Date range filter buttons */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="analytics-date-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(['today', '7days', '30days', 'all'] as const).map(range => (
               <button
                 key={range}

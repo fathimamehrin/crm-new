@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getClients, getUsers, getTags } from '../../lib/firestore';
 import { format, subDays, startOfDay, isAfter, isBefore, startOfWeek } from 'date-fns';
@@ -325,7 +325,7 @@ const LeadAnalyticsPage: React.FC = () => {
 
       {/* Filters Toolbar */}
       <div className="card" style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4) var(--space-5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <div className="analytics-filters-bar" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           
           {/* Agent Filter */}
           <div className="form-group" style={{ minWidth: 160, marginBottom: 0 }}>
@@ -366,7 +366,7 @@ const LeadAnalyticsPage: React.FC = () => {
           </div>
 
           {/* Date range filter buttons */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="analytics-date-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(['today', '7days', '30days', 'custom', 'all'] as const).map(range => (
               <button
                 key={range}
@@ -545,40 +545,40 @@ const LeadAnalyticsPage: React.FC = () => {
             <p className="empty-state-desc">There are no leads assigned to active agents in this range.</p>
           </div>
         ) : (
-          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Agent Name</th>
-                  <th style={{ textAlign: 'center' }}>Leads Assigned</th>
-                  <th style={{ textAlign: 'center' }}>Leads Converted (Active/Closed)</th>
-                  <th>Conversion Performance</th>
-                  <th style={{ textAlign: 'right' }}>Conversion Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.agentPerformanceList.map((row) => {
-                  
-                  return (
+          <>
+            {/* Desktop Table View */}
+            <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Agent Name</th>
+                    <th style={{ textAlign: 'center' }}>Leads Assigned</th>
+                    <th style={{ textAlign: 'center' }}>Leads Converted (Active/Closed)</th>
+                    <th>Conversion Performance</th>
+                    <th style={{ textAlign: 'right' }}>Conversion Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.agentPerformanceList.map((row) => (
                     <tr 
                       key={row.id}
                       style={{ cursor: 'pointer' }}
                       onClick={() => navigate('/admin/clients', { state: { agentId: row.id, status: '' } })}
                       title={`View clients for ${row.name}`}
                     >
-                      <td data-label="Agent Name">
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                           <div className="avatar avatar-sm">{row.name.charAt(0).toUpperCase()}</div>
                           <span className="text-sm font-semibold text-primary">{row.name}</span>
                         </div>
                       </td>
-                      <td data-label="Leads Assigned" style={{ textAlign: 'center' }} className="monospaced font-medium">
+                      <td style={{ textAlign: 'center' }} className="monospaced font-medium">
                         {row.total}
                       </td>
-                      <td data-label="Leads Converted" style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
+                      <td style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
                         {row.converted}
                       </td>
-                      <td data-label="Conversion Performance">
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                           <div className="leaderboard-bar-bg" style={{ flex: 1, height: 6 }}>
                             <div 
@@ -591,15 +591,60 @@ const LeadAnalyticsPage: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td data-label="Conversion Rate" style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
+                      <td style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
                         {row.rate}%
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="mobile-only" style={{ padding: 'var(--space-4) var(--space-3)' }}>
+              {analytics.agentPerformanceList.map((row) => (
+                <div 
+                  key={`${row.id}-mob`}
+                  className="mobile-card"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', cursor: 'pointer' }}
+                  onClick={() => navigate('/admin/clients', { state: { agentId: row.id, status: '' } })}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div className="avatar avatar-sm">{row.name.charAt(0).toUpperCase()}</div>
+                      <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{row.name}</span>
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-success)' }}>
+                      {row.rate}%
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '16px', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', marginTop: '2px' }}>
+                    <div>
+                      <span style={{ fontSize: '9px', textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block' }}>Assigned</span>
+                      <span className="text-xs font-semibold text-secondary">{row.total} leads</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '9px', textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block' }}>Converted</span>
+                      <span className="text-xs font-semibold text-success">{row.converted} leads</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '4px' }}>
+                    <div className="leaderboard-bar-bg" style={{ height: 6, width: '100%' }}>
+                      <div 
+                        className="leaderboard-bar-fill" 
+                        style={{ 
+                          width: `${row.rate}%`, 
+                          background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
+                        }} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -622,69 +667,128 @@ const LeadAnalyticsPage: React.FC = () => {
             <p className="empty-state-desc">There are no leads with source information in this range.</p>
           </div>
         ) : (
-          <div className="table-wrapper table-responsive-stack" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Source Channel</th>
-                  <th style={{ textAlign: 'center' }}>Total Leads</th>
-                  <th style={{ textAlign: 'center' }}>Leads Converted</th>
-                  <th>Conversion Funnel</th>
-                  <th style={{ textAlign: 'right' }}>Conversion Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.sourcePerformanceList.map((row, idx) => (
-                  <tr key={idx}>
-                    <td data-label="Source Channel">
-                      <div className="font-semibold text-sm text-primary">{row.name}</div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                        {Object.entries(row.statuses).map(([statusName, count]) => {
-                          let badgeClass = 'badge-muted';
-                          const lowerStatus = statusName.toLowerCase();
-                          if (lowerStatus === 'active') badgeClass = 'badge-success';
-                          else if (lowerStatus === 'lead') badgeClass = 'badge-warning';
-                          else if (lowerStatus === 'closed') badgeClass = 'badge-danger';
-                          
-                          return (
-                            <span 
-                              key={statusName} 
-                              className={`badge ${badgeClass}`} 
-                              style={{ fontSize: '9px', padding: '1px 5px', textTransform: 'capitalize' }}
-                            >
-                              {statusName}: {count}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td data-label="Total Leads" style={{ textAlign: 'center' }} className="monospaced font-medium">
-                      {row.total}
-                    </td>
-                    <td data-label="Leads Converted" style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
-                      {row.converted}
-                    </td>
-                    <td data-label="Conversion Funnel">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div className="leaderboard-bar-bg" style={{ flex: 1, height: 6 }}>
-                          <div 
-                            className="leaderboard-bar-fill" 
-                            style={{ 
-                              width: `${row.rate}%`, 
-                              background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td data-label="Conversion Rate" style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
-                      {row.rate}%
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Source Channel</th>
+                    <th style={{ textAlign: 'center' }}>Total Leads</th>
+                    <th style={{ textAlign: 'center' }}>Leads Converted</th>
+                    <th>Conversion Funnel</th>
+                    <th style={{ textAlign: 'right' }}>Conversion Rate</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {analytics.sourcePerformanceList.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <div className="font-semibold text-sm text-primary">{row.name}</div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                          {Object.entries(row.statuses).map(([statusName, count]) => {
+                            let badgeClass = 'badge-muted';
+                            const lowerStatus = statusName.toLowerCase();
+                            if (lowerStatus === 'active') badgeClass = 'badge-success';
+                            else if (lowerStatus === 'lead') badgeClass = 'badge-warning';
+                            else if (lowerStatus === 'closed') badgeClass = 'badge-danger';
+                            
+                            return (
+                              <span 
+                                key={statusName} 
+                                className={`badge ${badgeClass}`} 
+                                style={{ fontSize: '9px', padding: '1px 5px', textTransform: 'capitalize' }}
+                              >
+                                {statusName}: {count}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }} className="monospaced font-medium">
+                        {row.total}
+                      </td>
+                      <td style={{ textAlign: 'center' }} className="monospaced font-medium text-success">
+                        {row.converted}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <div className="leaderboard-bar-bg" style={{ flex: 1, height: 6 }}>
+                            <div 
+                              className="leaderboard-bar-fill" 
+                              style={{ 
+                                width: `${row.rate}%`, 
+                                background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
+                              }} 
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right' }} className="monospaced font-bold text-success text-sm">
+                        {row.rate}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="mobile-only" style={{ padding: 'var(--space-4) var(--space-3)' }}>
+              {analytics.sourcePerformanceList.map((row, idx) => (
+                <div 
+                  key={`${row.name}-${idx}`}
+                  className="mobile-card"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{row.name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-success)' }}>{row.rate}%</span>
+                  </div>
+                  
+                  {/* Status Pills */}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                    {Object.entries(row.statuses).map(([statusName, count]) => {
+                      let badgeClass = 'badge-muted';
+                      const lowerStatus = statusName.toLowerCase();
+                      if (lowerStatus === 'active') badgeClass = 'badge-success';
+                      else if (lowerStatus === 'lead') badgeClass = 'badge-warning';
+                      else if (lowerStatus === 'closed') badgeClass = 'badge-danger';
+                      
+                      return (
+                        <span key={statusName} className={`badge ${badgeClass}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+                          {statusName}: {count}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '16px', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', marginTop: '2px' }}>
+                    <div>
+                      <span style={{ fontSize: '9px', textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block' }}>Total Leads</span>
+                      <span className="text-xs font-semibold text-secondary">{row.total}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '9px', textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block' }}>Converted</span>
+                      <span className="text-xs font-semibold text-success">{row.converted}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '4px' }}>
+                    <div className="leaderboard-bar-bg" style={{ height: 6, width: '100%' }}>
+                      <div 
+                        className="leaderboard-bar-fill" 
+                        style={{ 
+                          width: `${row.rate}%`, 
+                          background: 'linear-gradient(90deg, var(--color-warning), var(--color-success))' 
+                        }} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

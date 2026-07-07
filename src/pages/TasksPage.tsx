@@ -24,6 +24,7 @@ const STATUS_BADGE: Record<string, string> = {
   rejected: 'badge-danger',
   completed: 'badge-success',
   pending_reassignment: 'badge-accent',
+  verified: 'badge-success',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -32,6 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
   rejected: 'Rejected',
   completed: 'Completed',
   pending_reassignment: 'Pending Reassignment',
+  verified: 'Done / Closed',
 };
 
 const TasksPage: React.FC = () => {
@@ -270,6 +272,18 @@ const TasksPage: React.FC = () => {
     }
   };
 
+  const handleVerifyTask = async (taskId: string) => {
+    if (!currentUser || !userProfile) return;
+    try {
+      await updateTaskStatus(taskId, 'verified', currentUser.uid, userProfile.name);
+      toast.success('Task verified & closed');
+      loadData();
+    } catch (err) {
+      console.error('Failed to verify task:', err);
+      toast.error('Failed to verify task');
+    }
+  };
+
   const toggleHistory = (taskId: string) => {
     setExpandedHistory(prev => ({
       ...prev,
@@ -481,6 +495,16 @@ const TasksPage: React.FC = () => {
                       </button>
                     </>
                   )}
+
+                  {isCreatedByMe && task.status === 'completed' && (
+                    <button 
+                      className="btn btn-sm"
+                      style={{ background: 'var(--color-success)', color: '#fff', border: 'none' }}
+                      onClick={() => handleVerifyTask(task.id)}
+                    >
+                      <Check size={14} /> Verify & Close Task
+                    </button>
+                  )}
                 </div>
 
                 {/* History Accordion Header */}
@@ -518,7 +542,7 @@ const TasksPage: React.FC = () => {
                           width: '10px',
                           height: '10px',
                           borderRadius: '50%',
-                          background: hist.action === 'completed' ? 'var(--color-success)' : (hist.action === 'rejected' ? 'var(--color-danger)' : 'var(--color-accent)'),
+                          background: (hist.action === 'completed' || hist.action === 'verified') ? 'var(--color-success)' : (hist.action === 'rejected' ? 'var(--color-danger)' : 'var(--color-accent)'),
                           border: '2px solid var(--color-bg-card)',
                         }} />
                         

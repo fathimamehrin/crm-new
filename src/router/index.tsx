@@ -1,5 +1,6 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
+import { AuthProvider } from '../contexts/AuthContext';
 import AppLayout from '../components/Layout/AppLayout';
 import AdminLayout from '../components/Layout/AdminLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -22,7 +23,18 @@ import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
 import LeadAnalyticsPage from '../pages/admin/LeadAnalyticsPage';
 import TasksPage from '../pages/TasksPage';
 
+// Root layout: wraps the entire router tree inside AuthProvider so every
+// page — including /login — has access to useAuth().
+const AuthRoot: React.FC = () => (
+  <AuthProvider>
+    <Outlet />
+  </AuthProvider>
+);
+
 const router = createBrowserRouter([
+  {
+    element: <AuthRoot />,
+    children: [
   {
     path: '/login',
     element: <LoginPage />,
@@ -69,6 +81,8 @@ const router = createBrowserRouter([
     path: '*',
     element: <Navigate to="/" replace />,
   },
+    ]
+  }
 ]);
 
 const AppRouter: React.FC = () => <RouterProvider router={router} />;

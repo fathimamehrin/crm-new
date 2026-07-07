@@ -17,6 +17,14 @@ const ACTION_LABELS: Record<string, string> = {
   admin_created: 'New admin created',
   user_login: 'User logged in',
   user_logout: 'User logged out',
+  task_created: 'New task created',
+  task_accepted: 'Task accepted',
+  task_rejected: 'Task rejected',
+  task_completed: 'Task completed',
+  task_verified: 'Task verified & closed',
+  task_reassign_requested: 'Task reassignment requested',
+  task_reassigned: 'Task reassigned & transferred',
+  task_reassign_rejected: 'Task reassignment rejected',
 };
 
 export interface NotificationItem {
