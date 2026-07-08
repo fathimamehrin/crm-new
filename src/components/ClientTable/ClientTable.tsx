@@ -348,9 +348,9 @@ const ClientTable: React.FC<ClientTableProps> = ({
                 })()}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
-                <span className="text-xs text-muted">Agent: {client.assignedAgent ? (agentMap[client.assignedAgent] || client.assignedAgentName || '—') : '—'}</span>
-                <span className="text-xs text-muted">{format(client.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'var(--space-1)', gap: '8px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Agent: {client.assignedAgent ? (agentMap[client.assignedAgent] || client.assignedAgentName || '—') : '—'}</span>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{format(client.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
               </div>
 
               <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>

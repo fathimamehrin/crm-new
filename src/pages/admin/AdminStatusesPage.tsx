@@ -323,8 +323,25 @@ const AdminStatusesPage: React.FC = () => {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                      <span className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '140px' }}>{status.name}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, alignItems: 'flex-start' }}>
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: `${status.color}1c`,
+                          color: status.color,
+                          border: `1px solid ${status.color}33`,
+                          fontWeight: 750,
+                          fontSize: '11px',
+                          padding: '3px 10px',
+                          textTransform: 'uppercase',
+                          maxWidth: '180px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {status.name}
+                      </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                         <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
                           {status.status === 'active' ? 'Enabled' : 'Disabled'}
@@ -333,43 +350,23 @@ const AdminStatusesPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: `${status.color}1c`,
-                          color: status.color,
-                          border: `1px solid ${status.color}33`,
-                          fontWeight: 700,
-                          fontSize: '11px',
-                          padding: '3px 10px',
-                          maxWidth: '90px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button 
+                        className="btn btn-secondary btn-icon" 
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                        onClick={() => startEdit(status)}
+                        title="Edit"
                       >
-                        {status.name}
-                      </span>
-                      
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button 
-                          className="btn btn-secondary btn-icon" 
-                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
-                          onClick={() => startEdit(status)}
-                          title="Edit"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button 
-                          className="btn btn-secondary btn-icon hover-danger" 
-                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
-                          onClick={() => handleDeleteStatus(status)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
-                        </button>
-                      </div>
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-icon hover-danger" 
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                        onClick={() => handleDeleteStatus(status)}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -29,14 +29,18 @@ const AdminTagsPage: React.FC = () => {
   // Drag and drop / Touch longpress states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const touchTimeout = React.useRef<any>(null);
   const tagsRef = React.useRef<Tag[]>([]);
+  const lastSwapTime = React.useRef<number>(0);
 
   useEffect(() => {
     tagsRef.current = tags;
   }, [tags]);
 
   const reorderTags = (fromIndex: number, toIndex: number) => {
+    const now = Date.now();
+    if (now - lastSwapTime.current < 280) return; // 280ms cooldown to prevent flickering swaps
+    lastSwapTime.current = now;
+
     setTags((prevTags) => {
       const result = Array.from(prevTags);
       const [removed] = result.splice(fromIndex, 1);
@@ -79,25 +83,17 @@ const AdminTagsPage: React.FC = () => {
     saveNewOrder();
   };
 
-  // Touch Event Handlers for Mobile Longpress & Drag
+  // Touch Event Handlers for Mobile Instant Drag on Grip handle
   const handleTouchStart = (index: number) => {
-    touchTimeout.current = setTimeout(() => {
-      setIsDragging(true);
-      setDraggedIndex(index);
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }, 450);
+    setIsDragging(true);
+    setDraggedIndex(index);
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || draggedIndex === null) {
-      if (touchTimeout.current) {
-        clearTimeout(touchTimeout.current);
-        touchTimeout.current = null;
-      }
-      return;
-    }
+    if (!isDragging || draggedIndex === null) return;
 
     if (e.cancelable) {
       e.preventDefault();
@@ -119,10 +115,6 @@ const AdminTagsPage: React.FC = () => {
   };
 
   const handleTouchEnd = () => {
-    if (touchTimeout.current) {
-      clearTimeout(touchTimeout.current);
-      touchTimeout.current = null;
-    }
     if (isDragging) {
       setIsDragging(false);
       setDraggedIndex(null);
@@ -382,6 +374,7 @@ const AdminTagsPage: React.FC = () => {
                           boxShadow: isDragged ? '0 4px 12px rgba(15, 23, 42, 0.06)' : undefined,
                           transition: isDragging ? 'none' : 'background 0.2s ease',
                           userSelect: 'none',
+                          touchAction: 'none',
                         }}
                       >
                         <td style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center', color: 'var(--color-text-muted)', cursor: 'grab' }}>
@@ -442,60 +435,58 @@ const AdminTagsPage: React.FC = () => {
                     borderRadius: 'var(--radius-lg)'
                   }}
                   data-index={index}
-                  onTouchStart={() => handleTouchStart(index)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                      <div style={{ color: 'var(--color-text-muted)', cursor: 'grab', padding: '6px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                      <div 
+                        onTouchStart={() => handleTouchStart(index)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        style={{ color: 'var(--color-text-muted)', cursor: 'grab', padding: '6px 4px', display: 'flex', alignItems: 'center', flexShrink: 0, touchAction: 'none' }}
+                      >
                         <GripVertical size={16} />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                        <span className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '120px' }}>{tag.name}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, alignItems: 'flex-start' }}>
+                        <span
+                          className="tag-badge"
+                          style={{
+                            backgroundColor: `${tag.color}1c`,
+                            color: tag.color,
+                            border: `1px solid ${tag.color}33`,
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            padding: '3px 10px',
+                            borderRadius: '100px',
+                            textTransform: 'uppercase',
+                            maxWidth: '180px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {tag.name}
+                        </span>
                         <span className="text-xs text-muted" style={{ fontSize: '10px' }}>Created: {format(tag.createdAt, 'dd MMM yyyy')}</span>
                       </div>
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                      <span
-                        className="tag-badge"
-                        style={{
-                          backgroundColor: `${tag.color}1c`,
-                          color: tag.color,
-                          border: `1px solid ${tag.color}33`,
-                          fontSize: '0.7rem',
-                          fontWeight: 650,
-                          padding: '2px 8px',
-                          borderRadius: '100px',
-                          textTransform: 'uppercase',
-                          maxWidth: '80px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button 
+                        className="btn btn-secondary btn-icon" 
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                        onClick={() => startEdit(tag)}
+                        aria-label="Edit Tag"
                       >
-                        {tag.name}
-                      </span>
-                      
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button 
-                          className="btn btn-secondary btn-icon" 
-                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
-                          onClick={() => startEdit(tag)}
-                          aria-label="Edit Tag"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button 
-                          className="btn btn-secondary btn-icon hover-danger" 
-                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
-                          onClick={() => handleDeleteTag(tag)}
-                          aria-label="Delete Tag"
-                        >
-                          <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
-                        </button>
-                      </div>
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-icon hover-danger" 
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                        onClick={() => handleDeleteTag(tag)}
+                        aria-label="Delete Tag"
+                      >
+                        <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
+                      </button>
                     </div>
                   </div>
                 </div>
