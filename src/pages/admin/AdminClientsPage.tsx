@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Search, Filter, Users, Activity, CheckCircle2, TrendingUp, DollarSign, ClipboardList, Check, X, ClipboardCheck } from 'lucide-react';
 import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags, getClientStatuses, getTasks, updateTaskStatus, getLeadSources } from '../../lib/firestore';
-import { where } from 'firebase/firestore';
 import type { Client, FilterOptions, User, Tag, CustomStatus, Task, LeadSource } from '../../types';
 import { format } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
@@ -158,14 +157,7 @@ const AdminClientsPage: React.FC = () => {
   const loadClients = useCallback(async () => {
     setLoading(true);
     try {
-      const constraints = [];
-      if (filters.agentId && filters.agentId !== 'unassigned') {
-        constraints.push(where('assignedAgent', '==', filters.agentId));
-      }
-      if (filters.status) constraints.push(where('status', '==', filters.status));
-
-      const [clientsRes, allClientsRes, summariesData, logsData, tasksData, sourcesData] = await Promise.all([
-        getClients(constraints, 500),
+      const [allClientsRes, summariesData, logsData, tasksData, sourcesData] = await Promise.all([
         getClients([], 1000),
         getAllSummaries(),
         getAllActivityLogs(),
@@ -178,10 +170,20 @@ const AdminClientsPage: React.FC = () => {
       setAllClientsData(allClientsRes.clients);
       setAllSources(sourcesData);
 
-      let data = clientsRes.clients;
+      let data = [...allClientsRes.clients];
 
-      if (filters.agentId === 'unassigned') {
-        data = data.filter((c) => !c.assignedAgent || c.assignedAgent === 'unassigned');
+      // 1. Filter by Agent
+      if (filters.agentId) {
+        if (filters.agentId === 'unassigned') {
+          data = data.filter((c) => !c.assignedAgent || c.assignedAgent === 'unassigned');
+        } else {
+          data = data.filter((c) => c.assignedAgent === filters.agentId);
+        }
+      }
+
+      // 2. Filter by Status
+      if (filters.status) {
+        data = data.filter((c) => c.status?.toLowerCase() === filters.status.toLowerCase());
       }
 
       if (filters.tags && filters.tags.length > 0) {

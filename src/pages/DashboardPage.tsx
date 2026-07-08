@@ -223,16 +223,32 @@ const DashboardPage: React.FC = () => {
       if (userRole === 'agent' && currentUser) {
         constraints.push(where('assignedAgent', '==', currentUser.uid));
       }
-      if (filters.agentId) constraints.push(where('assignedAgent', '==', filters.agentId));
-      if (filters.status) constraints.push(where('status', '==', filters.status));
-      if (filters.leadSource) constraints.push(where('leadSource', '==', filters.leadSource));
 
       const [clientsRes, summariesData] = await Promise.all([
-        getClients(constraints, 500),
+        getClients(constraints, 1000),
         getAllSummaries()
       ]);
 
-      let data = clientsRes.clients;
+      let data = [...clientsRes.clients];
+
+      // 1. Filter by Agent (if admin or agent sets it)
+      if (filters.agentId) {
+        if (filters.agentId === 'unassigned') {
+          data = data.filter((c) => !c.assignedAgent || c.assignedAgent === 'unassigned');
+        } else {
+          data = data.filter((c) => c.assignedAgent === filters.agentId);
+        }
+      }
+
+      // 2. Filter by Status
+      if (filters.status) {
+        data = data.filter((c) => c.status?.toLowerCase() === filters.status.toLowerCase());
+      }
+
+      // 3. Filter by Lead Source
+      if (filters.leadSource) {
+        data = data.filter((c) => c.leadSource?.toLowerCase() === filters.leadSource?.toLowerCase());
+      }
 
       if (filters.tags && filters.tags.length > 0) {
         data = data.filter((c) =>
