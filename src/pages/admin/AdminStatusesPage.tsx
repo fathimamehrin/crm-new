@@ -235,75 +235,138 @@ const AdminStatusesPage: React.FC = () => {
             <p className="font-medium">No statuses found</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
-                  <th>Status Name</th>
-                  <th>Badge Preview</th>
-                  <th>State</th>
-                  <th>Created</th>
-                  <th style={{ width: 100 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStatuses.map((status, index) => (
-                  <tr key={status.id}>
-                    <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
-                      {index + 1}
-                    </td>
-                    <td className="font-semibold text-primary">{status.name}</td>
-                    <td>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: `${status.color}1c`,
-                          color: status.color,
-                          border: `1px solid ${status.color}33`,
-                          fontWeight: 700,
-                          fontSize: '11px',
-                          padding: '3px 10px',
-                        }}
-                      >
-                        {status.name}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
-                        {status.status === 'active' ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="text-xs text-muted">
-                      {format(new Date(status.createdAt), 'dd MMM yyyy')}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-icon"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          onClick={() => startEdit(status)}
-                          title="Edit"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-icon hover-danger"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          onClick={() => handleDeleteStatus(status)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
+                    <th>Status Name</th>
+                    <th>Badge Preview</th>
+                    <th>State</th>
+                    <th>Created</th>
+                    <th style={{ width: 100 }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredStatuses.map((status, index) => (
+                    <tr key={status.id}>
+                      <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
+                        {index + 1}
+                      </td>
+                      <td className="font-semibold text-primary">{status.name}</td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: `${status.color}1c`,
+                            color: status.color,
+                            border: `1px solid ${status.color}33`,
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            padding: '3px 10px',
+                          }}
+                        >
+                          {status.name}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
+                          {status.status === 'active' ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="text-xs text-muted">
+                        {format(new Date(status.createdAt), 'dd MMM yyyy')}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            onClick={() => startEdit(status)}
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon hover-danger"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            onClick={() => handleDeleteStatus(status)}
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+              {filteredStatuses.map((status) => (
+                <div 
+                  key={status.id} 
+                  className="card" 
+                  style={{ 
+                    padding: 'var(--space-4)', 
+                    margin: 0,
+                    borderLeft: `4px solid ${status.color}`,
+                    background: 'var(--color-bg-card)',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span className="font-semibold text-primary text-sm">{status.name}</span>
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: `${status.color}1c`,
+                        color: status.color,
+                        border: `1px solid ${status.color}33`,
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        padding: '3px 10px',
+                      }}
+                    >
+                      {status.name}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0' }}>
+                    <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: '10px' }}>
+                      {status.status === 'active' ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <span className="text-xs text-muted">Created: {format(new Date(status.createdAt), 'dd MMM yyyy')}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px dashed var(--color-border)', paddingTop: '10px', marginTop: '10px', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
+                      onClick={() => startEdit(status)}
+                    >
+                      <Edit3 size={12} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm hover-danger"
+                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
+                      onClick={() => handleDeleteStatus(status)}
+                    >
+                      <Trash2 size={12} /> <span style={{ marginLeft: 4 }}>Delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

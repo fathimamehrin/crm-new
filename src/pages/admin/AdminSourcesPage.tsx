@@ -235,75 +235,138 @@ const AdminSourcesPage: React.FC = () => {
             <p className="font-medium">No lead sources found</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
-                  <th>Source Channel</th>
-                  <th>Badge Preview</th>
-                  <th>State</th>
-                  <th>Created</th>
-                  <th style={{ width: 100 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSources.map((source, index) => (
-                  <tr key={source.id}>
-                    <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
-                      {index + 1}
-                    </td>
-                    <td className="font-semibold text-primary">{source.name}</td>
-                    <td>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: `${source.color}1c`,
-                          color: source.color,
-                          border: `1px solid ${source.color}33`,
-                          fontWeight: 700,
-                          fontSize: '11px',
-                          padding: '3px 10px',
-                        }}
-                      >
-                        {source.name}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${source.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
-                        {source.status === 'active' ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="text-xs text-muted">
-                      {format(new Date(source.createdAt), 'dd MMM yyyy')}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-icon"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          onClick={() => startEdit(source)}
-                          title="Edit"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-icon hover-danger"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                          onClick={() => handleDeleteSource(source)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
+                    <th>Source Channel</th>
+                    <th>Badge Preview</th>
+                    <th>State</th>
+                    <th>Created</th>
+                    <th style={{ width: 100 }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredSources.map((source, index) => (
+                    <tr key={source.id}>
+                      <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
+                        {index + 1}
+                      </td>
+                      <td className="font-semibold text-primary">{source.name}</td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: `${source.color}1c`,
+                            color: source.color,
+                            border: `1px solid ${source.color}33`,
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            padding: '3px 10px',
+                          }}
+                        >
+                          {source.name}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${source.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
+                          {source.status === 'active' ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="text-xs text-muted">
+                        {format(new Date(source.createdAt), 'dd MMM yyyy')}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            onClick={() => startEdit(source)}
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon hover-danger"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            onClick={() => handleDeleteSource(source)}
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+              {filteredSources.map((source) => (
+                <div 
+                  key={source.id} 
+                  className="card" 
+                  style={{ 
+                    padding: 'var(--space-4)', 
+                    margin: 0,
+                    borderLeft: `4px solid ${source.color}`,
+                    background: 'var(--color-bg-card)',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span className="font-semibold text-primary text-sm">{source.name}</span>
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: `${source.color}1c`,
+                        color: source.color,
+                        border: `1px solid ${source.color}33`,
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        padding: '3px 10px',
+                      }}
+                    >
+                      {source.name}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0' }}>
+                    <span className={`badge ${source.status === 'active' ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: '10px' }}>
+                      {source.status === 'active' ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <span className="text-xs text-muted">Created: {format(new Date(source.createdAt), 'dd MMM yyyy')}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px dashed var(--color-border)', paddingTop: '10px', marginTop: '10px', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
+                      onClick={() => startEdit(source)}
+                    >
+                      <Edit3 size={12} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm hover-danger"
+                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
+                      onClick={() => handleDeleteSource(source)}
+                    >
+                      <Trash2 size={12} /> <span style={{ marginLeft: 4 }}>Delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

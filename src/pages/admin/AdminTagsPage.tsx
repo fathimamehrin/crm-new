@@ -346,84 +346,144 @@ const AdminTagsPage: React.FC = () => {
             <p className="empty-state-desc">No tags matched your search query "{searchQuery}".</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ borderRadius: 0, border: 'none' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
-                  <th>Tag Name</th>
-                  <th>Visual Preview</th>
-                  <th>Created At</th>
-                  <th style={{ width: 180 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTags.map((tag, index) => {
-                  const isDragged = index === draggedIndex;
-                  return (
-                    <tr 
-                      key={tag.id}
-                      data-index={index}
-                      draggable={true}
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragEnd={handleDragEnd}
-                      onDrop={handleDragEnd}
-                      onTouchStart={() => handleTouchStart(index)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
+          <>
+            {/* Desktop Table View */}
+            <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', paddingLeft: 'var(--space-4)' }}></th>
+                    <th>Tag Name</th>
+                    <th>Visual Preview</th>
+                    <th>Created At</th>
+                    <th style={{ width: 180 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTags.map((tag, index) => {
+                    const isDragged = index === draggedIndex;
+                    return (
+                      <tr 
+                        key={tag.id}
+                        data-index={index}
+                        draggable={true}
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragEnd={handleDragEnd}
+                        onDrop={handleDragEnd}
+                        onTouchStart={() => handleTouchStart(index)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        style={{
+                          cursor: isDragging ? 'grabbing' : 'grab',
+                          opacity: isDragged ? 0.5 : 1,
+                          backgroundColor: isDragged ? 'rgba(37, 99, 235, 0.05)' : undefined,
+                          border: isDragged ? '2px dashed var(--color-accent)' : undefined,
+                          boxShadow: isDragged ? '0 4px 12px rgba(15, 23, 42, 0.06)' : undefined,
+                          transition: isDragging ? 'none' : 'background 0.2s ease',
+                          userSelect: 'none',
+                        }}
+                      >
+                        <td style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center', color: 'var(--color-text-muted)', cursor: 'grab' }}>
+                          <GripVertical size={16} />
+                        </td>
+                        <td className="font-semibold text-sm">{tag.name}</td>
+                        <td>
+                          <span
+                            className="tag-badge"
+                            style={{
+                              backgroundColor: `${tag.color}1c`,
+                              color: tag.color,
+                              border: `1px solid ${tag.color}33`,
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              padding: '3px 10px',
+                              borderRadius: '100px',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        </td>
+                        <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => startEdit(tag)} aria-label="Edit Tag">
+                              <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleDeleteTag(tag)}
+                              style={{ minHeight: 32 }}
+                            >
+                              <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+              {filteredTags.map((tag, index) => (
+                <div 
+                  key={tag.id} 
+                  className="card" 
+                  style={{ 
+                    padding: 'var(--space-4)', 
+                    margin: 0,
+                    borderLeft: `4px solid ${tag.color}`,
+                    background: 'var(--color-bg-card)',
+                    position: 'relative'
+                  }}
+                  data-index={index}
+                  onTouchStart={() => handleTouchStart(index)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ color: 'var(--color-text-muted)', cursor: 'grab', padding: '4px' }}>
+                        <GripVertical size={16} />
+                      </div>
+                      <span className="font-semibold text-sm">{tag.name}</span>
+                    </div>
+                    <span
+                      className="tag-badge"
                       style={{
-                        cursor: isDragging ? 'grabbing' : 'grab',
-                        opacity: isDragged ? 0.5 : 1,
-                        backgroundColor: isDragged ? 'rgba(37, 99, 235, 0.05)' : undefined,
-                        border: isDragged ? '2px dashed var(--color-accent)' : undefined,
-                        boxShadow: isDragged ? '0 4px 12px rgba(15, 23, 42, 0.06)' : undefined,
-                        transition: isDragging ? 'none' : 'background 0.2s ease',
-                        userSelect: 'none',
+                        backgroundColor: `${tag.color}1c`,
+                        color: tag.color,
+                        border: `1px solid ${tag.color}33`,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        padding: '3px 10px',
+                        borderRadius: '100px',
+                        textTransform: 'uppercase',
                       }}
                     >
-                      <td style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center', color: 'var(--color-text-muted)', cursor: 'grab' }}>
-                        <GripVertical size={16} />
-                      </td>
-                      <td className="font-semibold text-sm">{tag.name}</td>
-                      <td>
-                        <span
-                          className="tag-badge"
-                          style={{
-                            backgroundColor: `${tag.color}1c`,
-                            color: tag.color,
-                            border: `1px solid ${tag.color}33`,
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            padding: '3px 10px',
-                            borderRadius: '100px',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          {tag.name}
-                        </span>
-                      </td>
-                      <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(tag)} aria-label="Edit Tag">
-                            <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
-                          </button>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleDeleteTag(tag)}
-                            style={{ minHeight: 32 }}
-                          >
-                            <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      {tag.name}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px dashed var(--color-border)', paddingTop: '10px', marginTop: '10px' }}>
+                    <span className="text-xs text-muted">Created: {format(tag.createdAt, 'dd MMM yyyy')}</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', minHeight: 'auto', height: '28px', fontSize: '11px' }} onClick={() => startEdit(tag)}>
+                        <Edit3 size={12} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                      </button>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px', minHeight: 'auto', height: '28px', fontSize: '11px' }} onClick={() => handleDeleteTag(tag)}>
+                        <Trash2 size={12} /> <span style={{ marginLeft: 4 }}>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
