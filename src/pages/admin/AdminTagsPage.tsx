@@ -105,7 +105,7 @@ const AdminTagsPage: React.FC = () => {
 
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    const row = element?.closest('tr');
+    const row = element?.closest('[data-index]');
     if (row) {
       const idxAttr = row.getAttribute('data-index');
       if (idxAttr !== null) {
@@ -428,56 +428,74 @@ const AdminTagsPage: React.FC = () => {
             </div>
 
             {/* Mobile Cards View */}
-            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
               {filteredTags.map((tag, index) => (
                 <div 
                   key={tag.id} 
                   className="card" 
                   style={{ 
-                    padding: 'var(--space-4)', 
-                    margin: 0,
+                    padding: '14px 16px', 
+                    margin: '0 0 var(--space-2) 0',
                     borderLeft: `4px solid ${tag.color}`,
                     background: 'var(--color-bg-card)',
-                    position: 'relative'
+                    boxShadow: 'var(--shadow-sm)',
+                    borderRadius: 'var(--radius-lg)'
                   }}
                   data-index={index}
                   onTouchStart={() => handleTouchStart(index)}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ color: 'var(--color-text-muted)', cursor: 'grab', padding: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <div style={{ color: 'var(--color-text-muted)', cursor: 'grab', padding: '6px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                         <GripVertical size={16} />
                       </div>
-                      <span className="font-semibold text-sm">{tag.name}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                        <span className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '120px' }}>{tag.name}</span>
+                        <span className="text-xs text-muted" style={{ fontSize: '10px' }}>Created: {format(tag.createdAt, 'dd MMM yyyy')}</span>
+                      </div>
                     </div>
-                    <span
-                      className="tag-badge"
-                      style={{
-                        backgroundColor: `${tag.color}1c`,
-                        color: tag.color,
-                        border: `1px solid ${tag.color}33`,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        padding: '3px 10px',
-                        borderRadius: '100px',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {tag.name}
-                    </span>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px dashed var(--color-border)', paddingTop: '10px', marginTop: '10px' }}>
-                    <span className="text-xs text-muted">Created: {format(tag.createdAt, 'dd MMM yyyy')}</span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', minHeight: 'auto', height: '28px', fontSize: '11px' }} onClick={() => startEdit(tag)}>
-                        <Edit3 size={12} /> <span style={{ marginLeft: 4 }}>Edit</span>
-                      </button>
-                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px', minHeight: 'auto', height: '28px', fontSize: '11px' }} onClick={() => handleDeleteTag(tag)}>
-                        <Trash2 size={12} /> <span style={{ marginLeft: 4 }}>Delete</span>
-                      </button>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                      <span
+                        className="tag-badge"
+                        style={{
+                          backgroundColor: `${tag.color}1c`,
+                          color: tag.color,
+                          border: `1px solid ${tag.color}33`,
+                          fontSize: '0.7rem',
+                          fontWeight: 650,
+                          padding: '2px 8px',
+                          borderRadius: '100px',
+                          textTransform: 'uppercase',
+                          maxWidth: '80px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {tag.name}
+                      </span>
+                      
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          className="btn btn-secondary btn-icon" 
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                          onClick={() => startEdit(tag)}
+                          aria-label="Edit Tag"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-icon hover-danger" 
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                          onClick={() => handleDeleteTag(tag)}
+                          aria-label="Delete Tag"
+                        >
+                          <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

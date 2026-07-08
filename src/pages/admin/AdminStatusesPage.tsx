@@ -308,60 +308,69 @@ const AdminStatusesPage: React.FC = () => {
             </div>
 
             {/* Mobile Cards View */}
-            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
               {filteredStatuses.map((status) => (
                 <div 
                   key={status.id} 
                   className="card" 
                   style={{ 
-                    padding: 'var(--space-4)', 
-                    margin: 0,
+                    padding: '14px 16px', 
+                    margin: '0 0 var(--space-2) 0',
                     borderLeft: `4px solid ${status.color}`,
                     background: 'var(--color-bg-card)',
-                    position: 'relative'
+                    boxShadow: 'var(--shadow-sm)',
+                    borderRadius: 'var(--radius-lg)'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span className="font-semibold text-primary text-sm">{status.name}</span>
-                    <span
-                      className="badge"
-                      style={{
-                        backgroundColor: `${status.color}1c`,
-                        color: status.color,
-                        border: `1px solid ${status.color}33`,
-                        fontWeight: 700,
-                        fontSize: '11px',
-                        padding: '3px 10px',
-                      }}
-                    >
-                      {status.name}
-                    </span>
-                  </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0' }}>
-                    <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: '10px' }}>
-                      {status.status === 'active' ? 'Enabled' : 'Disabled'}
-                    </span>
-                    <span className="text-xs text-muted">Created: {format(new Date(status.createdAt), 'dd MMM yyyy')}</span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px dashed var(--color-border)', paddingTop: '10px', marginTop: '10px', justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
-                      onClick={() => startEdit(status)}
-                    >
-                      <Edit3 size={12} /> <span style={{ marginLeft: 4 }}>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm hover-danger"
-                      style={{ padding: '4px 10px', fontSize: '11px', height: '28px', minHeight: 'auto' }}
-                      onClick={() => handleDeleteStatus(status)}
-                    >
-                      <Trash2 size={12} /> <span style={{ marginLeft: 4 }}>Delete</span>
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <span className="font-semibold text-sm text-primary truncate" style={{ maxWidth: '140px' }}>{status.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                        <span className={`badge ${status.status === 'active' ? 'badge-success' : 'badge-muted'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
+                          {status.status === 'active' ? 'Enabled' : 'Disabled'}
+                        </span>
+                        <span className="text-xs text-muted" style={{ fontSize: '10px' }}>Created: {format(new Date(status.createdAt), 'dd MMM yyyy')}</span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: `${status.color}1c`,
+                          color: status.color,
+                          border: `1px solid ${status.color}33`,
+                          fontWeight: 700,
+                          fontSize: '11px',
+                          padding: '3px 10px',
+                          maxWidth: '90px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {status.name}
+                      </span>
+                      
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          className="btn btn-secondary btn-icon" 
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                          onClick={() => startEdit(status)}
+                          title="Edit"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-icon hover-danger" 
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', padding: 0 }} 
+                          onClick={() => handleDeleteStatus(status)}
+                          title="Delete"
+                        >
+                          <Trash2 size={14} style={{ color: 'var(--color-danger)' }} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
