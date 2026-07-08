@@ -1176,6 +1176,8 @@ const AdminClientsPage: React.FC = () => {
                     setPage(1);
                   }}
                   allTags={allTags}
+                  customStatuses={customStatuses}
+                  allSources={allSources}
                 />
 
                 {/* Pagination */}
