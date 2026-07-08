@@ -273,19 +273,36 @@ export const getClientStatuses = async (): Promise<CustomStatus[]> => {
   const snap = await getDocs(clientStatusesColRef());
   let statuses = snap.docs.map(customStatusFromDoc);
   if (statuses.length === 0) {
-    const defaults = [
-      { name: 'Active', color: '#10b981' },
-      { name: 'Inactive', color: '#6b7280' },
-      { name: 'Lead', color: '#f59e0b' },
-      { name: 'Closed', color: '#ef4444' },
-    ];
-    for (const d of defaults) {
-      await createClientStatus(d.name, d.color);
+    const refetch = await getDocs(clientStatusesColRef());
+    if (refetch.docs.length === 0) {
+      const defaults = [
+        { name: 'Active', color: '#10b981' },
+        { name: 'Inactive', color: '#6b7280' },
+        { name: 'Lead', color: '#f59e0b' },
+        { name: 'Closed', color: '#ef4444' },
+      ];
+      for (const d of defaults) {
+        await createClientStatus(d.name, d.color);
+      }
+      const snapRefreshed = await getDocs(clientStatusesColRef());
+      statuses = snapRefreshed.docs.map(customStatusFromDoc);
+    } else {
+      statuses = refetch.docs.map(customStatusFromDoc);
     }
-    const snapRefreshed = await getDocs(clientStatusesColRef());
-    statuses = snapRefreshed.docs.map(customStatusFromDoc);
   }
-  return statuses.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  // Deduplicate by case-insensitive name to hide any duplicate DB records
+  const uniqueStatuses: CustomStatus[] = [];
+  const seen = new Set<string>();
+  for (const s of statuses) {
+    const key = s.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueStatuses.push(s);
+    }
+  }
+
+  return uniqueStatuses.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 };
 
 export const createClientStatus = async (name: string, color: string): Promise<string> => {
@@ -333,19 +350,36 @@ export const getLeadSources = async (): Promise<LeadSource[]> => {
   const snap = await getDocs(leadSourcesColRef());
   let sources = snap.docs.map(leadSourceFromDoc);
   if (sources.length === 0) {
-    const defaults = [
-      { name: 'Google', color: '#3b82f6' },
-      { name: 'Facebook', color: '#6366f1' },
-      { name: 'Referral', color: '#a855f7' },
-      { name: 'Other', color: '#6b7280' },
-    ];
-    for (const d of defaults) {
-      await createLeadSource(d.name, d.color);
+    const refetch = await getDocs(leadSourcesColRef());
+    if (refetch.docs.length === 0) {
+      const defaults = [
+        { name: 'Google', color: '#3b82f6' },
+        { name: 'Facebook', color: '#6366f1' },
+        { name: 'Referral', color: '#a855f7' },
+        { name: 'Other', color: '#6b7280' },
+      ];
+      for (const d of defaults) {
+        await createLeadSource(d.name, d.color);
+      }
+      const snapRefreshed = await getDocs(leadSourcesColRef());
+      sources = snapRefreshed.docs.map(leadSourceFromDoc);
+    } else {
+      sources = refetch.docs.map(leadSourceFromDoc);
     }
-    const snapRefreshed = await getDocs(leadSourcesColRef());
-    sources = snapRefreshed.docs.map(leadSourceFromDoc);
   }
-  return sources.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  // Deduplicate by case-insensitive name to hide duplicate DB records
+  const uniqueSources: LeadSource[] = [];
+  const seen = new Set<string>();
+  for (const s of sources) {
+    const key = s.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSources.push(s);
+    }
+  }
+
+  return uniqueSources.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 };
 
 export const createLeadSource = async (name: string, color: string): Promise<string> => {

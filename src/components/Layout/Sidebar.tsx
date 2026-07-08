@@ -35,8 +35,16 @@ const NavItem: React.FC<NavItemProps> = ({
   className = '',
   badge,
 }) => {
-  const showFloatingBadge = badge !== undefined && badge > 0 && collapsed;
-  const showTextCount = badge !== undefined && badge > 0 && !collapsed;
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const showFloatingBadge = badge !== undefined && badge > 0 && collapsed && !isMobile;
+  const showTextCount = badge !== undefined && badge > 0 && (!collapsed || isMobile);
 
   return (
     <NavLink
