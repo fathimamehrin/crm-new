@@ -311,8 +311,12 @@ const AdminClientsPage: React.FC = () => {
 
       const clientIds = new Set(statsClients.map(c => c.id));
       const revenue = summariesData
-        .filter(s => clientIds.has(s.clientId) && s.paymentDetails?.status === 'paid' && s.paymentDetails?.amount)
-        .reduce((sum, s) => sum + (s.paymentDetails?.amount || 0), 0);
+        .filter(s => 
+          clientIds.has(s.clientId) && 
+          s.paymentDetails?.amount && 
+          (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
+        )
+        .reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
 
       setStats({ total, active, closed, conversionRate, revenue });
 

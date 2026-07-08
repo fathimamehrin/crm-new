@@ -147,18 +147,20 @@ const RevenueAnalyticsPage: React.FC = () => {
     const monthlyRevenue: Record<string, number> = {};
 
     filteredTxs.forEach(tx => {
+      const amountVal = Number(tx.amount || 0);
+
       // Status counters
       if (tx.status === 'paid') {
-        collectedTotal += tx.amount;
+        collectedTotal += amountVal;
         statusCounts.paid += 1;
       } else if (tx.status === 'partial') {
-        collectedTotal += tx.amount; // partial is collected revenue
+        collectedTotal += amountVal; // partial is collected revenue
         statusCounts.partial += 1;
       } else if (tx.status === 'pending') {
-        pendingTotal += tx.amount;
+        pendingTotal += amountVal;
         statusCounts.pending += 1;
       } else if (tx.status === 'failed') {
-        failedTotal += tx.amount;
+        failedTotal += amountVal;
         statusCounts.failed += 1;
       }
 
@@ -169,7 +171,7 @@ const RevenueAnalyticsPage: React.FC = () => {
         agentRevenue[agentId] = { name: agentName, collected: 0 };
       }
       if (tx.status === 'paid' || tx.status === 'partial') {
-        agentRevenue[agentId].collected += tx.amount;
+        agentRevenue[agentId].collected += amountVal;
       }
 
       // Group by month
@@ -178,7 +180,7 @@ const RevenueAnalyticsPage: React.FC = () => {
         monthlyRevenue[monthStr] = 0;
       }
       if (tx.status === 'paid' || tx.status === 'partial') {
-        monthlyRevenue[monthStr] += tx.amount;
+        monthlyRevenue[monthStr] += amountVal;
       }
     });
 
