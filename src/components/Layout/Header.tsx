@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Settings, Menu, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import logo from '../../assets/logo.png';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -10,13 +12,31 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
-  const { userProfile, userRole, logout } = useAuth();
+  const { currentUser, userProfile, userRole, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
   const isTasksPage = location.pathname === '/tasks';
 
   const [isScrolled, setIsScrolled] = useState(false);
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
+
+
+  // Listen to pending tasks for agents
+  useEffect(() => {
+    if (!db || !currentUser || userRole !== 'agent') return;
+    const q = query(
+      collection(db, 'tasks'),
+      where('assignedTo', '==', currentUser.uid),
+      where('status', 'in', ['pending_acceptance', 'accepted', 'pending_reassignment'])
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      setPendingTasksCount(snap.size);
+    });
+
+    return () => unsub();
+  }, [currentUser, userRole]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -79,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
               }}
             >
               <ClipboardList size={15} />
-              <span>Tasks</span>
+              <span>Tasks {pendingTasksCount > 0 ? `(${pendingTasksCount})` : ''}</span>
             </button>
           )}
 

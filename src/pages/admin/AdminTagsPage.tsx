@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, Edit3, Search, Tag as TagIcon, Trash2 } from 'lucide-react';
+import { Plus, X, Edit3, Search, Tag as TagIcon, Trash2, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTags, createTag, updateTag, deleteTag, logActivity } from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,10 +22,113 @@ const PRESET_COLORS = [
 const AdminTagsPage: React.FC = () => {
   const { currentUser, userProfile } = useAuth();
   
-  // Data states
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Drag and drop / Touch longpress states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchTimeout = React.useRef<any>(null);
+  const tagsRef = React.useRef<Tag[]>([]);
+
+  useEffect(() => {
+    tagsRef.current = tags;
+  }, [tags]);
+
+  const reorderTags = (fromIndex: number, toIndex: number) => {
+    setTags((prevTags) => {
+      const result = Array.from(prevTags);
+      const [removed] = result.splice(fromIndex, 1);
+      result.splice(toIndex, 0, removed);
+      return result;
+    });
+  };
+
+  const saveNewOrder = async () => {
+    try {
+      const currentTags = tagsRef.current;
+      const promises = currentTags.map((tag, idx) => {
+        return updateTag(tag.id, { order: idx });
+      });
+      await Promise.all(promises);
+      toast.success('Tag priority order saved');
+    } catch (err) {
+      console.error('Failed to save priority:', err);
+      toast.error('Failed to save priority order');
+    }
+  };
+
+  // HTML5 Drag Event Handlers (Desktop)
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      reorderTags(draggedIndex, index);
+      setDraggedIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setIsDragging(false);
+    saveNewOrder();
+  };
+
+  // Touch Event Handlers for Mobile Longpress & Drag
+  const handleTouchStart = (index: number) => {
+    touchTimeout.current = setTimeout(() => {
+      setIsDragging(true);
+      setDraggedIndex(index);
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 450);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || draggedIndex === null) {
+      if (touchTimeout.current) {
+        clearTimeout(touchTimeout.current);
+        touchTimeout.current = null;
+      }
+      return;
+    }
+
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const row = element?.closest('tr');
+    if (row) {
+      const idxAttr = row.getAttribute('data-index');
+      if (idxAttr !== null) {
+        const hoverIdx = parseInt(idxAttr, 10);
+        if (hoverIdx !== draggedIndex) {
+          reorderTags(draggedIndex, hoverIdx);
+          setDraggedIndex(hoverIdx);
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimeout.current) {
+      clearTimeout(touchTimeout.current);
+      touchTimeout.current = null;
+    }
+    if (isDragging) {
+      setIsDragging(false);
+      setDraggedIndex(null);
+      saveNewOrder();
+    }
+  };
   
   // Add tag modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -205,6 +308,25 @@ const AdminTagsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Priority instruction card */}
+      {!loading && tags.length > 0 && (
+        <div style={{
+          background: 'color-mix(in srgb, var(--color-accent) 6%, var(--color-bg-card))',
+          border: '1px solid color-mix(in srgb, var(--color-accent) 15%, var(--color-border))',
+          borderRadius: 'var(--radius-lg)',
+          padding: '12px 16px',
+          marginBottom: 'var(--space-5)',
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center'
+        }}>
+          <TagIcon size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: '1.4' }}>
+            <strong>Prioritize Display Order</strong>: Long-press on a row and drag it up/down to set the priority order. The priority is saved automatically and applied to filters and select drop-downs across the CRM.
+          </span>
+        </div>
+      )}
+
       {/* Tags List Container */}
       <div className="card" style={{ padding: 0 }}>
         {loading ? (
@@ -236,46 +358,69 @@ const AdminTagsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTags.map((tag, index) => (
-                  <tr key={tag.id}>
-                    <td className="text-sm font-bold text-muted" style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center' }}>
-                      {index + 1}
-                    </td>
-                    <td className="font-semibold text-sm">{tag.name}</td>
-                    <td>
-                      <span
-                        className="tag-badge"
-                        style={{
-                          backgroundColor: `${tag.color}1c`,
-                          color: tag.color,
-                          border: `1px solid ${tag.color}33`,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          padding: '3px 10px',
-                          borderRadius: '100px',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {tag.name}
-                      </span>
-                    </td>
-                    <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(tag)} aria-label="Edit Tag">
-                          <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleDeleteTag(tag)}
-                          style={{ minHeight: 32 }}
+                {filteredTags.map((tag, index) => {
+                  const isDragged = index === draggedIndex;
+                  return (
+                    <tr 
+                      key={tag.id}
+                      data-index={index}
+                      draggable={true}
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      onDrop={handleDragEnd}
+                      onTouchStart={() => handleTouchStart(index)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      style={{
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        opacity: isDragged ? 0.5 : 1,
+                        backgroundColor: isDragged ? 'rgba(37, 99, 235, 0.05)' : undefined,
+                        border: isDragged ? '2px dashed var(--color-accent)' : undefined,
+                        boxShadow: isDragged ? '0 4px 12px rgba(15, 23, 42, 0.06)' : undefined,
+                        transition: isDragging ? 'none' : 'background 0.2s ease',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <td style={{ width: '40px', paddingLeft: 'var(--space-4)', textAlign: 'center', color: 'var(--color-text-muted)', cursor: 'grab' }}>
+                        <GripVertical size={16} />
+                      </td>
+                      <td className="font-semibold text-sm">{tag.name}</td>
+                      <td>
+                        <span
+                          className="tag-badge"
+                          style={{
+                            backgroundColor: `${tag.color}1c`,
+                            color: tag.color,
+                            border: `1px solid ${tag.color}33`,
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            padding: '3px 10px',
+                            borderRadius: '100px',
+                            textTransform: 'uppercase',
+                          }}
                         >
-                          <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {tag.name}
+                        </span>
+                      </td>
+                      <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(tag)} aria-label="Edit Tag">
+                            <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDeleteTag(tag)}
+                            style={{ minHeight: 32 }}
+                          >
+                            <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

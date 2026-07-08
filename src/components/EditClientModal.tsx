@@ -129,7 +129,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
   const { countryCode, digits } = parseWhatsApp(client.whatsappNumber);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: client.name,
@@ -147,8 +147,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
     },
   });
 
-  const selectedStatus = watch('status');
-  const isLead = selectedStatus?.toLowerCase().includes('lead');
+
 
   useEffect(() => {
     if (userRole === 'admin') {
@@ -206,7 +205,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         tags: selectedTags,
         createdAt: selectedDate,
         projectName: data.projectName || '',
-        leadSource: isLead ? (data.leadSource || '') : '',
+        leadSource: data.leadSource || '',
       };
 
       if (userRole === 'admin') {
@@ -401,27 +400,24 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                 </div>
               </div>
 
-              {isLead && (
-                <div className="form-group">
-                  <label className="form-label required" htmlFor="client-lead-source-input">Lead Source</label>
-                  <select
-                    id="client-lead-source-input"
-                    className="form-input form-select"
-                    {...register('leadSource')}
-                    required
-                  >
-                    <option value="">Select Lead Source...</option>
-                    {leadSources
-                      .filter(s => s.status === 'active' || s.name.toLowerCase() === (client.leadSource || '').toLowerCase())
-                      .map(s => (
-                        <option key={s.id} value={s.name}>{s.name}</option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-muted" style={{ marginTop: 4 }}>
-                    Select the channel from which this lead originated.
-                  </p>
-                </div>
-              )}
+              <div className="form-group">
+                <label className="form-label" htmlFor="client-lead-source-input">Lead Source</label>
+                <select
+                  id="client-lead-source-input"
+                  className="form-input form-select"
+                  {...register('leadSource')}
+                >
+                  <option value="">Select Lead Source (Optional)...</option>
+                  {leadSources
+                    .filter(s => s.status === 'active' || s.name.toLowerCase() === (client.leadSource || '').toLowerCase())
+                    .map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                </select>
+                <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                  Select the channel from which this lead originated.
+                </p>
+              </div>
 
               {/* Assigned Agent (Admin Only) */}
               {isAdmin ? (
@@ -476,6 +472,40 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
           </div>
         </div>
 
+        {/* Tags Selection */}
+        <div className="form-group" style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+          <label className="form-label">Tags / Labels</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+            {allTags.map((tag) => {
+              const isSelected = selectedTags.includes(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                    } else {
+                      setSelectedTags([...selectedTags, tag.id]);
+                    }
+                  }}
+                  className={`tag-selectable-pill ${isSelected ? 'active' : ''}`}
+                  style={isSelected ? {
+                    backgroundColor: `${tag.color}1c`,
+                    color: tag.color,
+                    borderColor: tag.color,
+                  } : {}}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+            {allTags.length === 0 && (
+              <span className="text-xs text-muted">No custom tags available. Manage tags in the Admin Panel.</span>
+            )}
+          </div>
+        </div>
+
         {/* Email & Alternative Number relocated to the very bottom of the form */}
         <div className="grid grid-2" style={{ gap: 'var(--space-5)', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
           {/* Email */}
@@ -508,40 +538,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
               />
             </div>
             {errors.alternateContact && <span className="form-error">{errors.alternateContact.message}</span>}
-          </div>
-        </div>
-
-        {/* Tags Selection */}
-        <div className="form-group" style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-          <label className="form-label">Tags / Labels</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
-            {allTags.map((tag) => {
-              const isSelected = selectedTags.includes(tag.id);
-              return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => {
-                    if (isSelected) {
-                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
-                    } else {
-                      setSelectedTags([...selectedTags, tag.id]);
-                    }
-                  }}
-                  className={`tag-selectable-pill ${isSelected ? 'active' : ''}`}
-                  style={isSelected ? {
-                    backgroundColor: `${tag.color}1c`,
-                    color: tag.color,
-                    borderColor: tag.color,
-                  } : {}}
-                >
-                  {tag.name}
-                </button>
-              );
-            })}
-            {allTags.length === 0 && (
-              <span className="text-xs text-muted">No custom tags available. Manage tags in the Admin Panel.</span>
-            )}
           </div>
         </div>
 

@@ -3220,12 +3220,14 @@ h1, h2, h3, h4, h5, h6 {
     padding: 16px !important;
     border-top-left-radius: 18px !important;
     border-top-right-radius: 18px !important;
+    overflow-x: hidden !important;
   }
   .admin-main {
     margin: 6px 6px 0 6px !important;
     padding: 16px !important;
     border-top-left-radius: 18px !important;
     border-top-right-radius: 18px !important;
+    overflow-x: hidden !important;
   }
 
   /* Header compact */
@@ -3397,4 +3399,42 @@ h1, h2, h3, h4, h5, h6 {
   .mobile-card { padding: 11px 12px !important; gap: 8px !important; margin-bottom: 8px !important; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
   .hide-xs { display: none !important; }
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Flush card utility */
+.card-flush {
+  padding: 0 !important;
+}
+
+/* Admin Layout Grid */
+.admin-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-6);
+  align-items: stretch;
+  min-width: 0;
+}
+
+/* Grid children must have min-width: 0 to prevent overflow */
+.admin-layout-grid > * {
+  min-width: 0;
+}
+
+.metrics-grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .admin-layout-grid {
+    grid-template-columns: 1fr !important;
+  }
 }

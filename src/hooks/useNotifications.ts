@@ -15,8 +15,6 @@ const ACTION_LABELS: Record<string, string> = {
   agent_enabled: 'Agent enabled',
   agent_disabled: 'Agent disabled',
   admin_created: 'New admin created',
-  user_login: 'User logged in',
-  user_logout: 'User logged out',
   task_created: 'New task created',
   task_accepted: 'Task accepted',
   task_rejected: 'Task rejected',
@@ -52,18 +50,25 @@ export const useNotifications = () => {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const items: NotificationItem[] = snap.docs.map((d) => {
-        const log = d.data() as ActivityLog & { createdAt: Timestamp };
-        return {
-          id: d.id,
-          title: ACTION_LABELS[log.action] ?? log.action,
-          message: log.entityName
-            ? `${log.userName ?? 'Someone'} → ${log.entityName}`
-            : `By ${log.userName ?? 'Unknown'}`,
-          read: readIds.has(d.id),
-          createdAt: log.createdAt instanceof Timestamp ? log.createdAt.toDate() : new Date(),
-        };
-      });
+      const items: NotificationItem[] = snap.docs
+        .map((d) => {
+          const log = d.data() as ActivityLog & { userId: string; createdAt: Timestamp };
+          
+          // Exclude self-actions and non-labeled actions
+          if (log.userId === currentUser.uid) return null;
+          if (!ACTION_LABELS[log.action]) return null;
+
+          return {
+            id: d.id,
+            title: ACTION_LABELS[log.action],
+            message: log.entityName
+              ? `${log.userName ?? 'Someone'} → ${log.entityName}`
+              : `By ${log.userName ?? 'Unknown'}`,
+            read: readIds.has(d.id),
+            createdAt: log.createdAt instanceof Timestamp ? log.createdAt.toDate() : new Date(),
+          };
+        })
+        .filter(Boolean) as NotificationItem[];
       setNotifications(items);
     }, (error) => {
       console.error("Notifications snapshot error:", error);

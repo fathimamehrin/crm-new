@@ -8,11 +8,47 @@ import { getClientByWhatsApp } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
+const parseWhatsAppNumber = (rawText: string) => {
+  const clean = rawText.trim().replace(/[^\d+]/g, '');
+  const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
+
+  for (const code of possibleCodes) {
+    if (clean.startsWith(code)) {
+      return {
+        countryCode: code,
+        digits: clean.substring(code.length),
+      };
+    }
+  }
+
+  for (const code of possibleCodes) {
+    const codeWithoutPlus = code.replace('+', '');
+    if (clean.startsWith(codeWithoutPlus) && clean.length > codeWithoutPlus.length + 3) {
+      return {
+        countryCode: code,
+        digits: clean.substring(codeWithoutPlus.length),
+      };
+    }
+  }
+
+  if (clean.startsWith('0') && clean.length > 5) {
+    return {
+      countryCode: null,
+      digits: clean.substring(1),
+    };
+  }
+
+  return {
+    countryCode: null,
+    digits: clean,
+  };
+};
+
 const schema = z.object({
   countryCode: z.string(),
   whatsappNumber: z
     .string()
-    .regex(/^\d{10}$/, 'WhatsApp number must be exactly 10 digits'),
+    .regex(/^\d{7,15}$/, 'WhatsApp number must be between 7 and 15 digits'),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -91,91 +127,25 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ onClose }) => {
                   type="tel"
                   className={`form-input ${errors.whatsappNumber ? 'error' : ''}`}
                   style={{ paddingLeft: '2.5rem' }}
-                  placeholder="10-digit number"
+                  placeholder="WhatsApp number"
                   maxLength={15}
                   {...register('whatsappNumber', {
                     onChange: (e) => {
-                      const rawVal = e.target.value;
-                      const clean = rawVal.replace(/[^\d+]/g, '');
-                      const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                      let matchedCode = '';
-                      let remainingNumber = clean;
-
-                      for (const code of possibleCodes) {
-                        if (clean.startsWith(code)) {
-                          matchedCode = code;
-                          remainingNumber = clean.substring(code.length);
-                          break;
-                        }
+                      const parsed = parseWhatsAppNumber(e.target.value);
+                      if (parsed.countryCode) {
+                        setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                       }
-
-                      if (!matchedCode) {
-                        for (const code of possibleCodes) {
-                          const codeWithoutPlus = code.replace('+', '');
-                          if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                            matchedCode = code;
-                            remainingNumber = clean.substring(codeWithoutPlus.length);
-                            break;
-                          }
-                        }
-                      }
-
-                      if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                        setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                        return;
-                      }
-
-                      if (matchedCode) {
-                        setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                        setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                      } else {
-                        setValue('whatsappNumber', clean.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                      }
+                      setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                     }
                   })}
                   onPaste={(e) => {
                     const pastedText = e.clipboardData.getData('text');
-                    console.log('Add modal onPaste triggered. Raw text:', pastedText);
-                    const clean = pastedText.replace(/[^\d+]/g, '');
-                    console.log('Add modal cleaned text:', clean);
-                    const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
-                    let matchedCode = '';
-                    let remainingNumber = clean;
-
-                    for (const code of possibleCodes) {
-                      if (clean.startsWith(code)) {
-                        matchedCode = code;
-                        remainingNumber = clean.substring(code.length);
-                        break;
-                      }
+                    const parsed = parseWhatsAppNumber(pastedText);
+                    e.preventDefault();
+                    if (parsed.countryCode) {
+                      setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
                     }
-                    console.log('Add modal loop 1 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                    if (!matchedCode) {
-                      for (const code of possibleCodes) {
-                        const codeWithoutPlus = code.replace('+', '');
-                        if (clean.startsWith(codeWithoutPlus) && clean.length > 10) {
-                          matchedCode = code;
-                          remainingNumber = clean.substring(codeWithoutPlus.length);
-                          break;
-                        }
-                      }
-                    }
-                    console.log('Add modal loop 2 check - matched:', matchedCode, 'remaining:', remainingNumber);
-
-                    if (!matchedCode && clean.startsWith('0') && clean.length === 11) {
-                      console.log('Add modal matched leading zero, setting number:', clean.substring(1));
-                      e.preventDefault();
-                      setValue('whatsappNumber', clean.substring(1), { shouldDirty: true, shouldValidate: true });
-                      return;
-                    }
-
-                    if (matchedCode) {
-                      console.log('Add modal matched code, setting country:', matchedCode, 'number:', remainingNumber.slice(0, 10));
-                      e.preventDefault();
-                      setValue('countryCode', matchedCode, { shouldDirty: true, shouldValidate: true });
-                      setValue('whatsappNumber', remainingNumber.slice(0, 10), { shouldDirty: true, shouldValidate: true });
-                    }
+                    setValue('whatsappNumber', parsed.digits, { shouldDirty: true, shouldValidate: true });
                   }}
                 />
               </div>

@@ -200,6 +200,7 @@ export interface Tag {
   color: string; // Hex color code
   status: 'active' | 'disabled';
   createdAt: Date;
+  order?: number;
 }
 
 export interface CustomStatus {

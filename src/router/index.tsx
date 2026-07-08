@@ -23,6 +23,8 @@ import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
 import LeadAnalyticsPage from '../pages/admin/LeadAnalyticsPage';
 import TasksPage from '../pages/TasksPage';
 import AdminCalendarPage from '../pages/admin/AdminCalendarPage';
+import AdminStatusesPage from '../pages/admin/AdminStatusesPage';
+import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
 
 // Root layout: wraps the entire router tree inside AuthProvider so every
 // page — including /login — has access to useAuth().
@@ -67,6 +69,8 @@ const router = createBrowserRouter([
                   { path: '/admin/requests', element: <EditRequestsPage /> },
                   { path: '/admin/calendar', element: <AdminCalendarPage /> },
                   { path: '/admin/tags', element: <AdminTagsPage /> },
+                  { path: '/admin/statuses', element: <AdminStatusesPage /> },
+                  { path: '/admin/sources', element: <AdminSourcesPage /> },
 
                   { path: '/admin/duration', element: <StaffDurationPage /> },
                   { path: '/admin/revenue', element: <RevenueAnalyticsPage /> },

@@ -13,7 +13,6 @@ import ClientTable from '../components/ClientTable/ClientTable';
 import ClientFilters from '../components/ClientTable/ClientFilters';
 import Pagination from '../components/Pagination';
 import AddClientModal from '../components/AddClientModal';
-import CalendarView from '../components/CalendarView';
 import toast from 'react-hot-toast';
 
 
@@ -47,8 +46,7 @@ const DashboardPage: React.FC = () => {
   const [totalClients, setTotalClients] = useState(0);
   const PAGE_SIZE = 25;
 
-  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
-  const [allFilteredClients, setAllFilteredClients] = useState<Client[]>([]);
+
 
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
@@ -313,7 +311,6 @@ const DashboardPage: React.FC = () => {
 
         setSearchResults(results);
         setTotalClients(results.length);
-        setAllFilteredClients(results.map(r => r.client));
       } else {
         // Fallback to basic date filtering for client list when search is empty
         let filtered = data;
@@ -328,7 +325,6 @@ const DashboardPage: React.FC = () => {
         const start = (page - 1) * PAGE_SIZE;
         setClients(filtered.slice(start, start + PAGE_SIZE));
         setSearchResults([]);
-        setAllFilteredClients(filtered);
       }
     } catch {
       toast.error('Failed to load clients');
@@ -509,7 +505,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Table Card */}
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card card-flush">
         {/* Table toolbar */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
@@ -533,25 +529,7 @@ const DashboardPage: React.FC = () => {
             />
           </div>
 
-          {/* View Mode Toggle */}
-          <div className="tabs" style={{ marginLeft: 'var(--space-2)' }}>
-            <button
-              type="button"
-              className={`tab-btn ${viewMode === 'table' ? 'active' : ''}`}
-              onClick={() => setViewMode('table')}
-              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
-            >
-              List
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-              onClick={() => setViewMode('calendar')}
-              style={{ fontSize: 'var(--font-size-xs)', padding: '0.4rem 0.8rem' }}
-            >
-              Calendar
-            </button>
-          </div>
+
 
           {/* Filter button */}
           <button
@@ -562,27 +540,110 @@ const DashboardPage: React.FC = () => {
             <Filter size={16} />
             Filters
             {(filters.agentId || 
-              (filters.status && filters.status !== 'active') || 
+              filters.status || 
               filters.paymentStatus || 
               filters.dateFrom || 
               filters.dateTo ||
               (filters.tags && filters.tags.length > 0)) && (
               <span style={{
-                width: 18, height: 18, borderRadius: '50%',
-                background: 'var(--color-accent)', color: '#fff',
-                fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>•</span>
+                borderRadius: '100px',
+                background: 'var(--color-accent, #2563eb)',
+                color: '#ffffff',
+                fontSize: '10px',
+                fontWeight: 800,
+                padding: '1px 5px',
+                marginLeft: '6px',
+                minWidth: '15px',
+                height: '15px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: '13px'
+              }}>
+                {totalClients}
+              </span>
             )}
           </button>
         </div>
 
+        {/* WhatsApp-style Quick Tag Filters */}
+        {!loading && allTags.length > 0 && (
+          <div 
+            className="hide-scrollbar" 
+            style={{ 
+              display: 'flex', 
+              gap: '8px', 
+              overflowX: 'auto', 
+              padding: '10px var(--space-4)', 
+              borderBottom: '1px solid var(--color-border)', 
+              background: 'var(--color-bg-elevated)',
+              whiteSpace: 'nowrap',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            {/* "All" Pill */}
+            <button
+              type="button"
+              onClick={() => {
+                setFilters(prev => ({ ...prev, tags: [] }));
+                setPage(1);
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '100px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: '1px solid',
+                transition: 'all 0.15s ease',
+                backgroundColor: filters.tags.length === 0 ? 'var(--color-accent)' : 'var(--color-bg-card)',
+                color: filters.tags.length === 0 ? '#ffffff' : 'var(--color-text-secondary)',
+                borderColor: filters.tags.length === 0 ? 'var(--color-accent)' : 'var(--color-border)',
+                flexShrink: 0,
+              }}
+            >
+              All
+            </button>
+
+            {/* Tag Pills */}
+            {allTags.map(tag => {
+              const isSelected = filters.tags.includes(tag.id);
+              const tagColor = tag.color || '#6b7280';
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      tags: isSelected ? [] : [tag.id]
+                    }));
+                    setPage(1);
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '100px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    transition: 'all 0.15s ease',
+                    backgroundColor: isSelected ? tagColor : 'var(--color-bg-card)',
+                    color: isSelected ? '#ffffff' : 'var(--color-text-secondary)',
+                    borderColor: isSelected ? tagColor : 'var(--color-border)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {loading ? (
           <div style={{ padding: 'var(--space-12)', display: 'flex', justifyContent: 'center' }}>
             <div className="spinner spinner-lg" />
-          </div>
-        ) : viewMode === 'calendar' ? (
-          <div style={{ padding: 'var(--space-5)' }}>
-            <CalendarView clients={allFilteredClients} isAdminView={false} />
           </div>
         ) : filters.search ? (
           searchResults.length === 0 ? (

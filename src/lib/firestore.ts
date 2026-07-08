@@ -249,7 +249,14 @@ export const updateSummary = async (id: string, data: Partial<Summary>): Promise
 export const getTags = async (): Promise<Tag[]> => {
   const snap = await getDocs(tagsColRef());
   const tags = snap.docs.map(tagFromDoc);
-  return tags.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return tags.sort((a, b) => {
+    const aOrder = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER;
+    const bOrder = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
 };
 
 export const createTag = async (data: Omit<Tag, 'id' | 'createdAt'>): Promise<string> => {

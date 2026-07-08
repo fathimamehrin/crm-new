@@ -111,7 +111,7 @@ const NewClientFormPage: React.FC = () => {
     });
   }, []);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       whatsappNumber: prefilledNumber,
@@ -124,8 +124,7 @@ const NewClientFormPage: React.FC = () => {
     },
   });
 
-  const selectedStatus = watch('status');
-  const isLead = selectedStatus?.toLowerCase().includes('lead');
+
 
   const handleBack = () => {
     const hasUnsavedChanges = isDirty || documents.length > 0 || voiceFile !== null || paymentScreenshot !== null;
@@ -314,7 +313,7 @@ const NewClientFormPage: React.FC = () => {
           addedByAgentAt: now,
           assignedAt: (isAgent || isAdmin) ? now : undefined,
           projectName: data.projectName || '',
-          leadSource: isLead ? (data.leadSource || '') : '',
+          leadSource: data.leadSource || '',
         });
 
         await logActivity({
@@ -539,25 +538,22 @@ const NewClientFormPage: React.FC = () => {
               </select>
             </div>
  
-            {isLead && (
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label required" htmlFor="client-lead-source">Lead Source</label>
-                <select
-                  id="client-lead-source"
-                  className="form-input form-select"
-                  {...register('leadSource')}
-                  required
-                >
-                  <option value="">Select Lead Source...</option>
-                  {leadSources.map(s => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted" style={{ marginTop: 4 }}>
-                  Select the channel from which this lead originated.
-                </p>
-              </div>
-            )}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label" htmlFor="client-lead-source">Lead Source</label>
+              <select
+                id="client-lead-source"
+                className="form-input form-select"
+                {...register('leadSource')}
+              >
+                <option value="">Select Lead Source (Optional)...</option>
+                {leadSources.map(s => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted" style={{ marginTop: 4 }}>
+                Select the channel from which this lead originated.
+              </p>
+            </div>
 
 
             {/* Notes */}
