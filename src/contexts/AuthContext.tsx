@@ -17,6 +17,7 @@ interface AuthContextValue {
   userProfile: User | null;
   userRole: UserRole | null;
   loading: boolean;
+  networkError: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -51,8 +52,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(!navigator.onLine);
 
   useEffect(() => {
+    const handleOnline = () => setNetworkError(false);
+    const handleOffline = () => setNetworkError(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!auth) return;
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         setCurrentUser(firebaseUser);
@@ -60,14 +76,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const profile = await ensureUserProfile(firebaseUser);
           setUserProfile(profile);
           setUserRole(profile.role);
+          setNetworkError(false);
         } else {
           setUserProfile(null);
           setUserRole(null);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("AuthContext initialization error:", error);
         setUserProfile(null);
         setUserRole(null);
+        
+        // Detect connection/network issues
+        const isOffline = !navigator.onLine || 
+          error.code === 'unavailable' || 
+          error.message?.toLowerCase().includes('offline') ||
+          error.message?.toLowerCase().includes('network') ||
+          error.message?.toLowerCase().includes('failed to fetch');
+          
+        if (isOffline) {
+          setNetworkError(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -103,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userProfile, userRole, loading, login, logout }}>
+    <AuthContext.Provider value={{ currentUser, userProfile, userRole, loading, networkError, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

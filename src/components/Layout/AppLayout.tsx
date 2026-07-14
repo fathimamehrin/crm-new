@@ -13,7 +13,7 @@ const AppLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSessionWarning, setShowSessionWarning] = useState(false);
-  const { logout, currentUser, userProfile, userRole } = useAuth();
+  const { logout, currentUser, userProfile, userRole, networkError } = useAuth();
   const prevTasksRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -132,7 +132,26 @@ const AppLayout: React.FC = () => {
           onMenuClick={handleMenuClick}
         />
         <div className="app-content">
-          {currentUser && !userProfile && (
+          {networkError && (
+            <div style={{
+              background: 'color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-card))',
+              border: '1px solid color-mix(in srgb, var(--color-warning) 25%, var(--color-border))',
+              borderRadius: 'var(--radius-lg)',
+              padding: '12px 20px',
+              marginBottom: 'var(--space-5)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: 'var(--color-warning)'
+            }}>
+              <span className="animate-pulse" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-warning)', flexShrink: 0 }}></span>
+              <span style={{ fontSize: '13px', fontWeight: 650, color: 'var(--color-text-primary)' }}>
+                Connection is low or offline. Attempting to sync with database...
+              </span>
+            </div>
+          )}
+
+          {currentUser && !userProfile && !networkError && (
             <div style={{
               background: 'rgba(239, 68, 68, 0.08)',
               border: '1px solid rgba(239, 68, 68, 0.25)',

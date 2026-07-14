@@ -272,6 +272,9 @@ const NewClientFormPage: React.FC = () => {
             email: data.email || existing.email || '',
             alternateContact: data.alternateContact || existing.alternateContact || '',
             notes: mergedNotes,
+            projectName: data.projectName || existing.projectName || '',
+            leadSource: data.leadSource || existing.leadSource || '',
+            tags: [...new Set([...(existing.tags || []), ...selectedTags])],
           });
           await logActivity({
             userId: currentUser.uid,
@@ -382,7 +385,7 @@ const NewClientFormPage: React.FC = () => {
         }
       }
 
-      navigate(isAdmin ? `/admin/clients/${clientId}` : `/clients/${clientId}`);
+      navigate(isAdmin ? `/admin/clients/${clientId}` : `/clients/${clientId}`, { replace: true, state: { fromForm: true } });
     } catch (err: any) {
       console.error(err);
       const errMsg = (err?.code?.startsWith('storage/') || err?.message?.toLowerCase().includes('storage'))

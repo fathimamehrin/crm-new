@@ -165,6 +165,7 @@ const ClientDiffView: React.FC<{ req: ClientEditRequest; allTags: Tag[]; origina
     { key: 'status', label: 'Status' },
     { key: 'tags', label: 'Tags' },
     { key: 'projectName', label: 'Project Name' },
+    { key: 'leadSource', label: 'Lead Source' },
     { key: 'createdAt', label: 'Creation Date' },
     { key: 'assignedAgent', label: 'Assigned Agent' },
     { key: 'assignedAgentName', label: 'Assigned Agent Name' },

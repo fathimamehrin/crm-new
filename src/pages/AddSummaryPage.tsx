@@ -231,11 +231,11 @@ const AddSummaryPage: React.FC = () => {
             The call summary has been attached to this client's history.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
-            <button className="btn btn-secondary" onClick={() => navigate(isAdminPath ? `/admin/clients/${clientId}` : `/clients/${clientId}`)}>
+            <button className="btn btn-secondary" onClick={() => navigate(isAdminPath ? `/admin/clients/${clientId}` : `/clients/${clientId}`, { replace: true, state: { fromForm: true } })}>
               View Client
             </button>
-            <button className="btn btn-primary" onClick={() => navigate(isAdminPath ? '/admin/agents' : '/')}>
-              {isAdminPath ? 'Admin Panel' : 'Dashboard'}
+            <button className="btn btn-primary" onClick={() => navigate(isAdminPath ? '/admin/clients' : '/')}>
+              {isAdminPath ? 'Clients' : 'Dashboard'}
             </button>
           </div>
         </div>

@@ -17,6 +17,7 @@ import {
   writeBatch,
   serverTimestamp,
   deleteDoc,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction } from '../types';
@@ -603,7 +604,11 @@ export const createTask = async (
   assignedTo: string,
   assignedToName: string,
   createdBy: string,
-  createdByName: string
+  createdByName: string,
+  taskType: 'payment' | 'follow_up' | 'general' = 'general',
+  clientId?: string,
+  clientName?: string,
+  voiceUrl?: string
 ): Promise<string> => {
   const history: TaskHistoryItem[] = [
     {
@@ -611,7 +616,7 @@ export const createTask = async (
       action: 'created',
       performedBy: createdBy,
       performedByName: createdByName,
-      details: `Assigned to ${assignedToName}`,
+      details: `Assigned to ${assignedToName} (Type: ${taskType})`,
     },
   ];
 
@@ -625,6 +630,10 @@ export const createTask = async (
     status: 'pending_acceptance',
     createdAt: new Date(),
     history,
+    type: taskType,
+    clientId,
+    clientName,
+    voiceUrl,
   };
 
   const ref = await addDoc(tasksColRef(), cleanObject(taskData));
@@ -831,6 +840,95 @@ export const rejectReassignment = async (
     userId,
     userName,
     action: 'task_reassign_rejected',
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const directReassignTask = async (
+  taskId: string,
+  targetUid: string,
+  targetName: string,
+  userId: string,
+  userName: string,
+  reason: string,
+  status: Task['status'] = 'pending_acceptance',
+  taskType?: Task['type']
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: 'reassign_approved',
+    performedBy: userId,
+    performedByName: userName,
+    details: `Directly reassigned task to ${targetName}. Reason: ${reason}`,
+  };
+
+  const updateData: any = {
+    status,
+    assignedTo: targetUid,
+    assignedToName: targetName,
+    history: [...task.history, historyItem],
+    reassignRequestedTo: deleteField(),
+    reassignRequestedToName: deleteField(),
+    reassignReason: deleteField(),
+    completionSummary: deleteField(),
+    rejectReason: deleteField(),
+  };
+
+  if (taskType) {
+    updateData.type = taskType;
+  }
+
+  await updateDoc(taskRef, cleanObject(updateData));
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'task_reassign_approved',
+    entityType: 'task',
+    entityId: taskId,
+    entityName: task.title,
+  });
+};
+
+export const rejectTaskCompletion = async (
+  taskId: string,
+  userId: string,
+  userName: string,
+  reason: string,
+  status: Task['status'] = 'accepted'
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  const historyItem: TaskHistoryItem = {
+    timestamp: new Date(),
+    action: 'rejected',
+    performedBy: userId,
+    performedByName: userName,
+    details: `Completion rejected. Reason: ${reason}`,
+  };
+
+  const updateData: Partial<Task> = {
+    status,
+    rejectReason: reason,
+    history: [...task.history, historyItem],
+  };
+
+  await updateDoc(taskRef, cleanObject(updateData));
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'task_rejected',
     entityType: 'task',
     entityId: taskId,
     entityName: task.title,

@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   createdAt: Date;
+  allowedTaskTypes?: ('payment' | 'follow_up' | 'general')[];
 }
 
 export interface Client {
@@ -262,6 +263,10 @@ export interface Task {
   completionSummary?: string;
   createdAt: Date;
   history: TaskHistoryItem[];
+  type?: 'payment' | 'follow_up' | 'general';
+  clientId?: string;
+  clientName?: string;
+  voiceUrl?: string;
 }
 
 

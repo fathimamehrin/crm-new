@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getUsers,
@@ -8,6 +9,8 @@ import {
   approveReassignment,
   rejectReassignment,
   getTasks,
+  directReassignTask,
+  rejectTaskCompletion,
 } from '../lib/firestore';
 import { where, QueryConstraint } from 'firebase/firestore';
 import type { Task, User } from '../types';
@@ -15,7 +18,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { 
   Plus, Check, X, ArrowLeftRight, CheckSquare, ClipboardList,
-  Clock, User as UserIcon, ChevronDown, ChevronUp, AlertCircle
+  Clock, User as UserIcon, ChevronDown, ChevronUp, AlertCircle, ExternalLink
 } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -23,7 +26,7 @@ const STATUS_BADGE: Record<string, string> = {
   accepted: 'badge-info',
   rejected: 'badge-danger',
   completed: 'badge-success',
-  pending_reassignment: 'badge-accent',
+  pending_reassignment: 'badge-warning',
   verified: 'badge-success',
 };
 
@@ -37,13 +40,14 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const TasksPage: React.FC = () => {
+  const navigate = useNavigate();
   const { currentUser, userProfile, userRole } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'assigned' | 'created' | 'all'>('assigned');
   
-  // Modals state
+  // Dialog modal visibility states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -62,6 +66,21 @@ const TasksPage: React.FC = () => {
   const [reassignToUid, setReassignToUid] = useState('');
   const [reassignReason, setReassignReason] = useState('');
   const [rejectReassignReason, setRejectReassignReason] = useState('');
+
+  // Reject completion states
+  const [showRejectCompletionModal, setShowRejectCompletionModal] = useState(false);
+  const [rejectCompletionReason, setRejectCompletionReason] = useState('');
+  const [rejectCompletionStatus, setRejectCompletionStatus] = useState<'accepted' | 'pending_acceptance'>('accepted');
+
+  // Direct reassign states
+  const [showDirectReassignModal, setShowDirectReassignModal] = useState(false);
+  const [directReassignUid, setDirectReassignUid] = useState('');
+  const [directReassignStatus, setDirectReassignStatus] = useState<'pending_acceptance' | 'accepted'>('pending_acceptance');
+  const [directReassignReason, setDirectReassignReason] = useState('');
+  const [directReassignType, setDirectReassignType] = useState<'payment' | 'follow_up' | 'general'>('general');
+
+  // Task Category / Type state
+  const [newTaskType, setNewTaskType] = useState<'payment' | 'follow_up' | 'general'>('general');
 
   // Expandable history state
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
@@ -83,7 +102,13 @@ const TasksPage: React.FC = () => {
       }
       
       const loadedTasks = await getTasks(constraints);
-      setTasks(loadedTasks);
+      let filteredTasks = loadedTasks;
+      if (userRole === 'agent' && userProfile?.allowedTaskTypes) {
+        filteredTasks = loadedTasks.filter(t => 
+          userProfile.allowedTaskTypes!.includes(t.type || 'general')
+        );
+      }
+      setTasks(filteredTasks);
     } catch (err) {
       console.error('Failed to load tasks:', err);
       toast.error('Failed to load tasks');
@@ -118,17 +143,80 @@ const TasksPage: React.FC = () => {
         newTaskAssignee,
         targetUser.name,
         currentUser.uid,
-        userProfile.name
+        userProfile.name,
+        newTaskType
       );
       toast.success('Task created and assigned successfully');
       setShowAddModal(false);
       setNewTaskTitle('');
       setNewTaskDescription('');
       setNewTaskAssignee('');
+      setNewTaskType('general');
       loadData();
     } catch (err) {
       console.error('Failed to create task:', err);
       toast.error('Failed to create task');
+    }
+  };
+
+  const handleRejectCompletionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !userProfile || !selectedTask) return;
+    if (!rejectCompletionReason.trim()) {
+      toast.error('Reason is required');
+      return;
+    }
+    try {
+      await rejectTaskCompletion(
+        selectedTask.id,
+        currentUser.uid,
+        userProfile.name,
+        rejectCompletionReason.trim(),
+        rejectCompletionStatus
+      );
+      toast.success('Task completion rejected');
+      setShowRejectCompletionModal(false);
+      setSelectedTask(null);
+      setRejectCompletionReason('');
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reject completion');
+    }
+  };
+
+  const handleDirectReassignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !userProfile || !selectedTask) return;
+    if (!directReassignUid) {
+      toast.error('Assignee is required');
+      return;
+    }
+    const targetUser = users.find(u => u.id === directReassignUid);
+    if (!targetUser) {
+      toast.error('Selected assignee not found');
+      return;
+    }
+    try {
+      await directReassignTask(
+        selectedTask.id,
+        directReassignUid,
+        targetUser.name,
+        currentUser.uid,
+        userProfile.name,
+        directReassignReason.trim() || 'Direct reassignment by creator',
+        directReassignStatus,
+        directReassignType
+      );
+      toast.success('Task successfully reassigned and reset');
+      setShowDirectReassignModal(false);
+      setSelectedTask(null);
+      setDirectReassignUid('');
+      setDirectReassignReason('');
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reassign task');
     }
   };
 
@@ -382,6 +470,10 @@ const TasksPage: React.FC = () => {
                         <Clock size={12} />
                         Created: {format(new Date(task.createdAt), 'dd MMM yyyy HH:mm')}
                       </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <ClipboardList size={12} />
+                        Category: <strong style={{ textTransform: 'capitalize' }}>{task.type || 'general'}</strong>
+                      </span>
                     </div>
                   </div>
                   
@@ -396,6 +488,30 @@ const TasksPage: React.FC = () => {
                     {task.description}
                   </p>
                 </div>
+
+                {/* Voice Directions Player */}
+                {task.voiceUrl && (
+                  <div style={{ padding: '10px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: '16px' }}>
+                    <span style={{ display: 'block', fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: '6px' }}>
+                      Attached Voice Direction
+                    </span>
+                    <audio controls src={task.voiceUrl} style={{ width: '100%', height: '32px' }} />
+                  </div>
+                )}
+
+                {/* Actionable Lead/Client Link */}
+                {task.clientId && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', fontWeight: 500 }}>Actionable Lead:</span>
+                    <button
+                      onClick={() => navigate(userRole === 'admin' ? `/admin/clients/${task.clientId}` : `/clients/${task.clientId}`)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <ExternalLink size={12} /> View Lead Profile ({task.clientName || 'Details'})
+                    </button>
+                  </div>
+                )}
 
                 {/* Additional task summaries/rejections details based on current state */}
                 {task.status === 'rejected' && task.rejectReason && (
@@ -476,7 +592,7 @@ const TasksPage: React.FC = () => {
                   )}
 
                   {/* Creator Actions */}
-                  {isCreatedByMe && task.status === 'pending_reassignment' && (
+                  {(isCreatedByMe || userRole === 'admin') && task.status === 'pending_reassignment' && (
                     <>
                       <button 
                         className="btn btn-primary btn-sm"
@@ -496,13 +612,43 @@ const TasksPage: React.FC = () => {
                     </>
                   )}
 
-                  {isCreatedByMe && task.status === 'completed' && (
+                  {(isCreatedByMe || userRole === 'admin') && task.status === 'completed' && (
+                    <>
+                      <button 
+                        className="btn btn-sm"
+                        style={{ background: 'var(--color-success)', color: '#fff', border: 'none' }}
+                        onClick={() => handleVerifyTask(task.id)}
+                      >
+                        <Check size={14} /> Verify & Close Task
+                      </button>
+                      <button 
+                        className="btn btn-danger btn-sm"
+                        onClick={() => {
+                          setSelectedTask(task);
+                          setRejectCompletionReason('');
+                          setRejectCompletionStatus('accepted');
+                          setShowRejectCompletionModal(true);
+                        }}
+                      >
+                        <X size={14} /> Reject / Not Completed
+                      </button>
+                    </>
+                  )}
+
+                  {/* Allow creator or admin to directly reassign / reset status at any time except when verified */}
+                  {(isCreatedByMe || userRole === 'admin') && task.status !== 'verified' && (
                     <button 
-                      className="btn btn-sm"
-                      style={{ background: 'var(--color-success)', color: '#fff', border: 'none' }}
-                      onClick={() => handleVerifyTask(task.id)}
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setSelectedTask(task);
+                        setDirectReassignUid(task.assignedTo);
+                        setDirectReassignStatus('pending_acceptance');
+                        setDirectReassignReason('');
+                        setDirectReassignType(task.type || 'general');
+                        setShowDirectReassignModal(true);
+                      }}
                     >
-                      <Check size={14} /> Verify & Close Task
+                      <ArrowLeftRight size={14} /> Reassign / Reset Status
                     </button>
                   )}
                 </div>
@@ -619,6 +765,20 @@ const TasksPage: React.FC = () => {
                     {users.map(user => (
                       <option key={user.id} value={user.id}>{user.name} ({user.role})</option>
                     ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="task-type-select">Task Category / Type</label>
+                  <select
+                    id="task-type-select"
+                    className="form-input form-select"
+                    value={newTaskType}
+                    onChange={(e) => setNewTaskType(e.target.value as any)}
+                    required
+                  >
+                    <option value="general">General Task</option>
+                    <option value="payment">Payment Task</option>
+                    <option value="follow_up">Follow-up Task</option>
                   </select>
                 </div>
               </div>
@@ -791,6 +951,135 @@ const TasksPage: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-danger">
                   Reject Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* REJECT TASK COMPLETION DIALOG MODAL */}
+      {showRejectCompletionModal && selectedTask && (
+        <div className="modal-overlay" onClick={() => setShowRejectCompletionModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reject Task Completion</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowRejectCompletionModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleRejectCompletionSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="reject-completion-reason">Reason for Rejection</label>
+                  <textarea
+                    id="reject-completion-reason"
+                    className="form-input"
+                    rows={3}
+                    placeholder="Provide reason for rejecting the completion..."
+                    value={rejectCompletionReason}
+                    onChange={(e) => setRejectCompletionReason(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="reject-completion-status">Target Task Status</label>
+                  <select
+                    id="reject-completion-status"
+                    className="form-input form-select"
+                    value={rejectCompletionStatus}
+                    onChange={(e) => setRejectCompletionStatus(e.target.value as any)}
+                    required
+                  >
+                    <option value="accepted">In Progress (Accepted)</option>
+                    <option value="pending_acceptance">Awaiting Acceptance (Reset)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowRejectCompletionModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-danger">
+                  Reject Completion
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DIRECT REASSIGN / RESET STATUS DIALOG MODAL */}
+      {showDirectReassignModal && selectedTask && (
+        <div className="modal-overlay" onClick={() => setShowDirectReassignModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Directly Reassign / Reset Task</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowDirectReassignModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleDirectReassignSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="direct-reassign-user">Assign To</label>
+                  <select
+                    id="direct-reassign-user"
+                    className="form-input form-select"
+                    value={directReassignUid}
+                    onChange={(e) => setDirectReassignUid(e.target.value)}
+                    required
+                  >
+                    <option value="">Select User...</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="direct-reassign-status">Target Status</label>
+                  <select
+                    id="direct-reassign-status"
+                    className="form-input form-select"
+                    value={directReassignStatus}
+                    onChange={(e) => setDirectReassignStatus(e.target.value as any)}
+                    required
+                  >
+                    <option value="pending_acceptance">Awaiting Acceptance (Default)</option>
+                    <option value="accepted">In Progress (Accepted)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label required" htmlFor="direct-reassign-type">Task Category / Type</label>
+                  <select
+                    id="direct-reassign-type"
+                    className="form-input form-select"
+                    value={directReassignType}
+                    onChange={(e) => setDirectReassignType(e.target.value as any)}
+                    required
+                  >
+                    <option value="general">General Task</option>
+                    <option value="payment">Payment Task</option>
+                    <option value="follow_up">Follow-up Task</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="direct-reassign-reason">Reason for Reassignment</label>
+                  <textarea
+                    id="direct-reassign-reason"
+                    className="form-input"
+                    rows={3}
+                    placeholder="Provide a reason for reassigning this task..."
+                    value={directReassignReason}
+                    onChange={(e) => setDirectReassignReason(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowDirectReassignModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Reassign Task
                 </button>
               </div>
             </form>

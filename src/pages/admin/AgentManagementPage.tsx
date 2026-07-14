@@ -26,12 +26,14 @@ const schema = z.object({
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   password: z.string()
     .min(6, 'Password must be at least 6 characters'),
+  taskPermissions: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
 const editSchema = z.object({
   name: z.string().min(2),
   phone: z.string().optional(),
+  taskPermissions: z.string().optional(),
 });
 type EditData = z.infer<typeof editSchema>;
 
@@ -181,12 +183,20 @@ const AgentManagementPage: React.FC = () => {
       const secondaryAuth = getAuth(secondaryApp);
       const cred = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
       await secondaryAuth.signOut();
+      let allowedTypes: ('payment' | 'follow_up' | 'general')[] = ['general', 'payment', 'follow_up'];
+      if (data.taskPermissions === 'payments') {
+        allowedTypes = ['payment'];
+      } else if (data.taskPermissions === 'follow_ups') {
+        allowedTypes = ['follow_up'];
+      }
+
       await setDoc(doc(db, 'users', cred.user.uid), {
         name: data.name,
         email: data.email,
         phone: data.phone || '',
         role: 'agent',
         status: 'active',
+        allowedTaskTypes: allowedTypes,
         createdAt: new Date(),
       });
 
@@ -226,11 +236,27 @@ const AgentManagementPage: React.FC = () => {
     setEditingId(agent.id);
     setValue('name', agent.name);
     setValue('phone', agent.phone || '');
+    let perm = 'all';
+    if (agent.allowedTaskTypes && agent.allowedTaskTypes.length === 1) {
+      if (agent.allowedTaskTypes[0] === 'payment') perm = 'payments';
+      if (agent.allowedTaskTypes[0] === 'follow_up') perm = 'follow_ups';
+    }
+    setValue('taskPermissions', perm);
   };
 
   const onEdit = async (data: EditData) => {
     if (!editingId) return;
-    await updateUser(editingId, { name: data.name, phone: data.phone });
+    let allowedTypes: ('payment' | 'follow_up' | 'general')[] = ['general', 'payment', 'follow_up'];
+    if (data.taskPermissions === 'payments') {
+      allowedTypes = ['payment'];
+    } else if (data.taskPermissions === 'follow_ups') {
+      allowedTypes = ['follow_up'];
+    }
+    await updateUser(editingId, { 
+      name: data.name, 
+      phone: data.phone,
+      allowedTaskTypes: allowedTypes
+    });
     await logActivity({
       userId: currentUser!.uid,
       userName: userProfile?.name,
@@ -325,6 +351,7 @@ const AgentManagementPage: React.FC = () => {
                     <th>Agent</th>
                     <th>Email</th>
                     <th>Phone</th>
+                    <th>Task Permission</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th>Actions</th>
@@ -336,7 +363,7 @@ const AgentManagementPage: React.FC = () => {
                       key={agent.id}
                       onClick={(e) => {
                         const target = e.target as HTMLElement;
-                        if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input')) {
+                        if (editingId !== agent.id && !target.closest('button') && !target.closest('a') && !target.closest('input') && !target.closest('select')) {
                           navigate(`/admin/agents/${agent.id}`);
                         }
                       }}
@@ -349,11 +376,7 @@ const AgentManagementPage: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                           <div className="avatar avatar-sm">{agent.name.charAt(0)}</div>
                           {editingId === agent.id ? (
-                            <form onSubmit={editSubmit(onEdit)} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                              <input {...editReg('name')} className="form-input text-sm" style={{ width: 140, padding: '4px 8px' }} />
-                              <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '4px 8px' }}><Check size={12} /></button>
-                              <button type="button" className="btn btn-sm btn-secondary" style={{ padding: '4px 8px' }} onClick={() => setEditingId(null)}><X size={12} /></button>
-                            </form>
+                            <input {...editReg('name')} className="form-input text-sm" style={{ width: 140, padding: '4px 8px' }} />
                           ) : (
                             <Link to={`/admin/agents/${agent.id}`} className="font-semibold text-sm text-accent hover:underline">
                               {agent.name}
@@ -362,7 +385,33 @@ const AgentManagementPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="text-sm text-secondary" data-label="Email">{agent.email}</td>
-                      <td className="text-sm text-secondary" data-label="Phone">{agent.phone || '—'}</td>
+                      <td className="text-sm text-secondary" data-label="Phone">
+                        {editingId === agent.id ? (
+                          <input {...editReg('phone')} className="form-input text-sm" placeholder="Phone" style={{ width: 120, padding: '4px 8px' }} />
+                        ) : (
+                          agent.phone || '—'
+                        )}
+                      </td>
+                      <td data-label="Task Permission">
+                        {editingId === agent.id ? (
+                          <select {...editReg('taskPermissions')} className="form-input form-select text-sm" style={{ width: 130, padding: '4px 8px' }}>
+                            <option value="all">All Tasks</option>
+                            <option value="payments">Payments Only</option>
+                            <option value="follow_ups">Follow-ups Only</option>
+                          </select>
+                        ) : (
+                          (() => {
+                            const allowed = agent.allowedTaskTypes || [];
+                            if (allowed.length === 1 && allowed[0] === 'payment') {
+                              return <span className="badge badge-primary">Payments Only</span>;
+                            }
+                            if (allowed.length === 1 && allowed[0] === 'follow_up') {
+                              return <span className="badge badge-warning">Follow-ups Only</span>;
+                            }
+                            return <span className="badge badge-success">All Tasks</span>;
+                          })()
+                        )}
+                      </td>
                       <td data-label="Status">
                         <span className={`badge ${agent.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
                           {agent.status}
@@ -370,30 +419,37 @@ const AgentManagementPage: React.FC = () => {
                       </td>
                       <td className="text-sm text-muted" data-label="Created">{format(agent.createdAt, 'dd MMM yyyy')}</td>
                       <td data-label="Actions">
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
-                            <Edit3 size={14} />
-                          </button>
-                          <button 
-                            className="btn btn-ghost btn-sm" 
-                            onClick={() => openResetModal(agent)} 
-                            title="Reset Password"
-                            aria-label="Reset Password"
-                            disabled={resettingPasswordId === agent.id}
-                            style={{ padding: '6px' }}
-                          >
-                            <Key size={14} />
-                          </button>
-                          <button
-                            className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                            onClick={() => toggleStatus(agent)}
-                          >
-                            {agent.status === 'active'
-                              ? <><ToggleLeft size={14} /> Disable</>
-                              : <><ToggleRight size={14} /> Enable</>
-                            }
-                          </button>
-                        </div>
+                        {editingId === agent.id ? (
+                          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <button type="button" className="btn btn-sm btn-primary" onClick={editSubmit(onEdit)} style={{ padding: '4px 8px' }}><Check size={12} /> Save</button>
+                            <button type="button" className="btn btn-sm btn-secondary" style={{ padding: '4px 8px' }} onClick={() => setEditingId(null)}><X size={12} /> Cancel</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => startEdit(agent)} aria-label="Edit agent">
+                              <Edit3 size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-ghost btn-sm" 
+                              onClick={() => openResetModal(agent)} 
+                              title="Reset Password"
+                              aria-label="Reset Password"
+                              disabled={resettingPasswordId === agent.id}
+                              style={{ padding: '6px' }}
+                            >
+                              <Key size={14} />
+                            </button>
+                            <button
+                              className={`btn btn-sm ${agent.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                              onClick={() => toggleStatus(agent)}
+                            >
+                              {agent.status === 'active'
+                                ? <><ToggleLeft size={14} /> Disable</>
+                                : <><ToggleRight size={14} /> Enable</>
+                              }
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -520,6 +576,18 @@ const AgentManagementPage: React.FC = () => {
                   />
                 </div>
                 {errors.phone && <span className="form-error">{errors.phone.message}</span>}
+              </div>
+              <div className="form-group">
+                <label className="form-label required" htmlFor="agent-task-permissions">Task Visibility Permission</label>
+                <select
+                  id="agent-task-permissions"
+                  className="form-input form-select"
+                  {...register('taskPermissions')}
+                >
+                  <option value="all">All Tasks (Full Access)</option>
+                  <option value="payments">Payment Tasks Only</option>
+                  <option value="follow_ups">Follow-up Tasks Only</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label required" htmlFor="agent-password">Temporary Password</label>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -74,6 +75,7 @@ interface EditClientModalProps {
 
 const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUpdate, onRequestSubmitted }) => {
   const { currentUser, userRole, userProfile } = useAuth();
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<UserType[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,6 +83,10 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
   const [selectedTags, setSelectedTags] = useState<string[]>(client.tags || []);
   const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
   const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
+
+  // Confirmation Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingData, setPendingData] = useState<FormData | null>(null);
 
   useEffect(() => {
     getClientStatuses().then(list => {
@@ -91,6 +97,19 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
     getLeadSources().then(list => {
       setLeadSources(list);
+      // Re-sync the leadSource select after options load.
+      // The select DOM had no matching option on mount (async load),
+      // so the browser forced it to "" — we must restore the real value.
+      if (client.leadSource) {
+        const matched = list.find(
+          s => s.name.toLowerCase() === (client.leadSource || '').toLowerCase()
+        );
+        // Use canonical name from DB if found, otherwise keep raw client value
+        setValue('leadSource', matched ? matched.name : client.leadSource, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+      }
     }).catch(err => {
       console.error('Failed to load lead sources:', err);
     });
@@ -169,7 +188,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
   const [reason, setReason] = useState('');
 
-  const onSubmit = async (data: FormData) => {
+  const executeSave = async (data: FormData) => {
     setSaving(true);
     try {
       const fullWhatsAppNumber = data.countryCode + data.whatsappNumber;
@@ -236,6 +255,14 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
         });
 
         toast.success('Client details updated successfully');
+        onClose();
+
+        // Redirect back to dashboard/homepage or wherever they originally initiated the edit
+        if (window.history.length > 2) {
+          navigate(-1);
+        } else {
+          navigate('/admin/clients');
+        }
       } else {
         // Agent submits proposed changes as edit request
         const proposedChanges: Partial<Client> = { ...updatedFields };
@@ -261,13 +288,32 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
         toast.success('Edit request submitted to Admin');
         onRequestSubmitted?.();
+        onClose();
       }
-      onClose();
     } catch (err) {
       console.error('Failed to update client details:', err);
       toast.error('Failed to update client details');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onSubmit = async (data: FormData) => {
+    const statusChanged = data.status !== client.status;
+    if (userRole === 'admin' && statusChanged) {
+      setPendingData(data);
+      setShowConfirmModal(true);
+      return;
+    }
+    await executeSave(data);
+  };
+
+  const handleConfirmSave = async () => {
+    if (pendingData) {
+      const data = pendingData;
+      setShowConfirmModal(false);
+      setPendingData(null);
+      await executeSave(data);
     }
   };
 
@@ -566,6 +612,58 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
           </div>
         </form>
       </div>
+
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header" style={{ marginBottom: 'var(--space-3)' }}>
+              <h2 className="modal-title" style={{ fontSize: 'var(--font-size-lg)' }}>Confirm Status Change</h2>
+            </div>
+            <div style={{ marginBottom: 'var(--space-6)', textAlign: 'left' }}>
+              <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-3)' }}>
+                Are you sure you want to make this change?
+              </p>
+              <div style={{
+                background: 'var(--color-bg-elevated)',
+                padding: 'var(--space-3) var(--space-4)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <span className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase' }}>Status Transition</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{client.status}</span>
+                  <span>➔</span>
+                  <strong className="text-accent">{pendingData?.status}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ marginTop: 0, paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', gap: 'var(--space-2)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setPendingData(null);
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmSave}
+                disabled={saving}
+              >
+                {saving ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Confirming...</> : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

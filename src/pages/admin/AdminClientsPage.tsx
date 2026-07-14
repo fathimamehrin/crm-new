@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, Users, Activity, CheckCircle2, TrendingUp, DollarSign, ClipboardList, Check, X, ClipboardCheck } from 'lucide-react';
-import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags, getClientStatuses, getTasks, updateTaskStatus, getLeadSources } from '../../lib/firestore';
-import type { Client, FilterOptions, User, Tag, CustomStatus, Task, LeadSource } from '../../types';
+import { Plus, Search, Filter, Users, TrendingUp, DollarSign, ClipboardList } from 'lucide-react';
+import { getClients, getUsers, getAllSummaries, getAllActivityLogs, getTags, getClientStatuses, getTasks, getLeadSources } from '../../lib/firestore';
+import type { Client, FilterOptions, User, Tag, CustomStatus, Task, LeadSource, Summary } from '../../types';
 import { format } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -62,33 +62,36 @@ const AdminClientsPage: React.FC = () => {
   const [totalClients, setTotalClients] = useState(0);
   const PAGE_SIZE = 25;
 
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser } = useAuth();
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [allLogs, setAllLogs] = useState<any[]>([]);
   const [allClientsData, setAllClientsData] = useState<Client[]>([]);
   const [customClientFilter, setCustomClientFilter] = useState<{ label: string; clientIds: string[] } | null>(null);
 
   // Lead Source date range filters
-  const [leadSourceRange, setLeadSourceRange] = useState<'today' | 'week' | 'month' | 'custom'>('month');
+  const [leadSourceRange, setLeadSourceRange] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>('all');
   const [leadSourceStartDate, setLeadSourceStartDate] = useState(new Date().toISOString().substring(0, 10));
   const [leadSourceEndDate, setLeadSourceEndDate] = useState(new Date().toISOString().substring(0, 10));
   const [allSources, setAllSources] = useState<LeadSource[]>([]);
 
-  // Task queue modal states
-  const [activeTaskTab, setActiveTaskTab] = useState<'assigned' | 'verify'>('assigned');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [rejectTaskModalOpen, setRejectTaskModalOpen] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [completeTaskModalOpen, setCompleteTaskModalOpen] = useState(false);
-  const [completionSummary, setCompletionSummary] = useState('');
+
 
   const [stats, setStats] = useState({
     total: 0,
-    active: 0,
-    closed: 0,
     conversionRate: '0.0%',
+    totalPayments: 0,
     revenue: 0,
   });
+
+  const [allSummaries, setAllSummaries] = useState<Summary[]>([]);
+
+  // Revenue filtering states
+  const [revenueFilterMode, setRevenueFilterMode] = useState<'lifetime' | 'day' | 'month' | 'year' | 'custom'>('lifetime');
+  const [revenueFilterDate, setRevenueFilterDate] = useState(new Date().toISOString().substring(0, 10));
+  const [revenueFilterMonth, setRevenueFilterMonth] = useState(new Date().toISOString().substring(0, 7)); // yyyy-MM
+  const [revenueFilterYear, setRevenueFilterYear] = useState(new Date().getFullYear().toString()); // yyyy
+  const [revenueFilterCustomFrom, setRevenueFilterCustomFrom] = useState(new Date().toISOString().substring(0, 10));
+  const [revenueFilterCustomTo, setRevenueFilterCustomTo] = useState(new Date().toISOString().substring(0, 10));
 
   const [filters, setFilters] = useState<FilterOptions>({
     search: '',
@@ -98,6 +101,7 @@ const AdminClientsPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     tags: [],
+    leadSource: '',
   });
 
   useEffect(() => {
@@ -154,6 +158,75 @@ const AdminClientsPage: React.FC = () => {
     );
   };
 
+  const tagCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allTags.forEach((t) => {
+      counts[t.id] = 0;
+    });
+    allClientsData.forEach((c) => {
+      if (c.tags && Array.isArray(c.tags)) {
+        c.tags.forEach((tId) => {
+          counts[tId] = (counts[tId] || 0) + 1;
+        });
+      }
+    });
+    return counts;
+  }, [allTags, allClientsData]);
+
+  const paymentStats = useMemo(() => {
+    let statsClients = allClientsData;
+    if (filters.agentId && filters.agentId !== 'unassigned') {
+      statsClients = statsClients.filter(c => c.assignedAgent === filters.agentId);
+    } else if (filters.agentId === 'unassigned') {
+      statsClients = statsClients.filter(c => !c.assignedAgent || c.assignedAgent === 'unassigned');
+    }
+    const clientIds = new Set(statsClients.map(c => c.id));
+    
+    const paymentSummaries = allSummaries.filter(s => 
+      clientIds.has(s.clientId) && 
+      s.paymentDetails?.amount && 
+      (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
+    );
+    
+    const lifetimeRevenue = paymentSummaries.reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
+    
+    const filteredPaymentSummaries = paymentSummaries.filter(s => {
+      if (revenueFilterMode === 'lifetime') return true;
+      const sDate = s.createdAt ? new Date(s.createdAt) : new Date();
+      
+      if (revenueFilterMode === 'day') {
+        const sDateString = sDate.toISOString().substring(0, 10);
+        return sDateString === revenueFilterDate;
+      }
+      
+      if (revenueFilterMode === 'month') {
+        const sMonthString = sDate.toISOString().substring(0, 7);
+        return sMonthString === revenueFilterMonth;
+      }
+      
+      if (revenueFilterMode === 'year') {
+        const sYearString = sDate.getFullYear().toString();
+        return sYearString === revenueFilterYear;
+      }
+      
+      if (revenueFilterMode === 'custom') {
+        const sDateOnly = sDate.toISOString().substring(0, 10);
+        return sDateOnly >= revenueFilterCustomFrom && sDateOnly <= revenueFilterCustomTo;
+      }
+      
+      return true;
+    });
+
+    const filteredRevenue = filteredPaymentSummaries.reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
+    const filteredPaymentsCount = filteredPaymentSummaries.length;
+    
+    return {
+      lifetimeRevenue,
+      filteredRevenue,
+      filteredPaymentsCount,
+    };
+  }, [allClientsData, allSummaries, filters.agentId, revenueFilterMode, revenueFilterDate, revenueFilterMonth, revenueFilterYear, revenueFilterCustomFrom, revenueFilterCustomTo]);
+
   const loadClients = useCallback(async () => {
     setLoading(true);
     try {
@@ -169,6 +242,7 @@ const AdminClientsPage: React.FC = () => {
       setAllLogs(logsData);
       setAllClientsData(allClientsRes.clients);
       setAllSources(sourcesData);
+      setAllSummaries(summariesData);
 
       let data = [...allClientsRes.clients];
 
@@ -184,6 +258,11 @@ const AdminClientsPage: React.FC = () => {
       // 2. Filter by Status
       if (filters.status) {
         data = data.filter((c) => c.status?.toLowerCase() === filters.status.toLowerCase());
+      }
+
+      // 3. Filter by Lead Source
+      if (filters.leadSource) {
+        data = data.filter((c) => (c.leadSource || '').toLowerCase() === (filters.leadSource || '').toLowerCase());
       }
 
       if (filters.tags && filters.tags.length > 0) {
@@ -305,20 +384,23 @@ const AdminClientsPage: React.FC = () => {
       }
 
       const total = statsClients.length;
-      const active = statsClients.filter(c => c.status === 'active' || c.status === 'lead').length;
-      const closed = statsClients.filter(c => c.status === 'closed' || c.status === 'won').length;
-      const conversionRate = total > 0 ? ((closed / total) * 100).toFixed(1) + '%' : '0.0%';
 
       const clientIds = new Set(statsClients.map(c => c.id));
-      const revenue = summariesData
-        .filter(s => 
-          clientIds.has(s.clientId) && 
-          s.paymentDetails?.amount && 
-          (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
-        )
-        .reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
+      const paymentSummaries = summariesData.filter(s => 
+        clientIds.has(s.clientId) && 
+        s.paymentDetails?.amount && 
+        (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
+      );
+      
+      const payingClientIds = new Set(paymentSummaries.map(s => s.clientId));
+      const payingClientsCount = payingClientIds.size;
+      const totalPayments = paymentSummaries.length;
+      
+      const conversionRate = total > 0 ? ((payingClientsCount / total) * 100).toFixed(1) + '%' : '0.0%';
 
-      setStats({ total, active, closed, conversionRate, revenue });
+      const revenue = paymentSummaries.reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
+
+      setStats({ total, conversionRate, totalPayments, revenue });
 
     } catch (err) {
       console.error(err);
@@ -332,71 +414,7 @@ const AdminClientsPage: React.FC = () => {
     loadClients();
   }, [loadClients]);
 
-  // Task queue handlers
-  const handleAcceptTask = async (taskId: string) => {
-    try {
-      await updateTaskStatus(taskId, 'accepted', currentUser!.uid, userProfile?.name || 'Admin');
-      toast.success('Task claimed successfully');
-      loadClients();
-    } catch {
-      toast.error('Failed to claim task');
-    }
-  };
 
-  const handleOpenReject = (task: Task) => {
-    setSelectedTask(task);
-    setRejectReason('');
-    setRejectTaskModalOpen(true);
-  };
-
-  const handleRejectTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !rejectReason.trim()) return;
-    try {
-      await updateTaskStatus(selectedTask.id, 'rejected', currentUser!.uid, userProfile?.name || 'Admin', rejectReason.trim());
-      toast.success('Task rejected');
-      setRejectTaskModalOpen(false);
-      loadClients();
-    } catch {
-      toast.error('Failed to reject task');
-    }
-  };
-
-  const handleOpenComplete = (task: Task) => {
-    setSelectedTask(task);
-    setCompletionSummary('');
-    setCompleteTaskModalOpen(true);
-  };
-
-  const handleCompleteTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !completionSummary.trim()) return;
-    try {
-      await updateTaskStatus(
-        selectedTask.id,
-        'completed',
-        currentUser!.uid,
-        userProfile?.name || 'Admin',
-        undefined,
-        completionSummary.trim()
-      );
-      toast.success('Task marked as completed');
-      setCompleteTaskModalOpen(false);
-      loadClients();
-    } catch {
-      toast.error('Failed to complete task');
-    }
-  };
-
-  const handleVerifyTask = async (taskId: string) => {
-    try {
-      await updateTaskStatus(taskId, 'verified', currentUser!.uid, userProfile?.name || 'Admin');
-      toast.success('Task verified and closed');
-      loadClients();
-    } catch {
-      toast.error('Failed to verify task');
-    }
-  };
 
   useEffect(() => {
     getUsers('agent').then(setAgents).catch(() => {});
@@ -404,6 +422,17 @@ const AdminClientsPage: React.FC = () => {
     getClientStatuses().then(setCustomStatuses).catch(() => {});
     getLeadSources().then(setAllSources).catch(() => {});
   }, []);
+
+  // Re-fetch when admin navigates back (e.g. after editing a client's lead source)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadClients();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadClients]);
 
   const renderAgentActivityCard = () => (
     <div className="card" style={{ padding: 'var(--space-5)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)' }}>
@@ -527,7 +556,7 @@ const AdminClientsPage: React.FC = () => {
         </div>
         
         <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-secondary)', padding: '3px', borderRadius: '8px', overflowX: 'auto' }} className="hide-scrollbar">
-          {(['today', 'week', 'month', 'custom'] as const).map(range => (
+          {(['today', 'week', 'month', 'all', 'custom'] as const).map(range => (
             <button
               key={range}
               type="button"
@@ -542,7 +571,7 @@ const AdminClientsPage: React.FC = () => {
                 whiteSpace: 'nowrap',
               }}
             >
-              {range === 'custom' ? 'Custom' : range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Today'}
+              {range === 'custom' ? 'Custom' : range === 'all' ? 'All' : range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Today'}
             </button>
           ))}
         </div>
@@ -589,6 +618,8 @@ const AdminClientsPage: React.FC = () => {
             } else if (leadSourceRange === 'month') {
               start.setDate(1);
               start.setHours(0, 0, 0, 0);
+            } else if (leadSourceRange === 'all') {
+              start = new Date(0); // Epoch start to include all historical leads
             } else if (leadSourceRange === 'custom') {
               if (leadSourceStartDate) {
                 start = new Date(leadSourceStartDate + 'T00:00:00');
@@ -615,7 +646,7 @@ const AdminClientsPage: React.FC = () => {
           
           const sourceCounts: Record<string, number> = {};
           leadsInRange.forEach(c => {
-            const sourceName = c.leadSource || 'Unspecified';
+            const sourceName = (c.leadSource || 'Unspecified').trim().toLowerCase();
             sourceCounts[sourceName] = (sourceCounts[sourceName] || 0) + 1;
           });
 
@@ -626,7 +657,7 @@ const AdminClientsPage: React.FC = () => {
           return allSources
             .map(source => ({
               ...source,
-              count: sourceCounts[source.name] || 0
+              count: sourceCounts[source.name.trim().toLowerCase()] || 0
             }))
             .sort((a, b) => b.count - a.count)
             .map(source => {
@@ -715,31 +746,7 @@ const AdminClientsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Active Leads */}
-        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Active Leads</span>
-            <Activity size={16} style={{ color: 'var(--color-warning)' }} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{stats.active}</h3>
-            <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Leads in progress</span>
-          </div>
-        </div>
-
-        {/* Card 3: Converted (Closed) */}
-        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Closed Deals</span>
-            <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{stats.closed}</h3>
-            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>Deals won</span>
-          </div>
-        </div>
-
-        {/* Card 4: Conversion Rate */}
+        {/* Card 2: Conversion Rate */}
         <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Conversion Rate</span>
@@ -747,19 +754,125 @@ const AdminClientsPage: React.FC = () => {
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{stats.conversionRate}</h3>
-            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>Closed vs Total</span>
+            <div style={{ fontSize: '10px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: 4 }}>
+              <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Paying Clients vs Total</span>
+              <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>Total Payments: {stats.totalPayments}</span>
+            </div>
           </div>
         </div>
 
-        {/* Card 5: Total Revenue */}
+        {/* Card 3: Total Revenue */}
         <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total Revenue</span>
-            <DollarSign size={16} style={{ color: 'var(--color-success)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <select
+                className="form-input form-select text-xs"
+                style={{ padding: '2px 24px 2px 8px', fontSize: '11px', width: 'auto', margin: 0, height: 'auto', border: '1px solid var(--color-border)' }}
+                value={revenueFilterMode}
+                onChange={(e) => setRevenueFilterMode(e.target.value as any)}
+              >
+                <option value="lifetime">Lifetime</option>
+                <option value="day">Specific Day</option>
+                <option value="month">Specific Month</option>
+                <option value="year">Specific Year</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              <DollarSign size={16} style={{ color: 'var(--color-success)' }} />
+            </div>
           </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>₹{stats.revenue.toLocaleString('en-IN')}</h3>
-            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>Paid transactions</span>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            {revenueFilterMode === 'lifetime' ? (
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>
+                  ₹{paymentStats.lifetimeRevenue.toLocaleString('en-IN')}
+                </h3>
+                <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>Lifetime Paid Transactions</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-success)' }}>
+                    ₹{paymentStats.filteredRevenue.toLocaleString('en-IN')}
+                  </h3>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Filtered Revenue</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    ₹{paymentStats.lifetimeRevenue.toLocaleString('en-IN')}
+                  </span>
+                  <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', fontWeight: 600 }}>Lifetime Total</span>
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic filter inputs */}
+            {revenueFilterMode === 'day' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterDate}
+                  onChange={(e) => setRevenueFilterDate(e.target.value)}
+                />
+              </div>
+            )}
+
+            {revenueFilterMode === 'month' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                <input
+                  type="month"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterMonth}
+                  onChange={(e) => setRevenueFilterMonth(e.target.value)}
+                />
+              </div>
+            )}
+
+            {revenueFilterMode === 'year' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                <select
+                  className="form-input form-select text-xs"
+                  style={{ padding: '4px 24px 4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterYear}
+                  onChange={(e) => setRevenueFilterYear(e.target.value)}
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const years = [];
+                    for (let y = currentYear - 3; y <= currentYear + 1; y++) {
+                      years.push(y.toString());
+                    }
+                    return years.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ));
+                  })()}
+                </select>
+              </div>
+            )}
+
+            {revenueFilterMode === 'custom' && (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 4px', fontSize: '10px', margin: 0, flex: 1, height: '30px' }}
+                  value={revenueFilterCustomFrom}
+                  onChange={(e) => setRevenueFilterCustomFrom(e.target.value)}
+                />
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>to</span>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 4px', fontSize: '10px', margin: 0, flex: 1, height: '30px' }}
+                  value={revenueFilterCustomTo}
+                  onChange={(e) => setRevenueFilterCustomTo(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -770,116 +883,41 @@ const AdminClientsPage: React.FC = () => {
         <div style={{ minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
           
           {/* Admin's Personal Task Queue Card */}
-          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 'var(--space-5)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ClipboardList size={20} style={{ color: 'var(--color-accent)' }} />
-                <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--color-text-primary)' }}>My Personal Task Queue</h3>
-              </div>
-              <div className="tabs" style={{ margin: 0 }}>
-                <button
-                  type="button"
-                  className={`tab-btn ${activeTaskTab === 'assigned' ? 'active' : ''}`}
-                  onClick={() => setActiveTaskTab('assigned')}
-                  style={{ fontSize: '11px', padding: '4px 10px' }}
-                >
-                  Assigned to Me ({allTasks.filter(t => t.assignedTo === currentUser?.uid && t.status !== 'verified').length})
-                </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${activeTaskTab === 'verify' ? 'active' : ''}`}
-                  onClick={() => setActiveTaskTab('verify')}
-                  style={{ fontSize: '11px', padding: '4px 10px' }}
-                >
-                  Verify Completed ({allTasks.filter(t => t.createdBy === currentUser?.uid && t.status === 'completed').length})
-                </button>
-              </div>
+          <div 
+            className="card hover-glow" 
+            style={{ 
+              flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 'var(--space-6)', 
+              background: 'var(--color-bg-card)', 
+              border: '1px solid var(--color-border)', 
+              borderRadius: 'var(--radius-xl)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              minHeight: '200px'
+            }}
+            onClick={() => navigate('/tasks')}
+          >
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'var(--color-accent-light)', color: 'var(--color-accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 'var(--space-4)'
+            }}>
+              <ClipboardList size={28} />
             </div>
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              {activeTaskTab === 'assigned' ? (
-              (() => {
-                const myTasksList = allTasks.filter(t => t.assignedTo === currentUser?.uid && t.status !== 'verified');
-                if (myTasksList.length === 0) {
-                  return <p className="text-muted text-xs text-center" style={{ padding: 'var(--space-4)' }}>No pending tasks assigned to you.</p>;
-                }
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {myTasksList.map((task) => (
-                      <div key={task.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>{task.title}</h4>
-                            <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{task.description}</p>
-                          </div>
-                          <span className={`badge badge-${task.status === 'accepted' ? 'primary' : task.status === 'rejected' ? 'danger' : 'accent'}`} style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 750 }}>
-                            {task.status.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                          <span className="text-xs text-muted">Created by: <strong>{task.createdByName}</strong></span>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            {task.status === 'pending_acceptance' && (
-                              <>
-                                <button className="btn btn-secondary btn-sm" style={{ padding: '3px 8px', fontSize: '11px', color: 'var(--color-success)' }} onClick={() => handleAcceptTask(task.id)}>
-                                  <Check size={12} /> Claim
-                                </button>
-                                <button className="btn btn-secondary btn-sm" style={{ padding: '3px 8px', fontSize: '11px', color: 'var(--color-danger)' }} onClick={() => handleOpenReject(task)}>
-                                  <X size={12} /> Reject
-                                </button>
-                              </>
-                            )}
-                            {task.status === 'accepted' && (
-                              <button className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => handleOpenComplete(task)}>
-                                <ClipboardCheck size={12} /> Complete Task
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()
-            ) : (
-              (() => {
-                const verifyTasksList = allTasks.filter(t => t.createdBy === currentUser?.uid && t.status === 'completed');
-                if (verifyTasksList.length === 0) {
-                  return <p className="text-muted text-xs text-center" style={{ padding: 'var(--space-4)' }}>No completed tasks to verify.</p>;
-                }
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {verifyTasksList.map((task) => (
-                      <div key={task.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>{task.title}</h4>
-                            <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{task.description}</p>
-                            {task.completionSummary && (
-                              <p style={{ margin: '6px 0 0 0', padding: '6px', background: 'var(--color-bg-card)', borderRadius: '4px', fontSize: 'var(--font-size-xs)', borderLeft: '3px solid var(--color-success)' }}>
-                                <strong>Result:</strong> {task.completionSummary}
-                              </p>
-                            )}
-                          </div>
-                          <span className="badge badge-success" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 750 }}>
-                            COMPLETED
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                          <span className="text-xs text-muted">Claimed by: <strong>{task.assignedToName}</strong></span>
-                          <button className="btn btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: '11px', background: 'var(--color-success)', borderColor: 'var(--color-success)' }} onClick={() => handleVerifyTask(task.id)}>
-                            <Check size={12} /> Verify & Close
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()
-            )}
-            </div>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
+              Task Overview
+            </h3>
+            <p style={{ margin: 'var(--space-2) 0', fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+              You have <span style={{ color: 'var(--color-accent)', fontWeight: 800 }}>{allTasks.filter(t => (t.assignedTo === currentUser?.uid && t.status !== 'verified') || (t.createdBy === currentUser?.uid && t.status === 'completed')).length}</span> tasks pending
+            </p>
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+              Click here to view complete task lists and workflows
+            </span>
           </div>
 
         </div>
@@ -938,8 +976,7 @@ const AdminClientsPage: React.FC = () => {
                   filters.status || 
                   filters.paymentStatus || 
                   filters.dateFrom || 
-                  filters.dateTo ||
-                  (filters.tags && filters.tags.length > 0)) && (
+                  filters.dateTo) && (
                   <span style={{
                     borderRadius: '100px',
                     background: 'var(--color-accent, #2563eb)',
@@ -1004,6 +1041,7 @@ const AdminClientsPage: React.FC = () => {
                 {allTags.map(tag => {
                   const isSelected = filters.tags.includes(tag.id);
                   const tagColor = tag.color || '#6b7280';
+                  const count = tagCounts[tag.id] || 0;
                   return (
                     <button
                       key={tag.id}
@@ -1027,9 +1065,25 @@ const AdminClientsPage: React.FC = () => {
                         color: isSelected ? '#ffffff' : 'var(--color-text-secondary)',
                         borderColor: isSelected ? tagColor : 'var(--color-border)',
                         flexShrink: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                     >
-                      {tag.name}
+                      <span>{tag.name}</span>
+                      <span 
+                        style={{
+                          backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.25)' : 'var(--color-bg-secondary)',
+                          color: isSelected ? '#ffffff' : 'var(--color-text-muted)',
+                          borderRadius: '100px',
+                          padding: '1px 6px',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          lineHeight: 1
+                        }}
+                      >
+                        {count}
+                      </span>
                     </button>
                   );
                 })}
@@ -1184,6 +1238,7 @@ const AdminClientsPage: React.FC = () => {
                   allTags={allTags}
                   customStatuses={customStatuses}
                   allSources={allSources}
+                  startIndex={(page - 1) * PAGE_SIZE}
                 />
 
                 {/* Pagination */}
@@ -1201,65 +1256,7 @@ const AdminClientsPage: React.FC = () => {
           </div>
 
 
-      {/* Reject Task Modal */}
-      {rejectTaskModalOpen && selectedTask && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 450 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Reject Task</h2>
-              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setRejectTaskModalOpen(false)}><X size={20} /></button>
-            </div>
-            <form onSubmit={handleRejectTask} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className="form-group">
-                <label className="form-label required" htmlFor="reject-reason">Reason for Rejection</label>
-                <textarea
-                  id="reject-reason"
-                  className="form-input"
-                  style={{ minHeight: 100, resize: 'vertical' }}
-                  placeholder="Explain why this task cannot be completed..."
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setRejectTaskModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-danger" disabled={!rejectReason.trim()}>Reject Task</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* Complete Task Modal */}
-      {completeTaskModalOpen && selectedTask && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 450 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Complete Task</h2>
-              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setCompleteTaskModalOpen(false)}><X size={20} /></button>
-            </div>
-            <form onSubmit={handleCompleteTask} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className="form-group">
-                <label className="form-label required" htmlFor="complete-summary">Completion Summary</label>
-                <textarea
-                  id="complete-summary"
-                  className="form-input"
-                  style={{ minHeight: 100, resize: 'vertical' }}
-                  placeholder="Describe the actions taken or outcome of this task..."
-                  value={completionSummary}
-                  onChange={(e) => setCompletionSummary(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setCompleteTaskModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={!completionSummary.trim()}>Complete Task</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Filter Drawer */}
       {showFilters && (
@@ -1274,13 +1271,14 @@ const AdminClientsPage: React.FC = () => {
             onChange={(f) => { setFilters(f); setPage(1); }}
             onClose={() => setShowFilters(false)}
             onClear={() => {
-              setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [] });
+              setFilters({ search: '', agentId: '', status: 'active', paymentStatus: '', dateFrom: '', dateTo: '', tags: [], leadSource: '' });
               setCustomClientFilter(null);
               setPage(1);
             }}
             allTags={allTags}
             agents={agents}
             customStatuses={customStatuses}
+            allSources={allSources}
           />
         </>
       )}

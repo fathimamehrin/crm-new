@@ -1,18 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload,
-  Share2
+  Share2, ClipboardList, Square
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags, getClientStatuses, getLeadSources } from '../lib/firestore';
-import { getDocs, query, collection } from 'firebase/firestore';
+import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags, getClientStatuses, getLeadSources, getUsers, getTasks, createTask } from '../lib/firestore';
+import { getDocs, query, collection, where } from 'firebase/firestore';
 import { logActivity } from '../lib/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag, CustomStatus, LeadSource, ActivityLog } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag, CustomStatus, LeadSource, ActivityLog, Task, User } from '../types';
 import EditClientModal from '../components/EditClientModal';
 import { resolvePresignedUrls, uploadFile, deleteFile, generateStoragePath } from '../lib/storage';
 import { useDropzone } from 'react-dropzone';
@@ -23,6 +23,15 @@ const PAYMENT_BADGE: Record<string, string> = {
   partial: 'badge-info',
   paid: 'badge-success',
   failed: 'badge-danger',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_acceptance: 'Awaiting Acceptance',
+  accepted: 'In Progress',
+  rejected: 'Rejected',
+  completed: 'Completed',
+  pending_reassignment: 'Pending Reassignment',
+  verified: 'Done / Closed',
 };
 
 const ClientDetailsPage: React.FC = () => {
@@ -49,6 +58,17 @@ const ClientDetailsPage: React.FC = () => {
 
   // Edit requests tracking state
   const [editRequests, setEditRequests] = useState<Record<string, EditRequest>>({});
+
+  // Lead directions and tasks states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
+  const [mediaRecorderInstance, setMediaRecorderInstance] = useState<MediaRecorder | null>(null);
+  const [directionText, setDirectionText] = useState('');
+  const [directionAssignee, setDirectionAssignee] = useState('');
+  const [agents, setAgents] = useState<User[]>([]);
+  const [clientTasks, setClientTasks] = useState<Task[]>([]);
+  const [sendingDirection, setSendingDirection] = useState(false);
 
   // Client edit requests state
   const [clientEditRequest, setClientEditRequest] = useState<ClientEditRequest | null>(null);
@@ -659,6 +679,33 @@ const ClientDetailsPage: React.FC = () => {
           console.error('Failed to load activity logs for client:', err);
         }
 
+        // Load active agents list
+        try {
+          const allUsers = await getUsers();
+          setAgents(allUsers.filter(u => u.status === 'active' && u.role === 'agent'));
+        } catch (err) {
+          console.error('Failed to load agents list:', err);
+        }
+
+        // Load tasks (directions) for this client
+        try {
+          const tasks = await getTasks([where('clientId', '==', id)]);
+          const tasksWithUrls = await Promise.all(tasks.map(async (t) => {
+            if (t.voiceUrl && !t.voiceUrl.startsWith('http://') && !t.voiceUrl.startsWith('https://')) {
+              try {
+                const urls = await resolvePresignedUrls([t.voiceUrl]);
+                return { ...t, voiceUrl: urls[t.voiceUrl] || t.voiceUrl };
+              } catch (e) {
+                console.error(e);
+              }
+            }
+            return t;
+          }));
+          setClientTasks(tasksWithUrls);
+        } catch (err) {
+          console.error('Failed to load tasks for client:', err);
+        }
+
         const resolved = await resolveSummariesUrls(s);
         setSummaries(resolved);
         setRawSummaries(s);
@@ -673,6 +720,125 @@ const ClientDetailsPage: React.FC = () => {
 
   const openFile = (url: string) => {
     window.open(url, '_blank');
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setRecordedAudioBlob(audioBlob);
+        setRecordedAudioUrl(audioUrl);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorderInstance(recorder);
+      setIsRecording(true);
+      setRecordedAudioUrl(null);
+      setRecordedAudioBlob(null);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      toast.error('Could not access microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderInstance && isRecording) {
+      mediaRecorderInstance.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const discardRecording = () => {
+    setRecordedAudioUrl(null);
+    setRecordedAudioBlob(null);
+    setMediaRecorderInstance(null);
+    setIsRecording(false);
+  };
+
+  const loadClientTasks = useCallback(async () => {
+    if (!id) return;
+    try {
+      const tasks = await getTasks([where('clientId', '==', id)]);
+      const tasksWithUrls = await Promise.all(tasks.map(async (t) => {
+        if (t.voiceUrl && !t.voiceUrl.startsWith('http://') && !t.voiceUrl.startsWith('https://')) {
+          try {
+            const urls = await resolvePresignedUrls([t.voiceUrl]);
+            return { ...t, voiceUrl: urls[t.voiceUrl] || t.voiceUrl };
+          } catch (e) {
+            console.error('Failed to resolve task voice URL:', e);
+          }
+        }
+        return t;
+      }));
+      setClientTasks(tasksWithUrls);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [id]);
+
+  const handleSendDirection = async () => {
+    if (!directionAssignee) {
+      toast.error('Please select a staff member to assign');
+      return;
+    }
+    if (!directionText.trim() && !recordedAudioBlob) {
+      toast.error('Please enter a note or record a voice note');
+      return;
+    }
+
+    const assigneeUser = agents.find(u => u.id === directionAssignee);
+    if (!assigneeUser) {
+      toast.error('Selected assignee not found');
+      return;
+    }
+
+    setSendingDirection(true);
+    try {
+      let voiceUrl = '';
+      if (recordedAudioBlob) {
+        const audioFile = new File([recordedAudioBlob], `direction_voice_${Date.now()}.webm`, {
+          type: 'audio/webm',
+        });
+        const uploadKey = await uploadFile(audioFile, 'tasks', () => {});
+        voiceUrl = uploadKey;
+      }
+
+      await createTask(
+        `Direction for ${client?.name || 'Lead'}`,
+        directionText.trim() || 'Please listen to the attached voice note directions.',
+        directionAssignee,
+        assigneeUser.name,
+        currentUser!.uid,
+        userProfile?.name || 'Admin',
+        'follow_up',
+        client?.id,
+        client?.name,
+        voiceUrl || undefined
+      );
+
+      toast.success('Direction task sent successfully');
+      setDirectionText('');
+      setDirectionAssignee('');
+      discardRecording();
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to send direction');
+    } finally {
+      setSendingDirection(false);
+    }
   };
 
   if (loading) {
@@ -706,7 +872,17 @@ const ClientDetailsPage: React.FC = () => {
       {/* Back & Title */}
       <div className="client-details-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)} aria-label="Go back">
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={() => {
+              if (location.state?.fromForm) {
+                navigate(isAdminPath ? '/admin/clients' : '/');
+              } else {
+                navigate(-1);
+              }
+            }}
+            aria-label="Go back"
+          >
             <ArrowLeft size={20} />
           </button>
           <h1 className="page-title" style={{ fontSize: 'var(--font-size-xl)' }}>Client Details</h1>
@@ -968,6 +1144,168 @@ const ClientDetailsPage: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Note/Direction System (Admin View to drop instructions, Admin/Agent views to see active instructions) */}
+      <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
+          <ClipboardList size={20} style={{ color: 'var(--color-accent)' }} />
+          <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--color-text-primary)' }}>
+            Lead Directions & Staff Instructions
+          </h3>
+        </div>
+
+        {userRole === 'admin' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+            <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              Leave Instructions/Direction for Staff
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="form-group">
+                <label className="form-label required" htmlFor="direction-assignee-select" style={{ fontSize: '11px' }}>Designated Staff Member</label>
+                <select
+                  id="direction-assignee-select"
+                  className="form-input form-select text-sm"
+                  style={{ height: '36px', padding: '4px 8px' }}
+                  value={directionAssignee}
+                  onChange={(e) => setDirectionAssignee(e.target.value)}
+                >
+                  <option value="">Select Staff...</option>
+                  {agents.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '8px' }}>
+                <label className="form-label" htmlFor="direction-text-input" style={{ fontSize: '11px' }}>Instruction Note (Text)</label>
+                <textarea
+                  id="direction-text-input"
+                  className="form-input text-sm"
+                  rows={3}
+                  placeholder="Type specific actions the staff member should take..."
+                  value={directionText}
+                  onChange={(e) => setDirectionText(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginTop: '8px' }}>
+                <label className="form-label" style={{ fontSize: '11px' }}>Instruction Note (Recorded Voice)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {isRecording ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={stopRecording}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                    >
+                      <Square size={12} /> Stop Recording
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={startRecording}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Mic size={12} /> Record Voice Note
+                    </button>
+                  )}
+
+                  {recordedAudioUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
+                      <audio controls src={recordedAudioUrl} style={{ height: '32px', flex: 1 }} />
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        style={{ color: 'var(--color-danger)', border: 'none', background: 'none', minHeight: 'auto', width: 'auto', padding: '4px' }}
+                        onClick={discardRecording}
+                        title="Delete recording"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary btn-sm align-self-start"
+                style={{ marginTop: '8px', padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content' }}
+                disabled={sendingDirection || (!directionText.trim() && !recordedAudioBlob)}
+                onClick={handleSendDirection}
+              >
+                {sendingDirection ? 'Sending...' : 'Send Direction & Create Task'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Directions List (Always visible for Admin to check status, or for assigned agent to review their actionable directions) */}
+        <div>
+          <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+            Active Directions Trail ({clientTasks.filter(t => t.status !== 'verified').length} pending)
+          </h4>
+          {clientTasks.length === 0 ? (
+            <p className="text-muted text-xs" style={{ margin: 0, padding: 'var(--space-2)' }}>No directions dropped for this lead yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {clientTasks.map((task) => (
+                <div 
+                  key={task.id} 
+                  style={{ 
+                    padding: '14px', 
+                    border: '1px solid var(--color-border)', 
+                    borderRadius: 'var(--radius-lg)', 
+                    background: 'var(--color-bg-secondary)',
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '8px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                    <div>
+                      <span className="text-xs text-muted" style={{ display: 'block', fontSize: '10px' }}>
+                        Assigned to: <strong>{task.assignedToName}</strong> | Created by: <strong>{task.createdByName}</strong>
+                      </span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap' }}>
+                        {task.description}
+                      </p>
+                    </div>
+                    <span 
+                      className={`badge ${STATUS_LABEL[task.status] === 'Completed' ? 'badge-success' : STATUS_LABEL[task.status] === 'In Progress' ? 'badge-primary' : 'badge-warning'}`} 
+                      style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 750 }}
+                    >
+                      {STATUS_LABEL[task.status] || task.status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+
+                  {task.voiceUrl && (
+                    <div style={{ padding: '6px', background: 'var(--color-bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                      <span style={{ display: 'block', fontSize: '9px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: '4px' }}>
+                        Voice Instructions
+                      </span>
+                      <audio controls src={task.voiceUrl} style={{ width: '100%', height: '32px' }} />
+                    </div>
+                  )}
+
+                  {task.status === 'completed' && task.completionSummary && (
+                    <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '4px', borderLeft: '3px solid var(--color-success)', fontSize: '12px' }}>
+                      <strong>Completion Report:</strong> {task.completionSummary}
+                    </div>
+                  )}
+
+                  {task.status === 'rejected' && task.rejectReason && (
+                    <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '4px', borderLeft: '3px solid var(--color-danger)', fontSize: '12px' }}>
+                      <strong>Rejection Reason:</strong> {task.rejectReason}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* SaaS CRM Tabs Navigation */}

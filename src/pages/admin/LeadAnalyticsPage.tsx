@@ -1,9 +1,9 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getClients, getUsers, getTags } from '../../lib/firestore';
+import { getClients, getUsers, getTags, getAllSummaries } from '../../lib/firestore';
 import { format, subDays, startOfDay, isAfter, isBefore, startOfWeek } from 'date-fns';
-import { Users, TrendingUp, BarChart3, PieChart, Calendar, UserCheck, Tag as TagIcon, CheckCircle } from 'lucide-react';
-import type { Client, User as AppUser, Tag } from '../../types';
+import { Users, TrendingUp, BarChart3, Calendar, UserCheck, Tag as TagIcon, CheckCircle } from 'lucide-react';
+import type { Client, User as AppUser, Tag, Summary } from '../../types';
 import toast from 'react-hot-toast';
 
 interface LeadTimeSeries {
@@ -28,6 +28,7 @@ const LeadAnalyticsPage: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<AppUser[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [summaries, setSummaries] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -41,14 +42,16 @@ const LeadAnalyticsPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [clientsRes, allAgents, allTags] = await Promise.all([
+      const [clientsRes, allAgents, allTags, summariesRes] = await Promise.all([
         getClients([], 1000),
         getUsers('agent'),
-        getTags()
+        getTags(),
+        getAllSummaries()
       ]);
       setClients(clientsRes.clients);
       setAgents(allAgents);
       setTags(allTags);
+      setSummaries(summariesRes);
     } catch (err) {
       console.error('Failed to load lead analytics:', err);
       toast.error('Failed to load leads data');
@@ -100,38 +103,20 @@ const LeadAnalyticsPage: React.FC = () => {
   // Compute metrics and analytics
   const getAnalytics = () => {
     const totalLeads = filteredClients.length;
-    const statusCounts: Record<string, number> = { lead: 0, active: 0, closed: 0, inactive: 0 };
 
-    filteredClients.forEach(c => {
-      if (c.status in statusCounts) {
-        statusCounts[c.status]++;
-      } else {
-        statusCounts.lead++;
-      }
-    });
+    // Filter unique paying client IDs and total payments count
+    const clientIds = new Set(filteredClients.map(c => c.id));
+    const paymentSummaries = summaries.filter(s => 
+      clientIds.has(s.clientId) && 
+      s.paymentDetails?.amount && 
+      (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
+    );
+    
+    const payingClientIds = new Set(paymentSummaries.map(s => s.clientId));
+    const payingLeadsCount = payingClientIds.size;
+    const totalPaymentsCount = paymentSummaries.length;
 
-    const convertedCount = statusCounts.active + statusCounts.closed;
-    const conversionRate = totalLeads > 0 ? Math.round((convertedCount / totalLeads) * 100) : 0;
-
-    // Percentages for Donut Chart
-    const totalCount = totalLeads || 1;
-    const activePct = Math.round((statusCounts.active / totalCount) * 100);
-    const closedPct = Math.round((statusCounts.closed / totalCount) * 100);
-    const leadPct = Math.round((statusCounts.lead / totalCount) * 100);
-    const inactivePct = 100 - activePct - closedPct - leadPct;
-
-    const p1 = activePct;
-    const p2 = p1 + closedPct;
-    const p3 = p2 + leadPct;
-
-    const conicGradientStyle = {
-      background: `conic-gradient(
-        var(--color-success) 0% ${p1}%,
-        var(--color-accent) ${p1}% ${p2}%,
-        var(--color-warning) ${p2}% ${p3}%,
-        var(--color-text-muted) ${p3}% 100%
-      )`
-    };
+    const conversionRate = totalLeads > 0 ? Math.round((payingLeadsCount / totalLeads) * 100) : 0;
 
     // Grouped Time Series
     const timeGroups: Record<string, { label: string; date: Date; total: number; converted: number }> = {};
@@ -160,7 +145,7 @@ const LeadAnalyticsPage: React.FC = () => {
         };
       }
       timeGroups[groupKey].total++;
-      if (c.status === 'active' || c.status === 'closed') {
+      if (payingClientIds.has(c.id)) {
         timeGroups[groupKey].converted++;
       }
     });
@@ -193,7 +178,7 @@ const LeadAnalyticsPage: React.FC = () => {
         agentPerformanceMap[agentId] = { name: agentName, total: 0, converted: 0 };
       }
       agentPerformanceMap[agentId].total++;
-      if (c.status === 'active' || c.status === 'closed') {
+      if (payingClientIds.has(c.id)) {
         agentPerformanceMap[agentId].converted++;
       }
     });
@@ -211,15 +196,19 @@ const LeadAnalyticsPage: React.FC = () => {
 
     // Lead source performance map
     const sourcePerformanceMap: Record<string, { name: string; total: number; converted: number; statuses: Record<string, number> }> = {};
+    // Helper: convert "whatsapp" → "Whatsapp", "WHATSAPP" → "Whatsapp"
+    const toTitleCase = (s: string) => s.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
 
     filteredClients.forEach(c => {
-      const source = c.leadSource ? c.leadSource.trim() : 'Unknown';
-      const sourceKey = source.toLowerCase();
+      const rawSource = c.leadSource ? c.leadSource.trim() : 'Unknown';
+      const sourceKey = rawSource.toLowerCase();
+      // Canonical display name — title case so "whatsapp" shows as "Whatsapp"
+      const canonicalName = toTitleCase(rawSource);
       if (!sourcePerformanceMap[sourceKey]) {
-        sourcePerformanceMap[sourceKey] = { name: source, total: 0, converted: 0, statuses: {} };
+        sourcePerformanceMap[sourceKey] = { name: canonicalName, total: 0, converted: 0, statuses: {} };
       }
       sourcePerformanceMap[sourceKey].total++;
-      if (c.status === 'active' || c.status === 'closed') {
+      if (payingClientIds.has(c.id)) {
         sourcePerformanceMap[sourceKey].converted++;
       }
       
@@ -242,10 +231,9 @@ const LeadAnalyticsPage: React.FC = () => {
 
     return {
       totalLeads,
-      statusCounts,
+      payingLeadsCount,
+      totalPaymentsCount,
       conversionRate,
-      percentages: { active: activePct, closed: closedPct, lead: leadPct, inactive: inactivePct },
-      conicGradientStyle,
       timeSeriesList,
       agentPerformanceList,
       sourcePerformanceList,
@@ -291,6 +279,7 @@ const LeadAnalyticsPage: React.FC = () => {
           <div>
             <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Conversion Rate</div>
             <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-success)', marginTop: 2 }}>{analytics.conversionRate}%</div>
+            <div className="text-xs text-muted" style={{ marginTop: 2 }}>Total Payments: {analytics.totalPaymentsCount}</div>
           </div>
         </div>
 
@@ -303,8 +292,8 @@ const LeadAnalyticsPage: React.FC = () => {
             <TrendingUp size={22} />
           </div>
           <div>
-            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pipeline Leads</div>
-            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-warning)', marginTop: 2 }}>{analytics.statusCounts.lead}</div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Paying Clients</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-warning)', marginTop: 2 }}>{analytics.payingLeadsCount}</div>
           </div>
         </div>
 
@@ -317,8 +306,8 @@ const LeadAnalyticsPage: React.FC = () => {
             <BarChart3 size={22} />
           </div>
           <div>
-            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Converted Leads</div>
-            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-success)', marginTop: 2 }}>{analytics.statusCounts.active + analytics.statusCounts.closed}</div>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payments Received</div>
+            <div className="font-bold text-2xl monospaced" style={{ color: 'var(--color-success)', marginTop: 2 }}>{analytics.totalPaymentsCount}</div>
           </div>
         </div>
       </div>
@@ -428,44 +417,8 @@ const LeadAnalyticsPage: React.FC = () => {
       {/* Visual Charts Grid */}
       <div className="analytics-dashboard-grid">
         
-        {/* Lead Status Split Donut */}
-        <div className="card col-span-4" style={{ display: 'flex', flexDirection: 'column' }}>
-          <h3 className="card-title" style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <PieChart size={16} style={{ color: 'var(--color-accent)' }} /> Status Distribution
-          </h3>
-          <div className="donut-chart-wrapper" style={{ flex: 1 }}>
-            <div className="donut-chart-radial" style={analytics.conicGradientStyle} />
-            <div className="donut-legend">
-              <div className="donut-legend-item">
-                <span className="donut-legend-label">
-                  <span className="donut-legend-dot" style={{ background: 'var(--color-success)' }} /> Active
-                </span>
-                <span className="donut-legend-value">{analytics.statusCounts.active} ({analytics.percentages.active}%)</span>
-              </div>
-              <div className="donut-legend-item">
-                <span className="donut-legend-label">
-                  <span className="donut-legend-dot" style={{ background: 'var(--color-accent)' }} /> Closed
-                </span>
-                <span className="donut-legend-value">{analytics.statusCounts.closed} ({analytics.percentages.closed}%)</span>
-              </div>
-              <div className="donut-legend-item">
-                <span className="donut-legend-label">
-                  <span className="donut-legend-dot" style={{ background: 'var(--color-warning)' }} /> Lead (Pipeline)
-                </span>
-                <span className="donut-legend-value">{analytics.statusCounts.lead} ({analytics.percentages.lead}%)</span>
-              </div>
-              <div className="donut-legend-item">
-                <span className="donut-legend-label">
-                  <span className="donut-legend-dot" style={{ background: 'var(--color-text-muted)' }} /> Inactive
-                </span>
-                <span className="donut-legend-value">{analytics.statusCounts.inactive} ({analytics.percentages.inactive}%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Lead Timelines Trend */}
-        <div className="card col-span-8">
+        <div className="card col-span-12">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-5)' }}>
             <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
               <BarChart3 size={16} style={{ color: 'var(--color-accent)' }} /> Leads Volume & Conversion Trend
@@ -492,7 +445,7 @@ const LeadAnalyticsPage: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-size-xs)' }}>
                       <span className="font-semibold text-primary">{row.label}</span>
                       <span className="text-muted font-medium">
-                        {row.total} leads <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>({row.converted} converted - {row.rate}%)</span>
+                        {row.total} leads <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>({row.converted} paying - {row.rate}%)</span>
                       </span>
                     </div>
                     {/* Visual Dual Bars */}
@@ -553,7 +506,7 @@ const LeadAnalyticsPage: React.FC = () => {
                   <tr>
                     <th>Agent Name</th>
                     <th style={{ textAlign: 'center' }}>Leads Assigned</th>
-                    <th style={{ textAlign: 'center' }}>Leads Converted (Active/Closed)</th>
+                    <th style={{ textAlign: 'center' }}>Paying Clients</th>
                     <th>Conversion Performance</th>
                     <th style={{ textAlign: 'right' }}>Conversion Rate</th>
                   </tr>
@@ -675,7 +628,7 @@ const LeadAnalyticsPage: React.FC = () => {
                   <tr>
                     <th>Source Channel</th>
                     <th style={{ textAlign: 'center' }}>Total Leads</th>
-                    <th style={{ textAlign: 'center' }}>Leads Converted</th>
+                    <th style={{ textAlign: 'center' }}>Paying Clients</th>
                     <th>Conversion Funnel</th>
                     <th style={{ textAlign: 'right' }}>Conversion Rate</th>
                   </tr>

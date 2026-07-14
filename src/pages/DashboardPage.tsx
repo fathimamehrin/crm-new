@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Check, X, ArrowLeftRight, ClipboardList, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,6 +38,7 @@ const DashboardPage: React.FC = () => {
   }, [userRole, navigate]);
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [allClientsData, setAllClientsData] = useState<Client[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -61,6 +62,21 @@ const DashboardPage: React.FC = () => {
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
+
+  const tagCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allTags.forEach((t) => {
+      counts[t.id] = 0;
+    });
+    allClientsData.forEach((c) => {
+      if (c.tags && Array.isArray(c.tags)) {
+        c.tags.forEach((tId) => {
+          counts[tId] = (counts[tId] || 0) + 1;
+        });
+      }
+    });
+    return counts;
+  }, [allTags, allClientsData]);
 
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [activeTaskTab, setActiveTaskTab] = useState<'assigned' | 'verify'>('assigned');
@@ -229,6 +245,7 @@ const DashboardPage: React.FC = () => {
         getAllSummaries()
       ]);
 
+      setAllClientsData(clientsRes.clients);
       let data = [...clientsRes.clients];
 
       // 1. Filter by Agent (if admin or agent sets it)
@@ -559,8 +576,7 @@ const DashboardPage: React.FC = () => {
               filters.status || 
               filters.paymentStatus || 
               filters.dateFrom || 
-              filters.dateTo ||
-              (filters.tags && filters.tags.length > 0)) && (
+              filters.dateTo) && (
               <span style={{
                 borderRadius: '100px',
                 background: 'var(--color-accent, #2563eb)',
@@ -625,6 +641,7 @@ const DashboardPage: React.FC = () => {
             {allTags.map(tag => {
               const isSelected = filters.tags.includes(tag.id);
               const tagColor = tag.color || '#6b7280';
+              const count = tagCounts[tag.id] || 0;
               return (
                 <button
                   key={tag.id}
@@ -648,9 +665,25 @@ const DashboardPage: React.FC = () => {
                     color: isSelected ? '#ffffff' : 'var(--color-text-secondary)',
                     borderColor: isSelected ? tagColor : 'var(--color-border)',
                     flexShrink: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
                   }}
                 >
-                  {tag.name}
+                  <span>{tag.name}</span>
+                  <span 
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.25)' : 'var(--color-bg-secondary)',
+                      color: isSelected ? '#ffffff' : 'var(--color-text-muted)',
+                      borderRadius: '100px',
+                      padding: '1px 6px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      lineHeight: 1
+                    }}
+                  >
+                    {count}
+                  </span>
                 </button>
               );
             })}
