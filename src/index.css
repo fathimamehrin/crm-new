@@ -3012,11 +3012,10 @@ h1, h2, h3, h4, h5, h6 {
   .client-details-page-wrapper {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 128px); /* Fits screen viewport precisely */
+    min-height: calc(100vh - 128px);
     width: 100%;
     max-width: 1400px !important; /* Fills screen width on laptop screen */
     margin: 0 auto;
-    overflow: hidden;
   }
   
   .client-details-header {
@@ -3039,7 +3038,7 @@ h1, h2, h3, h4, h5, h6 {
   
   .client-tab-panel-scroll {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: visible;
     padding-right: 6px;
     padding-bottom: var(--space-10);
   }
