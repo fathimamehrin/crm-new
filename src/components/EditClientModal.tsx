@@ -30,7 +30,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 // Helper to parse WhatsApp phone numbers gracefully supporting international formats & copy-paste cleaning
-const parseWhatsAppNumber = (rawText: string) => {
+const parseWhatsAppNumber = (rawText: string, isPaste = false) => {
   const clean = rawText.trim().replace(/[^\d+]/g, '');
   const possibleCodes = ['+91', '+1', '+44', '+971', '+966', '+61', '+65', '+968', '+974', '+965', '+973'];
 
@@ -43,13 +43,15 @@ const parseWhatsAppNumber = (rawText: string) => {
     }
   }
 
-  for (const code of possibleCodes) {
-    const codeWithoutPlus = code.replace('+', '');
-    if (clean.startsWith(codeWithoutPlus) && clean.length > codeWithoutPlus.length + 3) {
-      return {
-        countryCode: code,
-        digits: clean.substring(codeWithoutPlus.length),
-      };
+  if (isPaste) {
+    for (const code of possibleCodes) {
+      const codeWithoutPlus = code.replace('+', '');
+      if (clean.startsWith(codeWithoutPlus) && clean.length > codeWithoutPlus.length + 3) {
+        return {
+          countryCode: code,
+          digits: clean.substring(codeWithoutPlus.length),
+        };
+      }
     }
   }
 
@@ -408,7 +410,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
                       })}
                       onPaste={(e) => {
                         const pastedText = e.clipboardData.getData('text');
-                        const parsed = parseWhatsAppNumber(pastedText);
+                        const parsed = parseWhatsAppNumber(pastedText, true);
                         e.preventDefault();
                         if (parsed.countryCode) {
                           setValue('countryCode', parsed.countryCode, { shouldDirty: true, shouldValidate: true });
