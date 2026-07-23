@@ -20,7 +20,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction, PackageService } from '../types';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
@@ -35,6 +35,7 @@ const tagsColRef = () => collection(db, 'tags');
 const clientStatusesColRef = () => collection(db, 'clientStatuses');
 const tasksColRef = () => collection(db, 'tasks');
 const leadSourcesColRef = () => collection(db, 'leadSources');
+const packagesColRef = () => collection(db, 'packages');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -939,6 +940,72 @@ export const getTasks = async (constraints: QueryConstraint[] = []): Promise<Tas
   const snap = await getDocs(query(tasksColRef(), ...constraints));
   const tasks = snap.docs.map(taskFromDoc);
   return tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+// ─── Packages ────────────────────────────────────────────────────────────────
+export const packageFromDoc = (snap: AnySnap): PackageService => ({
+  id: snap.id,
+  ...snap.data(),
+  createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
+  lastReviewedAt: snap.data().lastReviewedAt ? toDate(snap.data().lastReviewedAt) : undefined,
+} as PackageService);
+
+export const getPackages = async (includeArchived = false): Promise<PackageService[]> => {
+  const snap = await getDocs(query(packagesColRef(), orderBy('name', 'asc')));
+  const all = snap.docs.map(packageFromDoc);
+  return includeArchived ? all : all.filter((p) => p.status === 'active');
+};
+
+export const createPackage = async (
+  data: Omit<PackageService, 'id' | 'createdAt' | 'updatedAt' | 'lastReviewedAt'>
+): Promise<string> => {
+  const ref = await addDoc(packagesColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
+  return ref.id;
+};
+
+export const updatePackage = async (
+  id: string,
+  data: Partial<PackageService>
+): Promise<void> => {
+  await updateDoc(doc(db, 'packages', id), cleanObject({ ...data, updatedAt: serverTimestamp() }));
+};
+
+export const markPackageReviewed = async (
+  id: string,
+  userId: string,
+  userName: string
+): Promise<void> => {
+  await updateDoc(doc(db, 'packages', id), cleanObject({
+    lastReviewedAt: serverTimestamp(),
+    lastReviewedBy: userId,
+    lastReviewedByName: userName,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+    updatedByName: userName,
+  }));
+};
+
+export const archivePackage = async (id: string): Promise<void> => {
+  await updateDoc(doc(db, 'packages', id), { status: 'archived', updatedAt: serverTimestamp() });
+};
+
+export const restorePackage = async (id: string): Promise<void> => {
+  await updateDoc(doc(db, 'packages', id), { status: 'active', updatedAt: serverTimestamp() });
+};
+
+// Helper: returns the start-of-quarter Date for a given date
+export const getQuarterStart = (date: Date): Date => {
+  const month = date.getMonth(); // 0-indexed
+  const quarterStartMonth = Math.floor(month / 3) * 3;
+  return new Date(date.getFullYear(), quarterStartMonth, 1, 0, 0, 0, 0);
+};
+
+// Helper: returns true if a package needs a quarterly review
+export const isPackageOverdueForReview = (pkg: PackageService): boolean => {
+  if (!pkg.lastReviewedAt) return true;
+  const quarterStart = getQuarterStart(new Date());
+  return pkg.lastReviewedAt < quarterStart;
 };
 
 // ─── Re-exports for convenience ───────────────────────────────────────────────

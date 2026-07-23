@@ -32,7 +32,7 @@ const LeadAnalyticsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Filters
-  const [dateRange, setDateRange] = useState<'today' | '7days' | '30days' | 'custom' | 'all'>('all');
+  const [dateRange, setDateRange] = useState<'today' | '7days' | '30days' | 'month' | 'year' | 'custom' | 'all'>('month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
@@ -79,6 +79,12 @@ const LeadAnalyticsPage: React.FC = () => {
     } else if (dateRange === '30days') {
       const thirtyDaysAgo = startOfDay(subDays(now, 30));
       filtered = filtered.filter(c => isAfter(c.createdAt, thirtyDaysAgo));
+    } else if (dateRange === 'month') {
+      const currentMonthPrefix = now.toISOString().substring(0, 7);
+      filtered = filtered.filter(c => c.createdAt.toISOString().substring(0, 7) === currentMonthPrefix);
+    } else if (dateRange === 'year') {
+      const currentYear = now.getFullYear().toString();
+      filtered = filtered.filter(c => c.createdAt.getFullYear().toString() === currentYear);
     } else if (dateRange === 'custom' && customStartDate && customEndDate) {
       const start = new Date(customStartDate + 'T00:00:00');
       const end = new Date(customEndDate + 'T23:59:59');
@@ -356,17 +362,13 @@ const LeadAnalyticsPage: React.FC = () => {
 
           {/* Date range filter buttons */}
           <div className="analytics-date-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['today', '7days', '30days', 'custom', 'all'] as const).map(range => (
+            {(['month', 'today', '7days', '30days', 'year', 'all', 'custom'] as const).map(range => (
               <button
                 key={range}
                 className={`btn btn-sm ${dateRange === range ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setDateRange(range)}
               >
-                {range === 'today' && 'Today'}
-                {range === '7days' && 'Last 7 Days'}
-                {range === '30days' && 'Last 30 Days'}
-                {range === 'custom' && 'Custom Range'}
-                {range === 'all' && 'All Time'}
+                {range === 'month' ? 'Current Month' : range === 'today' ? 'Today' : range === '7days' ? 'Last 7 Days' : range === '30days' ? 'Last 30 Days' : range === 'year' ? 'Current Year' : range === 'all' ? 'Lifetime' : 'Custom'}
               </button>
             ))}
           </div>

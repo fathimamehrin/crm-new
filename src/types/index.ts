@@ -33,6 +33,7 @@ export interface Client {
   tags?: string[];
   projectName?: string;
   leadSource?: string;
+  paymentStatus?: string;
 }
 
 export interface PaymentDetails {
@@ -270,3 +271,36 @@ export interface Task {
 }
 
 
+// ─── Packages ─────────────────────────────────────────────────────────────────
+export type PackagePaymentType = 'direct' | 'associated';
+export type PackageCategory = 'company_registration' | 'startup' | 'service' | 'other';
+
+export interface PackageCostComponent {
+  label: string;   // e.g. "Base Service Cost", "Agent Commission", "VAT"
+  amount: number;
+}
+
+export interface PackageService {
+  id: string;
+  name: string;
+  category: PackageCategory;
+  description?: string;
+  paymentType: PackagePaymentType;
+  // For direct payments — single fixed rate, visible to all
+  fixedRate?: number;
+  // For associated payments — admin sees full breakdown, agents see only totalClientPrice
+  costComponents?: PackageCostComponent[];  // flexible list of cost items
+  totalClientPrice?: number;                 // final quoted amount for the client
+  // Quarterly review tracking
+  lastReviewedAt?: Date;
+  lastReviewedBy?: string;
+  lastReviewedByName?: string;
+  // Meta
+  status: 'active' | 'archived';
+  createdAt: Date;
+  createdBy: string;
+  createdByName?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+  updatedByName?: string;
+}

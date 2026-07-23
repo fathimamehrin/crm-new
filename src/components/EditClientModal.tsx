@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -77,7 +76,6 @@ interface EditClientModalProps {
 
 const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUpdate, onRequestSubmitted }) => {
   const { currentUser, userRole, userProfile } = useAuth();
-  const navigate = useNavigate();
   const [agents, setAgents] = useState<UserType[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -258,13 +256,6 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ client, onClose, onUp
 
         toast.success('Client details updated successfully');
         onClose();
-
-        // Redirect back to dashboard/homepage or wherever they originally initiated the edit
-        if (window.history.length > 2) {
-          navigate(-1);
-        } else {
-          navigate('/admin/clients');
-        }
       } else {
         // Agent submits proposed changes as edit request
         const proposedChanges: Partial<Client> = { ...updatedFields };

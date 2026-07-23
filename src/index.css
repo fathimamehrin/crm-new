@@ -1513,11 +1513,13 @@ h1, h2, h3, h4, h5, h6 {
   display: none !important;
 }
 
-.stats-grid {
+.stats-grid,
+.metrics-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: var(--space-5);
   margin-bottom: var(--space-6);
+  
 }
 
 /* Enhancing inputs and selectors for premium responsiveness */
@@ -3171,11 +3173,13 @@ h1, h2, h3, h4, h5, h6 {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: var(--space-4);
+  
 }
 
 @media (max-width: 1200px) {
   .metrics-grid {
     grid-template-columns: repeat(3, 1fr);
+    
   }
 }
 

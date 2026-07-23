@@ -267,6 +267,21 @@ const DashboardPage: React.FC = () => {
         data = data.filter((c) => c.leadSource?.toLowerCase() === filters.leadSource?.toLowerCase());
       }
 
+      // 4. Filter by Payment Status
+      if (filters.paymentStatus) {
+        const ps = filters.paymentStatus.toLowerCase();
+        const clientIdsWithPaymentStatus = new Set(
+          summariesData
+            .filter((s) => s.paymentDetails?.status?.toLowerCase() === ps)
+            .map((s) => s.clientId)
+        );
+        data = data.filter(
+          (c) =>
+            c.paymentStatus?.toLowerCase() === ps ||
+            clientIdsWithPaymentStatus.has(c.id)
+        );
+      }
+
       if (filters.tags && filters.tags.length > 0) {
         data = data.filter((c) =>
           filters.tags.every((tagId) => c.tags?.includes(tagId))
@@ -719,7 +734,7 @@ const DashboardPage: React.FC = () => {
                     transition: 'all 0.2s ease',
                     cursor: 'pointer'
                   }}
-                  onClick={() => navigate(`/clients/${client.id}`)}
+                  onClick={() => navigate(userRole === 'admin' ? `/admin/clients/${client.id}` : `/clients/${client.id}`)}
                 >
                   {/* Client header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
@@ -820,6 +835,7 @@ const DashboardPage: React.FC = () => {
             customStatuses={customStatuses}
             allSources={allSources}
             startIndex={(page - 1) * PAGE_SIZE}
+            allTasks={allTasks}
           />
  
           {/* Pagination */}

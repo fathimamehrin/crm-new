@@ -4,7 +4,7 @@ import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
   Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3,
-  Sliders, Share2, Calendar
+  Sliders, Share2, Calendar, Package2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -188,6 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/statuses" icon={Sliders} label="Statuses" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/sources" icon={Share2} label="Lead Sources" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/packages" icon={Package2} label="Packages" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingRequestsCount} />
                 <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingTasksCount} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
@@ -205,6 +206,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <MoreHorizontal className="link-icon" size={20} />
                   <span className="link-text">More</span>
                 </button>
+              </>
+            )}
+            {userRole === 'agent' && (
+              <>
+                <NavItem to="/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingTasksCount} />
+                <NavItem to="/packages" icon={Package2} label="Packages" collapsed={collapsed} onCloseMobile={onCloseMobile} />
               </>
             )}
           </nav>
@@ -286,6 +294,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Share2 size={18} />
                 <span>Lead Source Management</span>
+              </NavLink>
+
+              <NavLink 
+                to="/admin/packages" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <Package2 size={18} />
+                <span>Packages</span>
               </NavLink>
               
               <NavLink 

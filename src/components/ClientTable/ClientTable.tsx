@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { MessageCircle } from 'lucide-react';
-import type { Client, User, Tag, CustomStatus, LeadSource } from '../../types';
+import type { Client, User, Tag, CustomStatus, LeadSource, Task } from '../../types';
 
 interface ClientTableProps {
   clients: Client[];
@@ -15,6 +15,7 @@ interface ClientTableProps {
   customStatuses?: CustomStatus[];
   allSources?: LeadSource[];
   startIndex?: number;
+  allTasks?: Task[];
 }
 
 const ClientTable: React.FC<ClientTableProps> = ({ 
@@ -26,7 +27,8 @@ const ClientTable: React.FC<ClientTableProps> = ({
   allTags = [],
   customStatuses = [],
   allSources = [],
-  startIndex = 0
+  startIndex = 0,
+  allTasks = []
 }) => {
   const navigate = useNavigate();
   const agentMap = Object.fromEntries(agents.map((a) => [a.id, a.name]));
@@ -67,16 +69,17 @@ const ClientTable: React.FC<ClientTableProps> = ({
     <>
       {/* Desktop View (Standard Table) */}
       <div className="table-wrapper desktop-only" style={{ borderRadius: 0, border: 'none' }}>
-        <table className="table">
+        <table className="table" style={{ tableLayout: 'auto' }}>
           <thead>
             <tr>
-              <th style={{ width: 50, paddingLeft: 'var(--space-4)' }}></th>
-              <th>Client</th>
-              <th>WhatsApp</th>
-              <th>Status</th>
-              <th>Assigned Agent</th>
-              <th>Created</th>
-              <th style={{ width: 48 }}></th>
+              <th style={{ width: 45, paddingLeft: 'var(--space-3)' }}>#</th>
+              <th style={{ minWidth: 180 }}>Client</th>
+              <th style={{ minWidth: 120 }}>WhatsApp</th>
+              <th style={{ width: 100 }}>Status</th>
+              <th style={{ minWidth: 120 }}>Lead Source</th>
+              <th style={{ minWidth: 120 }}>Agent</th>
+              <th style={{ minWidth: 110 }}>Active Tasks</th>
+              <th style={{ width: 110 }}>Created</th>
             </tr>
           </thead>
           <tbody>
@@ -102,8 +105,8 @@ const ClientTable: React.FC<ClientTableProps> = ({
                   <td 
                     className="text-sm font-bold text-muted" 
                     style={{ 
-                      width: 50, 
-                      paddingLeft: 'var(--space-4)', 
+                      width: 45, 
+                      paddingLeft: 'var(--space-3)', 
                       borderLeft: borderLeftStyle,
                       verticalAlign: 'middle',
                       textAlign: 'center'
@@ -138,25 +141,6 @@ const ClientTable: React.FC<ClientTableProps> = ({
                               {client.projectName}
                             </span>
                           )}
-                          {client.leadSource && (() => {
-                            const sourceObj = allSources.find(s => s.name.toLowerCase() === client.leadSource!.toLowerCase());
-                            const sourceColor = sourceObj?.color || '#6b7280';
-                            return (
-                              <span
-                                className="tag-badge sm"
-                                style={{
-                                  backgroundColor: `${sourceColor}10`,
-                                  color: sourceColor,
-                                  border: `1px solid ${sourceColor}25`,
-                                  padding: '2px 8px',
-                                  fontWeight: 700,
-                                  textTransform: 'uppercase'
-                                }}
-                              >
-                                {client.leadSource}
-                              </span>
-                            );
-                          })()}
                         </div>
                         {client.email && (
                           <div className="text-xs text-muted">{client.email}</div>
@@ -223,9 +207,55 @@ const ClientTable: React.FC<ClientTableProps> = ({
                     })()}
                   </td>
 
+                  {/* Lead Source */}
+                  <td className="text-sm">
+                    {(() => {
+                      const sourceName = client.leadSource || 'Unspecified';
+                      const sourceObj = allSources.find(s => s.name.toLowerCase() === sourceName.toLowerCase());
+                      const sourceColor = sourceObj?.color || '#6b7280';
+                      return (
+                        <span
+                          className="tag-badge sm"
+                          style={{
+                            backgroundColor: `${sourceColor}10`,
+                            color: sourceColor,
+                            border: `1px solid ${sourceColor}25`,
+                            padding: '2px 8px',
+                            fontWeight: 700,
+                            fontSize: '10px',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {sourceName}
+                        </span>
+                      );
+                    })()}
+                  </td>
+
                   {/* Agent */}
-                  <td className="text-sm text-secondary">
-                    {client.assignedAgent ? (agentMap[client.assignedAgent] || client.assignedAgentName || '—') : '—'}
+                  <td className="text-sm">
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {client.assignedAgent ? (agentMap[client.assignedAgent] || client.assignedAgentName || 'Unassigned') : 'Unassigned'}
+                    </span>
+                  </td>
+
+                  {/* Active Tasks */}
+                  <td>
+                    {(() => {
+                      const clientTasks = allTasks.filter(t => t.clientId === client.id && t.status !== 'verified');
+                      if (clientTasks.length > 0) {
+                        return (
+                          <span
+                            className="badge badge-accent"
+                            style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                          >
+                            {clientTasks.length} task{clientTasks.length > 1 ? 's' : ''}
+                          </span>
+                        );
+                      }
+                      return <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>—</span>;
+                    })()}
                   </td>
 
                   {/* Date */}

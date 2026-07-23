@@ -74,19 +74,10 @@ const AdminClientsPage: React.FC = () => {
   const [leadSourceEndDate, setLeadSourceEndDate] = useState(new Date().toISOString().substring(0, 10));
   const [allSources, setAllSources] = useState<LeadSource[]>([]);
 
-
-
-  const [stats, setStats] = useState({
-    total: 0,
-    conversionRate: '0.0%',
-    totalPayments: 0,
-    revenue: 0,
-  });
-
   const [allSummaries, setAllSummaries] = useState<Summary[]>([]);
 
-  // Revenue filtering states
-  const [revenueFilterMode, setRevenueFilterMode] = useState<'lifetime' | 'day' | 'month' | 'year' | 'custom'>('lifetime');
+  // Global date filter for all metric cards (defaults to Current Month)
+  const [revenueFilterMode, setRevenueFilterMode] = useState<'month' | 'lifetime' | 'day' | 'year' | 'custom'>('month');
   const [revenueFilterDate, setRevenueFilterDate] = useState(new Date().toISOString().substring(0, 10));
   const [revenueFilterMonth, setRevenueFilterMonth] = useState(new Date().toISOString().substring(0, 7)); // yyyy-MM
   const [revenueFilterYear, setRevenueFilterYear] = useState(new Date().getFullYear().toString()); // yyyy
@@ -172,6 +163,56 @@ const AdminClientsPage: React.FC = () => {
     });
     return counts;
   }, [allTags, allClientsData]);
+
+  const dateFilterMatch = useCallback((date: Date, mode: string) => {
+    if (mode === 'lifetime' || mode === 'all') return true;
+    const dStr = date.toISOString().substring(0, 10);
+    if (mode === 'day') return dStr === revenueFilterDate;
+    if (mode === 'month') return date.toISOString().substring(0, 7) === revenueFilterMonth;
+    if (mode === 'year') return date.getFullYear().toString() === revenueFilterYear;
+    if (mode === 'custom' && revenueFilterCustomFrom && revenueFilterCustomTo) return dStr >= revenueFilterCustomFrom && dStr <= revenueFilterCustomTo;
+    return true;
+  }, [revenueFilterDate, revenueFilterMonth, revenueFilterYear, revenueFilterCustomFrom, revenueFilterCustomTo]);
+
+  const filteredTotalClients = useMemo(() => {
+    let list = allClientsData;
+    if (filters.agentId && filters.agentId !== 'unassigned') {
+      list = list.filter(c => c.assignedAgent === filters.agentId);
+    } else if (filters.agentId === 'unassigned') {
+      list = list.filter(c => !c.assignedAgent || c.assignedAgent === 'unassigned');
+    }
+    return list.filter(c => dateFilterMatch(c.createdAt, revenueFilterMode)).length;
+  }, [allClientsData, filters.agentId, revenueFilterMode, dateFilterMatch]);
+
+  const filteredConversionStats = useMemo(() => {
+    let list = allClientsData;
+    if (filters.agentId && filters.agentId !== 'unassigned') {
+      list = list.filter(c => c.assignedAgent === filters.agentId);
+    } else if (filters.agentId === 'unassigned') {
+      list = list.filter(c => !c.assignedAgent || c.assignedAgent === 'unassigned');
+    }
+    const filteredLeads = list.filter(c => dateFilterMatch(c.createdAt, revenueFilterMode));
+    const totalLeads = filteredLeads.length;
+
+    const clientIds = new Set(filteredLeads.map(c => c.id));
+    const paymentSummaries = allSummaries.filter(s => 
+      clientIds.has(s.clientId) && 
+      s.paymentDetails?.amount && 
+      (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial') &&
+      dateFilterMatch(s.createdAt ? new Date(s.createdAt) : new Date(), revenueFilterMode)
+    );
+
+    const payingClientIds = new Set(paymentSummaries.map(s => s.clientId));
+    const payingCount = payingClientIds.size;
+    const rate = totalLeads > 0 ? ((payingCount / totalLeads) * 100).toFixed(1) + '%' : '0.0%';
+
+    return {
+      rate,
+      totalLeads,
+      payingCount,
+      totalPayments: paymentSummaries.length,
+    };
+  }, [allClientsData, allSummaries, filters.agentId, revenueFilterMode, dateFilterMatch]);
 
   const paymentStats = useMemo(() => {
     let statsClients = allClientsData;
@@ -263,6 +304,21 @@ const AdminClientsPage: React.FC = () => {
       // 3. Filter by Lead Source
       if (filters.leadSource) {
         data = data.filter((c) => (c.leadSource || '').toLowerCase() === (filters.leadSource || '').toLowerCase());
+      }
+
+      // 4. Filter by Payment Status
+      if (filters.paymentStatus) {
+        const ps = filters.paymentStatus.toLowerCase();
+        const clientIdsWithPaymentStatus = new Set(
+          summariesData
+            .filter((s) => s.paymentDetails?.status?.toLowerCase() === ps)
+            .map((s) => s.clientId)
+        );
+        data = data.filter(
+          (c) =>
+            c.paymentStatus?.toLowerCase() === ps ||
+            clientIdsWithPaymentStatus.has(c.id)
+        );
       }
 
       if (filters.tags && filters.tags.length > 0) {
@@ -374,33 +430,6 @@ const AdminClientsPage: React.FC = () => {
         setClients(filtered.slice(start, start + PAGE_SIZE));
         setSearchResults([]);
       }
-
-      // Calculate stats based on filters.agentId
-      let statsClients = allClientsRes.clients;
-      if (filters.agentId && filters.agentId !== 'unassigned') {
-        statsClients = statsClients.filter(c => c.assignedAgent === filters.agentId);
-      } else if (filters.agentId === 'unassigned') {
-        statsClients = statsClients.filter(c => !c.assignedAgent || c.assignedAgent === 'unassigned');
-      }
-
-      const total = statsClients.length;
-
-      const clientIds = new Set(statsClients.map(c => c.id));
-      const paymentSummaries = summariesData.filter(s => 
-        clientIds.has(s.clientId) && 
-        s.paymentDetails?.amount && 
-        (s.paymentDetails?.status?.toLowerCase() === 'paid' || s.paymentDetails?.status?.toLowerCase() === 'partial')
-      );
-      
-      const payingClientIds = new Set(paymentSummaries.map(s => s.clientId));
-      const payingClientsCount = payingClientIds.size;
-      const totalPayments = paymentSummaries.length;
-      
-      const conversionRate = total > 0 ? ((payingClientsCount / total) * 100).toFixed(1) + '%' : '0.0%';
-
-      const revenue = paymentSummaries.reduce((sum, s) => sum + Number(s.paymentDetails?.amount || 0), 0);
-
-      setStats({ total, conversionRate, totalPayments, revenue });
 
     } catch (err) {
       console.error(err);
@@ -733,52 +762,144 @@ const AdminClientsPage: React.FC = () => {
       </div>
 
       {/* Analytics Grid */}
-      <div className="metrics-grid" style={{ marginBottom: 'var(--space-6)' }}>
+      <div className="metrics-grid" style={{ marginBottom: 'var(--space-4)' }}>
         {/* Card 1: Total Clients */}
-        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total Clients</span>
             <Users size={16} style={{ color: 'var(--color-accent)' }} />
           </div>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{stats.total}</h3>
-            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>Total leads registered</span>
+            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{filteredTotalClients}</h3>
+            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>
+              {revenueFilterMode === 'lifetime' ? 'Lifetime Total Leads' : 'Leads in Selected Period'}
+            </span>
           </div>
         </div>
 
         {/* Card 2: Conversion Rate */}
-        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Conversion Rate</span>
-            <TrendingUp size={16} style={{ color: 'var(--color-accent)' }} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{stats.conversionRate}</h3>
-            <div style={{ fontSize: '10px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: 4 }}>
-              <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Paying Clients vs Total</span>
-              <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>Total Payments: {stats.totalPayments}</span>
+        <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conversion Rate</span>
+              <select
+                className="form-input form-select text-xs"
+                style={{ padding: '2px 20px 2px 6px', fontSize: '10px', width: 'auto', margin: 0, height: '24px', border: '1px solid var(--color-border)' }}
+                value={revenueFilterMode}
+                onChange={(e) => setRevenueFilterMode(e.target.value as any)}
+              >
+                <option value="month">Current Month</option>
+                <option value="lifetime">Lifetime</option>
+                <option value="day">Specific Day</option>
+                <option value="year">Specific Year</option>
+                <option value="custom">Custom Range</option>
+              </select>
             </div>
+            <TrendingUp size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{filteredConversionStats.rate}</h3>
+              <div style={{ fontSize: '10px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: 4 }}>
+                <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Paying Clients: {filteredConversionStats.payingCount} / {filteredConversionStats.totalLeads}</span>
+                <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>Total Payments: {filteredConversionStats.totalPayments}</span>
+              </div>
+            </div>
+
+            {/* Dynamic date pickers for Conversion Rate */}
+            {revenueFilterMode === 'day' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterDate}
+                  onChange={(e) => setRevenueFilterDate(e.target.value)}
+                />
+              </div>
+            )}
+            {revenueFilterMode === 'month' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                <input
+                  type="month"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterMonth}
+                  onChange={(e) => setRevenueFilterMonth(e.target.value)}
+                />
+              </div>
+            )}
+            {revenueFilterMode === 'year' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                <select
+                  className="form-input form-select text-xs"
+                  style={{ padding: '4px 24px 4px 8px', fontSize: '11px', margin: 0, height: '30px' }}
+                  value={revenueFilterYear}
+                  onChange={(e) => setRevenueFilterYear(e.target.value)}
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const years = [];
+                    for (let y = currentYear - 3; y <= currentYear + 1; y++) {
+                      years.push(y.toString());
+                    }
+                    return years.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ));
+                  })()}
+                </select>
+              </div>
+            )}
+            {revenueFilterMode === 'custom' && (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '2px' }}>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 4px', fontSize: '10px', margin: 0, flex: 1, height: '30px' }}
+                  value={revenueFilterCustomFrom}
+                  onChange={(e) => setRevenueFilterCustomFrom(e.target.value)}
+                />
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>to</span>
+                <input
+                  type="date"
+                  className="form-input text-xs"
+                  style={{ padding: '4px 4px', fontSize: '10px', margin: 0, flex: 1, height: '30px' }}
+                  value={revenueFilterCustomTo}
+                  onChange={(e) => setRevenueFilterCustomTo(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
         {/* Card 3: Total Revenue */}
-        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total Revenue</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <select
                 className="form-input form-select text-xs"
-                style={{ padding: '2px 24px 2px 8px', fontSize: '11px', width: 'auto', margin: 0, height: 'auto', border: '1px solid var(--color-border)' }}
+                style={{ padding: '2px 24px 2px 8px', fontSize: '10px', width: 'auto', margin: 0, height: 'auto', border: '1px solid var(--color-border)' }}
                 value={revenueFilterMode}
                 onChange={(e) => setRevenueFilterMode(e.target.value as any)}
               >
+                <option value="month">Current Month</option>
                 <option value="lifetime">Lifetime</option>
                 <option value="day">Specific Day</option>
-                <option value="month">Specific Month</option>
                 <option value="year">Specific Year</option>
                 <option value="custom">Custom Range</option>
               </select>
-              <DollarSign size={16} style={{ color: 'var(--color-success)' }} />
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                title={revenueFilterMode === 'month' ? 'Switch to Lifetime' : 'Switch to Current Month'}
+                style={{ padding: '2px 8px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid var(--color-border)' }}
+                onClick={() => setRevenueFilterMode(revenueFilterMode === 'month' ? 'lifetime' : 'month')}
+              >
+                {revenueFilterMode === 'month' ? '➔ Lifetime' : '➔ Month'}
+              </button>
+              <DollarSign size={15} style={{ color: 'var(--color-success)' }} />
             </div>
           </div>
 
@@ -1239,6 +1360,7 @@ const AdminClientsPage: React.FC = () => {
                   customStatuses={customStatuses}
                   allSources={allSources}
                   startIndex={(page - 1) * PAGE_SIZE}
+                  allTasks={allTasks}
                 />
 
                 {/* Pagination */}
