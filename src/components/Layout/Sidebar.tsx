@@ -88,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   onCloseMobile,
 }) => {
-  const { currentUser, userRole, logout } = useAuth();
+  const { currentUser, userRole, userProfile, logout } = useAuth();
   const navigate = useNavigate();
   const [showMore, setShowMore] = useState(false);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
@@ -210,9 +210,21 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             {userRole === 'agent' && (
               <>
-                <NavItem to="/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
-                <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingTasksCount} />
-                <NavItem to="/packages" icon={Package2} label="Packages" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                {(!userProfile?.allowedModules || userProfile.allowedModules.includes('clients')) && (
+                  <NavItem to="/clients" icon={Users} label="Clients" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                )}
+                {(!userProfile?.allowedModules || userProfile.allowedModules.includes('tasks')) && (
+                  <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingTasksCount} />
+                )}
+                {(!userProfile?.allowedModules || userProfile.allowedModules.includes('packages')) && (
+                  <NavItem to="/packages" icon={Package2} label="Packages" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                )}
+                {userProfile?.allowedModules?.includes('calendar') && (
+                  <NavItem to="/admin/calendar" icon={Calendar} label="Calendar" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                )}
+                {userProfile?.allowedModules?.includes('analytics') && (
+                  <NavItem to="/admin/analytics" icon={BarChart3} label="Lead Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
+                )}
               </>
             )}
           </nav>

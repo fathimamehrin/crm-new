@@ -28,7 +28,7 @@ interface ClientSearchResult {
 }
 
 const DashboardPage: React.FC = () => {
-  const { userRole, currentUser } = useAuth();
+  const { userRole, currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -237,7 +237,9 @@ const DashboardPage: React.FC = () => {
     try {
       const constraints = [];
       if (userRole === 'agent' && currentUser) {
-        constraints.push(where('assignedAgent', '==', currentUser.uid));
+        if (userProfile?.clientVisibilityScope === 'assigned_only') {
+          constraints.push(where('assignedAgent', '==', currentUser.uid));
+        }
       }
 
       const [clientsRes, summariesData] = await Promise.all([
@@ -245,8 +247,21 @@ const DashboardPage: React.FC = () => {
         getAllSummaries()
       ]);
 
-      setAllClientsData(clientsRes.clients);
       let data = [...clientsRes.clients];
+
+      // Enforce granular visibility restrictions for agents
+      if (userRole === 'agent' && userProfile) {
+        // Tag restriction
+        if (userProfile.allowedTags && userProfile.allowedTags.length > 0) {
+          data = data.filter((c) => c.tags && c.tags.some(t => userProfile.allowedTags?.includes(t)));
+        }
+        // Lead source restriction
+        if (userProfile.allowedLeadSources && userProfile.allowedLeadSources.length > 0) {
+          data = data.filter((c) => c.leadSource && userProfile.allowedLeadSources?.includes(c.leadSource));
+        }
+      }
+
+      setAllClientsData(data);
 
       // 1. Filter by Agent (if admin or agent sets it)
       if (filters.agentId) {

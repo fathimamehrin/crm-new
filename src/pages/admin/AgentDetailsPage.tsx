@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, Calendar, UserCheck, Search, MessageCircle, ExternalLink, Key, X } from 'lucide-react';
-import { getUserById, getClients, getClientStatuses } from '../../lib/firestore';
+import { getUserById, getClients, getClientStatuses, getTags, getLeadSources, updateUser } from '../../lib/firestore';
 import { where } from 'firebase/firestore';
 import { format } from 'date-fns';
-import type { User, Client, CustomStatus } from '../../types';
+import type { User, Client, CustomStatus, Tag, LeadSource } from '../../types';
 import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -20,6 +20,8 @@ const AgentDetailsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
   const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [allSources, setAllSources] = useState<LeadSource[]>([]);
 
   // Reset password modal state
   const [showResetModal, setShowResetModal] = useState(false);
@@ -90,6 +92,8 @@ const AgentDetailsPage: React.FC = () => {
   useEffect(() => {
     loadData();
     getClientStatuses().then(setCustomStatuses).catch(() => {});
+    getTags().then(setAllTags).catch(() => {});
+    getLeadSources().then(setAllSources).catch(() => {});
   }, [loadData]);
 
   // Handle local client search
@@ -172,6 +176,166 @@ const AgentDetailsPage: React.FC = () => {
           >
             <Key size={12} /> Reset Password
           </button>
+        </div>
+      </div>
+
+      {/* Visibility Scope & Permissions Control (Admin Config) */}
+      <div className="card" style={{ padding: '20px 24px', boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08)' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '4px' }}>Granular Visibility Scope & Permissions</h3>
+        <p className="text-xs text-muted" style={{ marginBottom: '16px' }}>Configure which modules, clients, tags, and analytics streams this agent is permitted to view.</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+          {/* Module Access */}
+          <div>
+            <label className="form-label" style={{ fontWeight: 650 }}>Allowed Modules</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+              {[
+                { id: 'clients', label: 'Clients' },
+                { id: 'tasks', label: 'Tasks' },
+                { id: 'packages', label: 'Packages (Lookup)' },
+                { id: 'calendar', label: 'Calendar' },
+                { id: 'analytics', label: 'Lead Analytics' },
+              ].map(m => {
+                const currentAllowed = agent.allowedModules || ['clients', 'tasks', 'packages'];
+                const checked = currentAllowed.includes(m.id);
+                return (
+                  <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={async (e) => {
+                        const updated = e.target.checked
+                          ? [...currentAllowed, m.id]
+                          : currentAllowed.filter(x => x !== m.id);
+                        setAgent({ ...agent, allowedModules: updated });
+                        await updateUser(agent.id, { allowedModules: updated });
+                        toast.success('Module permissions updated');
+                      }}
+                      style={{ accentColor: 'var(--color-accent)' }}
+                    />
+                    {m.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Client & Analytics Scope */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label className="form-label" style={{ fontWeight: 650 }}>Client Visibility Scope</label>
+              <select
+                className="form-input form-select text-sm"
+                value={agent.clientVisibilityScope || 'all'}
+                onChange={async (e) => {
+                  const val = e.target.value as 'all' | 'assigned_only';
+                  setAgent({ ...agent, clientVisibilityScope: val });
+                  await updateUser(agent.id, { clientVisibilityScope: val });
+                  toast.success('Client scope updated');
+                }}
+                style={{ marginTop: '4px' }}
+              >
+                <option value="all">All Clients (Full Access)</option>
+                <option value="assigned_only">Assigned Clients Only</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontWeight: 650 }}>Analytics Visibility Scope</label>
+              <select
+                className="form-input form-select text-sm"
+                value={agent.analyticsVisibilityScope || 'all'}
+                onChange={async (e) => {
+                  const val = e.target.value as 'all' | 'own_only' | 'none';
+                  setAgent({ ...agent, analyticsVisibilityScope: val });
+                  await updateUser(agent.id, { analyticsVisibilityScope: val });
+                  toast.success('Analytics scope updated');
+                }}
+                style={{ marginTop: '4px' }}
+              >
+                <option value="all">Full Team Analytics</option>
+                <option value="own_only">Own Performance Only</option>
+                <option value="none">No Analytics Access</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Tag & Lead Source Restrictions */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label className="form-label" style={{ fontWeight: 650 }}>Allowed Tags Restriction</label>
+              <p className="text-xs text-muted" style={{ marginBottom: '4px' }}>Leave empty to allow all tags.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {allTags.map(tag => {
+                  const allowed = agent.allowedTags || [];
+                  const selected = allowed.includes(tag.name);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={async () => {
+                        const updated = selected
+                          ? allowed.filter(t => t !== tag.name)
+                          : [...allowed, tag.name];
+                        setAgent({ ...agent, allowedTags: updated });
+                        await updateUser(agent.id, { allowedTags: updated });
+                        toast.success('Tag permissions updated');
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: selected ? `2px solid ${tag.color}` : '1px solid var(--color-border)',
+                        background: selected ? `${tag.color}20` : 'transparent',
+                        color: selected ? tag.color : 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontWeight: 650 }}>Allowed Lead Sources Restriction</label>
+              <p className="text-xs text-muted" style={{ marginBottom: '4px' }}>Leave empty to allow all sources.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {allSources.map(src => {
+                  const allowed = agent.allowedLeadSources || [];
+                  const selected = allowed.includes(src.name);
+                  return (
+                    <button
+                      key={src.id}
+                      type="button"
+                      onClick={async () => {
+                        const updated = selected
+                          ? allowed.filter(s => s !== src.name)
+                          : [...allowed, src.name];
+                        setAgent({ ...agent, allowedLeadSources: updated });
+                        await updateUser(agent.id, { allowedLeadSources: updated });
+                        toast.success('Source permissions updated');
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: selected ? `2px solid ${src.color}` : '1px solid var(--color-border)',
+                        background: selected ? `${src.color}20` : 'transparent',
+                        color: selected ? src.color : 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {src.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

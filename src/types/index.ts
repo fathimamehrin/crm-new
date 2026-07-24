@@ -12,6 +12,11 @@ export interface User {
   status: UserStatus;
   createdAt: Date;
   allowedTaskTypes?: ('payment' | 'follow_up' | 'general')[];
+  allowedModules?: string[]; // e.g. ['clients', 'tasks', 'packages', 'calendar', 'analytics']
+  allowedTags?: string[];
+  allowedLeadSources?: string[];
+  clientVisibilityScope?: 'all' | 'assigned_only';
+  analyticsVisibilityScope?: 'all' | 'own_only' | 'none';
 }
 
 export interface Client {

@@ -4,6 +4,7 @@ import { getClients, getUsers, getTags, getAllSummaries } from '../../lib/firest
 import { format, subDays, startOfDay, isAfter, isBefore, startOfWeek } from 'date-fns';
 import { Users, TrendingUp, BarChart3, Calendar, UserCheck, Tag as TagIcon, CheckCircle } from 'lucide-react';
 import type { Client, User as AppUser, Tag, Summary } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface LeadTimeSeries {
@@ -25,6 +26,7 @@ interface AgentLeadPerformance {
 
 const LeadAnalyticsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { currentUser, userProfile, userRole } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [agents, setAgents] = useState<AppUser[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -48,7 +50,18 @@ const LeadAnalyticsPage: React.FC = () => {
         getTags(),
         getAllSummaries()
       ]);
-      setClients(clientsRes.clients);
+      let fetchedClients = clientsRes.clients;
+
+      // Analytics Scope Mapping for non-admins
+      if (userRole === 'agent' && userProfile) {
+        if (userProfile.analyticsVisibilityScope === 'none') {
+          fetchedClients = [];
+        } else if (userProfile.analyticsVisibilityScope === 'own_only') {
+          fetchedClients = fetchedClients.filter(c => c.assignedAgent === currentUser?.uid);
+        }
+      }
+
+      setClients(fetchedClients);
       setAgents(allAgents);
       setTags(allTags);
       setSummaries(summariesRes);
