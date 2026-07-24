@@ -4,7 +4,7 @@ import {
   UserCog,
   LogOut, UserCheck, Users, ClipboardList,
   Clock, DollarSign, X, MoreHorizontal, Tag, BarChart3,
-  Sliders, Share2, Calendar, Package2
+  Sliders, Share2, Calendar, Package2, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -97,25 +97,46 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Listen to pending tasks
   useEffect(() => {
     if (!db || !currentUser) return;
-    let q;
+    
     if (userRole === 'admin') {
-      q = query(
+      const q = query(
         collection(db, 'tasks'),
         where('status', 'in', ['pending_acceptance', 'accepted', 'pending_reassignment', 'completed'])
       );
+      const unsub = onSnapshot(q, (snap) => {
+        setPendingTasksCount(snap.size);
+      });
+      return () => unsub();
     } else {
-      q = query(
+      const qAssigned = query(
         collection(db, 'tasks'),
         where('assignedTo', '==', currentUser.uid),
         where('status', 'in', ['pending_acceptance', 'accepted', 'pending_reassignment'])
       );
+      const qCreatedCompleted = query(
+        collection(db, 'tasks'),
+        where('createdBy', '==', currentUser.uid),
+        where('status', '==', 'completed')
+      );
+
+      let countAssigned = 0;
+      let countCreated = 0;
+
+      const unsubAssigned = onSnapshot(qAssigned, (snap) => {
+        countAssigned = snap.size;
+        setPendingTasksCount(countAssigned + countCreated);
+      });
+
+      const unsubCreated = onSnapshot(qCreatedCompleted, (snap) => {
+        countCreated = snap.size;
+        setPendingTasksCount(countAssigned + countCreated);
+      });
+
+      return () => {
+        unsubAssigned();
+        unsubCreated();
+      };
     }
-
-    const unsub = onSnapshot(q, (snap) => {
-      setPendingTasksCount(snap.size);
-    });
-
-    return () => unsub();
   }, [currentUser, userRole]);
 
   // Listen to pending requests
@@ -186,9 +207,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <NavItem to="/admin/agents" icon={UserCheck} label="Agents" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/admins" icon={UserCog} label="Admins" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/tags" icon={Tag} label="Tags" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/tag-messaging" icon={MessageSquare} label="Tag Messaging" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/statuses" icon={Sliders} label="Statuses" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/sources" icon={Share2} label="Lead Sources" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/packages" icon={Package2} label="Packages" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
+                <NavItem to="/admin/salaries" icon={DollarSign} label="Salaries & Commissions" collapsed={collapsed} onCloseMobile={onCloseMobile} className="desktop-only-nav" />
                 <NavItem to="/admin/requests" icon={ClipboardList} label="Edit Requests" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingRequestsCount} />
                 <NavItem to="/tasks" icon={ClipboardList} label="Tasks" collapsed={collapsed} onCloseMobile={onCloseMobile} badge={pendingTasksCount} />
                 <NavItem to="/admin/revenue" icon={DollarSign} label="Revenue Analytics" collapsed={collapsed} onCloseMobile={onCloseMobile} />
@@ -291,6 +314,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               </NavLink>
 
               <NavLink 
+                to="/admin/tag-messaging" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <MessageSquare size={18} />
+                <span>Tag Messaging</span>
+              </NavLink>
+
+              <NavLink 
                 to="/admin/statuses" 
                 className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
                 onClick={() => setShowMore(false)}
@@ -315,6 +347,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Package2 size={18} />
                 <span>Packages</span>
+              </NavLink>
+
+              <NavLink 
+                to="/admin/salaries" 
+                className={({ isActive }) => `mobile-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => setShowMore(false)}
+              >
+                <DollarSign size={18} />
+                <span>Salaries & Commissions</span>
               </NavLink>
               
               <NavLink 

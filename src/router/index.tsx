@@ -1,5 +1,4 @@
-import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
+import { createHashRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
 import AppLayout from '../components/Layout/AppLayout';
 import AdminLayout from '../components/Layout/AdminLayout';
@@ -17,6 +16,7 @@ import AgentDetailsPage from '../pages/admin/AgentDetailsPage';
 import AdminClientsPage from '../pages/admin/AdminClientsPage';
 import EditRequestsPage from '../pages/admin/EditRequestsPage';
 import AdminTagsPage from '../pages/admin/AdminTagsPage';
+import AdminTagMessagingPage from '../pages/admin/AdminTagMessagingPage';
 
 import StaffDurationPage from '../pages/admin/StaffDurationPage';
 import RevenueAnalyticsPage from '../pages/admin/RevenueAnalyticsPage';
@@ -26,6 +26,7 @@ import AdminCalendarPage from '../pages/admin/AdminCalendarPage';
 import AdminStatusesPage from '../pages/admin/AdminStatusesPage';
 import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
 import AdminPackagesPage from '../pages/admin/AdminPackagesPage';
+import AdminSalariesPage from '../pages/admin/AdminSalariesPage';
 
 // Root layout: wraps the entire router tree inside AuthProvider so every
 // page — including /login — has access to useAuth().
@@ -35,7 +36,7 @@ const AuthRoot: React.FC = () => (
   </AuthProvider>
 );
 
-const router = createBrowserRouter([
+const router = createHashRouter([
   {
     element: <AuthRoot />,
     children: [
@@ -71,6 +72,7 @@ const router = createBrowserRouter([
                   { path: '/admin/requests', element: <EditRequestsPage /> },
                   { path: '/admin/calendar', element: <AdminCalendarPage /> },
                   { path: '/admin/tags', element: <AdminTagsPage /> },
+                  { path: '/admin/tag-messaging', element: <AdminTagMessagingPage /> },
                   { path: '/admin/statuses', element: <AdminStatusesPage /> },
                   { path: '/admin/sources', element: <AdminSourcesPage /> },
 
@@ -78,6 +80,7 @@ const router = createBrowserRouter([
                   { path: '/admin/revenue', element: <RevenueAnalyticsPage /> },
                   { path: '/admin/analytics', element: <LeadAnalyticsPage /> },
                   { path: '/admin/packages', element: <AdminPackagesPage /> },
+                  { path: '/admin/salaries', element: <AdminSalariesPage /> },
                 ],
               },
             ],

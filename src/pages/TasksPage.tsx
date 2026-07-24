@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getUsers,
   createTask,
+  deleteTask,
   updateTaskStatus,
   reassignTaskRequest,
   approveReassignment,
@@ -18,7 +19,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { 
   Plus, Check, X, ArrowLeftRight, CheckSquare, ClipboardList,
-  Clock, User as UserIcon, ChevronDown, ChevronUp, AlertCircle, ExternalLink
+  Clock, User as UserIcon, ChevronDown, ChevronUp, AlertCircle, ExternalLink, Trash2, Calendar
 } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -77,10 +78,18 @@ const TasksPage: React.FC = () => {
   const [directReassignUid, setDirectReassignUid] = useState('');
   const [directReassignStatus, setDirectReassignStatus] = useState<'pending_acceptance' | 'accepted'>('pending_acceptance');
   const [directReassignReason, setDirectReassignReason] = useState('');
-  const [directReassignType, setDirectReassignType] = useState<'payment' | 'follow_up' | 'general'>('general');
+  const [directReassignType, setDirectReassignType] = useState<'payment' | 'follow_up' | 'general' | 'salary'>('general');
 
   // Task Category / Type state
-  const [newTaskType, setNewTaskType] = useState<'payment' | 'follow_up' | 'general'>('general');
+  const [newTaskType, setNewTaskType] = useState<'payment' | 'follow_up' | 'general' | 'salary'>('general');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskReminder, setNewTaskReminder] = useState('');
+
+  // Filtering states
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
 
   // Expandable history state
   const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
@@ -103,11 +112,42 @@ const TasksPage: React.FC = () => {
       
       const loadedTasks = await getTasks(constraints);
       let filteredTasks = loadedTasks;
+      
       if (userRole === 'agent' && userProfile?.allowedTaskTypes) {
         filteredTasks = loadedTasks.filter(t => 
           userProfile.allowedTaskTypes!.includes(t.type || 'general')
         );
       }
+
+      // 1. Search filter (title, description, client name)
+      if (filterSearch.trim()) {
+        const q = filterSearch.toLowerCase().trim();
+        filteredTasks = filteredTasks.filter(t => 
+          t.title.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          (t.clientName && t.clientName.toLowerCase().includes(q))
+        );
+      }
+
+      // 2. Type Category filter
+      if (filterType) {
+        filteredTasks = filteredTasks.filter(t => t.type === filterType);
+      }
+
+      // 3. Status filter
+      if (filterStatus) {
+        if (filterStatus === 'pending') {
+          filteredTasks = filteredTasks.filter(t => ['pending_acceptance', 'accepted', 'pending_reassignment'].includes(t.status));
+        } else {
+          filteredTasks = filteredTasks.filter(t => t.status === filterStatus);
+        }
+      }
+
+      // 4. Assignee / Creator filter
+      if (filterAssignee) {
+        filteredTasks = filteredTasks.filter(t => t.assignedTo === filterAssignee || t.createdBy === filterAssignee);
+      }
+
       setTasks(filteredTasks);
     } catch (err) {
       console.error('Failed to load tasks:', err);
@@ -119,8 +159,7 @@ const TasksPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    // Default to 'created' tab if agent and has no assigned tasks, or just keep assigned as default
-  }, [activeTab, currentUser]);
+  }, [activeTab, currentUser, filterSearch, filterType, filterStatus, filterAssignee]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,7 +183,13 @@ const TasksPage: React.FC = () => {
         targetUser.name,
         currentUser.uid,
         userProfile.name,
-        newTaskType
+        newTaskType,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        newTaskDueDate ? new Date(newTaskDueDate) : undefined,
+        newTaskReminder ? new Date(newTaskReminder) : undefined
       );
       toast.success('Task created and assigned successfully');
       setShowAddModal(false);
@@ -152,6 +197,8 @@ const TasksPage: React.FC = () => {
       setNewTaskDescription('');
       setNewTaskAssignee('');
       setNewTaskType('general');
+      setNewTaskDueDate('');
+      setNewTaskReminder('');
       loadData();
     } catch (err) {
       console.error('Failed to create task:', err);
@@ -182,6 +229,19 @@ const TasksPage: React.FC = () => {
     } catch (err) {
       console.error(err);
       toast.error('Failed to reject completion');
+    }
+  };
+
+  const handleDeleteTaskSubmit = async (taskId: string) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!currentUser || !userProfile) return;
+    try {
+      await deleteTask(taskId, currentUser.uid, userProfile.name);
+      toast.success('Task deleted successfully');
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete task');
     }
   };
 
@@ -379,12 +439,320 @@ const TasksPage: React.FC = () => {
     }));
   };
 
+  const renderTaskCard = (task: Task) => {
+    const isAssignedToMe = task.assignedTo === currentUser?.uid;
+    const isCreatedByMe = task.createdBy === currentUser?.uid;
+    const historyExpanded = !!expandedHistory[task.id];
+
+    return (
+      <div 
+        key={task.id} 
+        className="card"
+        style={{ 
+          padding: '24px', 
+          border: '1px solid var(--color-border)', 
+          background: 'var(--color-bg-card)',
+          borderRadius: 'var(--radius-lg)' 
+        }}
+      >
+        {/* Task Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              {task.title}
+            </h3>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '6px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <UserIcon size={12} />
+                From: <strong>{task.createdByName}</strong>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <UserIcon size={12} />
+                To: <strong>{task.assignedToName}</strong>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Clock size={12} />
+                Created: {format(new Date(task.createdAt), 'dd MMM yyyy HH:mm')}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ClipboardList size={12} />
+                Category: <strong style={{ textTransform: 'capitalize' }}>{task.type || 'general'}</strong>
+              </span>
+              {task.dueDate && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontWeight: 600 }}>
+                  <Calendar size={12} />
+                  Due: {format(new Date(task.dueDate), 'dd MMM yyyy')}
+                </span>
+              )}
+              {task.reminderDateTime && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f97316', fontWeight: 600 }}>
+                  <Clock size={12} />
+                  Reminder: {format(new Date(task.reminderDateTime), 'dd MMM HH:mm')}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <span className={`badge ${STATUS_BADGE[task.status] || 'badge-muted'}`} style={{ fontSize: '11px', padding: '4px 12px' }}>
+            {STATUS_LABEL[task.status] || task.status}
+          </span>
+        </div>
+
+        {/* Task Description */}
+        <div style={{ marginBottom: '16px' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {task.description}
+          </p>
+        </div>
+
+        {/* Voice Directions Player */}
+        {task.voiceUrl && (
+          <div style={{ padding: '10px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: '16px' }}>
+            <span style={{ display: 'block', fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: '6px' }}>
+              Attached Voice Direction
+            </span>
+            <audio controls src={task.voiceUrl} style={{ width: '100%', height: '32px' }} />
+          </div>
+        )}
+
+        {/* Actionable Lead/Client Link */}
+        {task.clientId && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', fontWeight: 500 }}>Actionable Lead:</span>
+            <button
+              onClick={() => navigate(userRole === 'admin' ? `/admin/clients/${task.clientId}` : `/clients/${task.clientId}`)}
+              className="btn btn-secondary btn-sm"
+              style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <ExternalLink size={12} /> View Lead Profile ({task.clientName || 'Details'})
+            </button>
+          </div>
+        )}
+
+        {/* Rejections details based on rejectReason field being present */}
+        {task.rejectReason && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: 'var(--color-danger-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.15)', marginBottom: '16px', color: 'var(--color-danger)', fontSize: 'var(--font-size-sm)' }}>
+            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <span>Rejection Reason: <strong>{task.rejectReason}</strong></span>
+          </div>
+        )}
+
+        {task.status === 'completed' && task.completionSummary && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px', background: 'var(--color-success-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.15)', marginBottom: '16px', color: '#059669', fontSize: 'var(--font-size-sm)' }}>
+            <CheckSquare size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Completion Summary</strong>
+              <span style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-secondary)' }}>{task.completionSummary}</span>
+            </div>
+          </div>
+        )}
+
+        {task.status === 'pending_reassignment' && task.reassignRequestedToName && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: 'var(--color-accent-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(37, 99, 235, 0.15)', marginBottom: '16px', fontSize: 'var(--font-size-sm)' }}>
+            <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>Reassignment Request Pending Approval:</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              Requesting transfer to <strong>{task.reassignRequestedToName}</strong>
+            </span>
+            {task.reassignReason && (
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
+                Reason: "{task.reassignReason}"
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          {/* Assigned User Actions */}
+          {isAssignedToMe && task.status === 'pending_acceptance' && (
+            <>
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => handleAcceptTask(task)}
+              >
+                <Check size={14} /> Accept Task
+              </button>
+              <button 
+                className="btn btn-danger btn-sm"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setShowRejectModal(true);
+                }}
+              >
+                <X size={14} /> Reject Task
+              </button>
+            </>
+          )}
+
+          {isAssignedToMe && task.status === 'accepted' && (
+            <>
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setShowCompleteModal(true);
+                }}
+              >
+                <CheckSquare size={14} /> Mark Completed
+              </button>
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setShowReassignModal(true);
+                }}
+              >
+                <ArrowLeftRight size={14} /> Reassign Task
+              </button>
+            </>
+          )}
+
+          {/* Creator Actions */}
+          {(isCreatedByMe || userRole === 'admin') && task.status === 'pending_reassignment' && (
+            <>
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => handleApproveReassignment(task)}
+              >
+                <Check size={14} /> Approve Reassignment
+              </button>
+              <button 
+                className="btn btn-danger btn-sm"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setShowRejectReassignModal(true);
+                }}
+              >
+                <X size={14} /> Reject Reassignment
+              </button>
+            </>
+          )}
+
+          {(isCreatedByMe || userRole === 'admin') && task.status === 'completed' && (
+            <>
+              <button 
+                className="btn btn-sm"
+                style={{ background: 'var(--color-success)', color: '#fff', border: 'none' }}
+                onClick={() => handleVerifyTask(task.id)}
+              >
+                <Check size={14} /> Verify & Close Task
+              </button>
+              <button 
+                className="btn btn-danger btn-sm"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setRejectCompletionReason('');
+                  setRejectCompletionStatus('accepted');
+                  setShowRejectCompletionModal(true);
+                }}
+              >
+                <X size={14} /> Reject / Not Completed
+              </button>
+            </>
+          )}
+
+          {/* Allow creator or admin to directly reassign / reset status at any time except when verified */}
+          {(isCreatedByMe || userRole === 'admin') && task.status !== 'verified' && (
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setSelectedTask(task);
+                setDirectReassignUid(task.assignedTo);
+                setDirectReassignStatus('pending_acceptance');
+                setDirectReassignReason('');
+                setDirectReassignType(task.type || 'general');
+                setShowDirectReassignModal(true);
+              }}
+            >
+              <ArrowLeftRight size={14} /> Reassign / Reset Status
+            </button>
+          )}
+
+          {/* Delete Task Button */}
+          {(isCreatedByMe || userRole === 'admin') && (
+            <button 
+              className="btn btn-danger btn-sm"
+              onClick={() => handleDeleteTaskSubmit(task.id)}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          )}
+        </div>
+
+        {/* History Accordion Header */}
+        <button
+          type="button"
+          onClick={() => toggleHistory(task.id)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            fontSize: 'var(--font-size-xs)',
+            fontWeight: 600,
+            padding: 0,
+            outline: 'none'
+          }}
+        >
+          {historyExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          <span>{historyExpanded ? 'Hide History Trail' : 'Show History Trail'} ({task.history.length})</span>
+        </button>
+
+        {/* History Accordion Content (Timeline) */}
+        {historyExpanded && (
+          <div style={{ marginTop: '16px', paddingLeft: '12px', borderLeft: '2px dashed var(--color-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {task.history.map((hist, hIdx) => (
+              <div key={hIdx} style={{ position: 'relative' }}>
+                {/* Timeline node dot */}
+                <div style={{
+                  position: 'absolute',
+                  left: '-20px',
+                  top: '4px',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: (hist.action === 'completed' || hist.action === 'verified') ? 'var(--color-success)' : (hist.action === 'rejected' ? 'var(--color-danger)' : 'var(--color-accent)'),
+                  border: '2px solid var(--color-bg-card)',
+                }} />
+                
+                <div style={{ fontSize: 'var(--font-size-xs)' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>
+                    {hist.action.replace('_', ' ')}
+                  </span>
+                  <span style={{ color: 'var(--color-text-muted)' }}> by </span>
+                  <strong style={{ color: 'var(--color-text-secondary)' }}>{hist.performedByName}</strong>
+                  <span style={{ color: 'var(--color-text-muted)', marginLeft: '8px' }}>
+                    {format(new Date(hist.timestamp), 'dd MMM HH:mm')}
+                  </span>
+                </div>
+                {hist.details && (
+                  <div style={{ marginTop: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '6px 10px', borderRadius: '4px', display: 'inline-block' }}>
+                    {hist.details}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const pendingTasks = tasks.filter(t => ['pending_acceptance', 'accepted', 'pending_reassignment'].includes(t.status));
+  const completedTasks = tasks.filter(t => t.status === 'completed');
+  const rejectedTasks = tasks.filter(t => t.status === 'rejected');
+  const verifiedTasks = tasks.filter(t => t.status === 'verified');
+
   return (
     <div>
       {/* Header section */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">Tasks & Workflows</h1>
+          <h1 className="page-title">Tasks &amp; Workflows</h1>
           <p className="page-subtitle">Track task assignments, reassignments, completions, and workflow histories</p>
         </div>
         <button
@@ -420,7 +788,77 @@ const TasksPage: React.FC = () => {
         )}
       </div>
 
-      {/* Main Grid List */}
+      {/* Advanced Filter Controls */}
+      <div className="card" style={{ padding: '16px', marginBottom: 'var(--space-5)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', alignItems: 'center' }}>
+          
+          {/* Search bar */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label text-xs" style={{ marginBottom: '4px', fontWeight: 650 }}>Search</label>
+            <input
+              type="text"
+              className="form-input text-xs"
+              placeholder="Search title, details or client..."
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              style={{ height: '34px', padding: '6px 10px' }}
+            />
+          </div>
+
+          {/* Type Filter */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label text-xs" style={{ marginBottom: '4px', fontWeight: 650 }}>Task Category</label>
+            <select
+              className="form-input form-select text-xs"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              style={{ height: '34px', padding: '6px 10px' }}
+            >
+              <option value="">All Categories</option>
+              <option value="general">General</option>
+              <option value="follow_up">Follow Up</option>
+              <option value="payment">Payment</option>
+              <option value="salary">Salary</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label text-xs" style={{ marginBottom: '4px', fontWeight: 650 }}>Task Status</label>
+            <select
+              className="form-input form-select text-xs"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{ height: '34px', padding: '6px 10px' }}
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending / In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+              <option value="verified">Verified &amp; Closed</option>
+            </select>
+          </div>
+
+          {/* User Filter */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label text-xs" style={{ marginBottom: '4px', fontWeight: 650 }}>User Involved</label>
+            <select
+              className="form-input form-select text-xs"
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              style={{ height: '34px', padding: '6px 10px' }}
+            >
+              <option value="">All Staff</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+              ))}
+            </select>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Main Grid List with Segregation */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12)' }}>
           <div className="spinner spinner-lg" />
@@ -431,289 +869,62 @@ const TasksPage: React.FC = () => {
             <ClipboardList size={32} />
           </div>
           <h3 className="empty-state-title">No tasks found</h3>
-          <p className="empty-state-desc">There are no tasks registered in this category.</p>
+          <p className="empty-state-desc">There are no tasks registered matching your selection.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {tasks.map((task) => {
-            const isAssignedToMe = task.assignedTo === currentUser?.uid;
-            const isCreatedByMe = task.createdBy === currentUser?.uid;
-            const historyExpanded = !!expandedHistory[task.id];
-
-            return (
-              <div 
-                key={task.id} 
-                className="card"
-                style={{ 
-                  padding: '24px', 
-                  border: '1px solid var(--color-border)', 
-                  background: 'var(--color-bg-card)',
-                  borderRadius: 'var(--radius-lg)' 
-                }}
-              >
-                {/* Task Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                      {task.title}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '16px', marginTop: '6px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', flexWrap: 'wrap' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <UserIcon size={12} />
-                        From: <strong>{task.createdByName}</strong>
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <UserIcon size={12} />
-                        To: <strong>{task.assignedToName}</strong>
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock size={12} />
-                        Created: {format(new Date(task.createdAt), 'dd MMM yyyy HH:mm')}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <ClipboardList size={12} />
-                        Category: <strong style={{ textTransform: 'capitalize' }}>{task.type || 'general'}</strong>
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <span className={`badge ${STATUS_BADGE[task.status] || 'badge-muted'}`} style={{ fontSize: '11px', padding: '4px 12px' }}>
-                    {STATUS_LABEL[task.status] || task.status}
-                  </span>
-                </div>
-
-                {/* Task Description */}
-                <div style={{ marginBottom: '16px' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                    {task.description}
-                  </p>
-                </div>
-
-                {/* Voice Directions Player */}
-                {task.voiceUrl && (
-                  <div style={{ padding: '10px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: '16px' }}>
-                    <span style={{ display: 'block', fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: '6px' }}>
-                      Attached Voice Direction
-                    </span>
-                    <audio controls src={task.voiceUrl} style={{ width: '100%', height: '32px' }} />
-                  </div>
-                )}
-
-                {/* Actionable Lead/Client Link */}
-                {task.clientId && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', fontWeight: 500 }}>Actionable Lead:</span>
-                    <button
-                      onClick={() => navigate(userRole === 'admin' ? `/admin/clients/${task.clientId}` : `/clients/${task.clientId}`)}
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <ExternalLink size={12} /> View Lead Profile ({task.clientName || 'Details'})
-                    </button>
-                  </div>
-                )}
-
-                {/* Additional task summaries/rejections details based on current state */}
-                {task.status === 'rejected' && task.rejectReason && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: 'var(--color-danger-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.15)', marginBottom: '16px', color: 'var(--color-danger)', fontSize: 'var(--font-size-sm)' }}>
-                    <AlertCircle size={16} style={{ flexShrink: 0 }} />
-                    <span>Rejection Reason: <strong>{task.rejectReason}</strong></span>
-                  </div>
-                )}
-
-                {task.status === 'completed' && task.completionSummary && (
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px', background: 'var(--color-success-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.15)', marginBottom: '16px', color: '#059669', fontSize: 'var(--font-size-sm)' }}>
-                    <CheckSquare size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <div>
-                      <strong style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Completion Summary</strong>
-                      <span style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-secondary)' }}>{task.completionSummary}</span>
-                    </div>
-                  </div>
-                )}
-
-                {task.status === 'pending_reassignment' && task.reassignRequestedToName && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: 'var(--color-accent-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(37, 99, 235, 0.15)', marginBottom: '16px', fontSize: 'var(--font-size-sm)' }}>
-                    <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>Reassignment Request Pending Approval:</span>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>
-                      Requesting transfer to <strong>{task.reassignRequestedToName}</strong>
-                    </span>
-                    {task.reassignReason && (
-                      <span style={{ color: 'var(--color-text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
-                        Reason: "{task.reassignReason}"
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                  {/* Assigned User Actions */}
-                  {isAssignedToMe && task.status === 'pending_acceptance' && (
-                    <>
-                      <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => handleAcceptTask(task)}
-                      >
-                        <Check size={14} /> Accept Task
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowRejectModal(true);
-                        }}
-                      >
-                        <X size={14} /> Reject Task
-                      </button>
-                    </>
-                  )}
-
-                  {isAssignedToMe && task.status === 'accepted' && (
-                    <>
-                      <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowCompleteModal(true);
-                        }}
-                      >
-                        <CheckSquare size={14} /> Mark Completed
-                      </button>
-                      <button 
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowReassignModal(true);
-                        }}
-                      >
-                        <ArrowLeftRight size={14} /> Reassign Task
-                      </button>
-                    </>
-                  )}
-
-                  {/* Creator Actions */}
-                  {(isCreatedByMe || userRole === 'admin') && task.status === 'pending_reassignment' && (
-                    <>
-                      <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => handleApproveReassignment(task)}
-                      >
-                        <Check size={14} /> Approve Reassignment
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowRejectReassignModal(true);
-                        }}
-                      >
-                        <X size={14} /> Reject Reassignment
-                      </button>
-                    </>
-                  )}
-
-                  {(isCreatedByMe || userRole === 'admin') && task.status === 'completed' && (
-                    <>
-                      <button 
-                        className="btn btn-sm"
-                        style={{ background: 'var(--color-success)', color: '#fff', border: 'none' }}
-                        onClick={() => handleVerifyTask(task.id)}
-                      >
-                        <Check size={14} /> Verify & Close Task
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setRejectCompletionReason('');
-                          setRejectCompletionStatus('accepted');
-                          setShowRejectCompletionModal(true);
-                        }}
-                      >
-                        <X size={14} /> Reject / Not Completed
-                      </button>
-                    </>
-                  )}
-
-                  {/* Allow creator or admin to directly reassign / reset status at any time except when verified */}
-                  {(isCreatedByMe || userRole === 'admin') && task.status !== 'verified' && (
-                    <button 
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setSelectedTask(task);
-                        setDirectReassignUid(task.assignedTo);
-                        setDirectReassignStatus('pending_acceptance');
-                        setDirectReassignReason('');
-                        setDirectReassignType(task.type || 'general');
-                        setShowDirectReassignModal(true);
-                      }}
-                    >
-                      <ArrowLeftRight size={14} /> Reassign / Reset Status
-                    </button>
-                  )}
-                </div>
-
-                {/* History Accordion Header */}
-                <button
-                  type="button"
-                  onClick={() => toggleHistory(task.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--color-text-muted)',
-                    cursor: 'pointer',
-                    fontSize: 'var(--font-size-xs)',
-                    fontWeight: 600,
-                    padding: 0,
-                    outline: 'none'
-                  }}
-                >
-                  {historyExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  <span>{historyExpanded ? 'Hide History Trail' : 'Show History Trail'} ({task.history.length})</span>
-                </button>
-
-                {/* History Accordion Content (Timeline) */}
-                {historyExpanded && (
-                  <div style={{ marginTop: '16px', paddingLeft: '12px', borderLeft: '2px dashed var(--color-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {task.history.map((hist, hIdx) => (
-                      <div key={hIdx} style={{ position: 'relative' }}>
-                        {/* Timeline node dot */}
-                        <div style={{
-                          position: 'absolute',
-                          left: '-20px',
-                          top: '4px',
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          background: (hist.action === 'completed' || hist.action === 'verified') ? 'var(--color-success)' : (hist.action === 'rejected' ? 'var(--color-danger)' : 'var(--color-accent)'),
-                          border: '2px solid var(--color-bg-card)',
-                        }} />
-                        
-                        <div style={{ fontSize: 'var(--font-size-xs)' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>
-                            {hist.action.replace('_', ' ')}
-                          </span>
-                          <span style={{ color: 'var(--color-text-muted)' }}> by </span>
-                          <strong style={{ color: 'var(--color-text-secondary)' }}>{hist.performedByName}</strong>
-                          <span style={{ color: 'var(--color-text-muted)', marginLeft: '8px' }}>
-                            {format(new Date(hist.timestamp), 'dd MMM HH:mm')}
-                          </span>
-                        </div>
-                        {hist.details && (
-                          <div style={{ marginTop: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '6px 10px', borderRadius: '4px', display: 'inline-block' }}>
-                            {hist.details}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+          
+          {/* 1. Pending Tasks Section */}
+          {pendingTasks.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--color-text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-warning)' }} />
+                Pending &amp; In Progress Tasks ({pendingTasks.length})
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {pendingTasks.map(renderTaskCard)}
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* 2. Completed Tasks Section */}
+          {completedTasks.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--color-text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-accent)' }} />
+                Completed Tasks — Awaiting Verification ({completedTasks.length})
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {completedTasks.map(renderTaskCard)}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Rejected Tasks Section */}
+          {rejectedTasks.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--color-text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-danger)' }} />
+                Rejected Tasks ({rejectedTasks.length})
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {rejectedTasks.map(renderTaskCard)}
+              </div>
+            </div>
+          )}
+
+          {/* 4. Verified Tasks Section */}
+          {verifiedTasks.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 800, color: 'var(--color-text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-success)' }} />
+                Verified &amp; Closed Tasks ({verifiedTasks.length})
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {verifiedTasks.map(renderTaskCard)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -779,7 +990,30 @@ const TasksPage: React.FC = () => {
                     <option value="general">General Task</option>
                     <option value="payment">Payment Task</option>
                     <option value="follow_up">Follow-up Task</option>
+                    <option value="salary">Salary Task</option>
                   </select>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="task-due-date">Due Date (Optional)</label>
+                    <input
+                      id="task-due-date"
+                      type="date"
+                      className="form-input"
+                      value={newTaskDueDate}
+                      onChange={(e) => setNewTaskDueDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label className="form-label" htmlFor="task-reminder-time">Reminder Date/Time (Optional)</label>
+                    <input
+                      id="task-reminder-time"
+                      type="datetime-local"
+                      className="form-input"
+                      value={newTaskReminder}
+                      onChange={(e) => setNewTaskReminder(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">

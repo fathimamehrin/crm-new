@@ -5,14 +5,23 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Calendar,
   Plus, FileText, Mic, DollarSign, Edit3, UserCheck,
   MessageCircle, ExternalLink, X, Copy, Check, Grid, List, Clock, Trash2, Upload,
-  Share2, ClipboardList, Square
+  Share2, ClipboardList, Square, StickyNote, Pin, PinOff, CheckSquare
 } from 'lucide-react';
-import { getClientById, getSummariesByClient, updateSummary, createEditRequest, getEditRequest, createClientEditRequest, getClientEditRequest, updateClientEditRequestStatus, deleteDoc, doc, getTags, getClientStatuses, getLeadSources, getUsers, getTasks, createTask } from '../lib/firestore';
+import { 
+  getClientById, getSummariesByClient, updateSummary, createEditRequest, 
+  getEditRequest, createClientEditRequest, getClientEditRequest, 
+  updateClientEditRequestStatus, deleteDoc, doc, getTags, getClientStatuses, 
+  getLeadSources, getUsers, getTasks, createTask, getAdminNotesByClient, 
+  createAdminNote, updateAdminNote, deleteAdminNote, pinAdminNote, 
+  logActivity as _logActivity, updateTaskStatus, deleteTask, 
+  reassignTaskRequest, approveReassignment, rejectReassignment, 
+  directReassignTask, rejectTaskCompletion 
+} from '../lib/firestore';
 import { getDocs, query, collection, where } from 'firebase/firestore';
 import { logActivity } from '../lib/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag, CustomStatus, LeadSource, ActivityLog, Task, User } from '../types';
+import type { Client, Summary, PaymentStatus, EditRequest, ClientEditRequest, DocumentFile, Tag, CustomStatus, LeadSource, ActivityLog, Task, User, AdminNote } from '../types';
 import EditClientModal from '../components/EditClientModal';
 import { resolvePresignedUrls, uploadFile, deleteFile, generateStoragePath } from '../lib/storage';
 import { useDropzone } from 'react-dropzone';
@@ -65,10 +74,23 @@ const ClientDetailsPage: React.FC = () => {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [mediaRecorderInstance, setMediaRecorderInstance] = useState<MediaRecorder | null>(null);
   const [directionText, setDirectionText] = useState('');
+  const [directionTitle, setDirectionTitle] = useState('');
+  const [directionType, setDirectionType] = useState<'follow_up' | 'payment' | 'general'>('follow_up');
   const [directionAssignee, setDirectionAssignee] = useState('');
+  const [directionSelfAssign, setDirectionSelfAssign] = useState(false);
+  const [directionDueDate, setDirectionDueDate] = useState('');
+  const [directionReminderDateTime, setDirectionReminderDateTime] = useState('');
   const [agents, setAgents] = useState<User[]>([]);
   const [clientTasks, setClientTasks] = useState<Task[]>([]);
   const [sendingDirection, setSendingDirection] = useState(false);
+
+  // Admin Notes state
+  const [adminNotes, setAdminNotes] = useState<AdminNote[]>([]);
+  const [showAddNotePanel, setShowAddNotePanel] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [editingNote, setEditingNote] = useState<AdminNote | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
 
   // Client edit requests state
   const [clientEditRequest, setClientEditRequest] = useState<ClientEditRequest | null>(null);
@@ -682,9 +704,9 @@ const ClientDetailsPage: React.FC = () => {
         // Load active agents list
         try {
           const allUsers = await getUsers();
-          setAgents(allUsers.filter(u => u.status === 'active' && u.role === 'agent'));
+          setAgents(allUsers.filter(u => u.status === 'active'));
         } catch (err) {
-          console.error('Failed to load agents list:', err);
+          console.error('Failed to load users list:', err);
         }
 
         // Load tasks (directions) for this client
@@ -704,6 +726,14 @@ const ClientDetailsPage: React.FC = () => {
           setClientTasks(tasksWithUrls);
         } catch (err) {
           console.error('Failed to load tasks for client:', err);
+        }
+
+        // Load admin notes for this client (admin only)
+        try {
+          const notes = await getAdminNotesByClient(id);
+          setAdminNotes(notes);
+        } catch (err) {
+          console.error('Failed to load admin notes:', err);
         }
 
         const resolved = await resolveSummariesUrls(s);
@@ -788,8 +818,204 @@ const ClientDetailsPage: React.FC = () => {
     }
   }, [id]);
 
+  const handleAcceptTask = async (task: Task) => {
+    if (!currentUser || !userProfile) return;
+    try {
+      await updateTaskStatus(task.id, 'accepted', currentUser.uid, userProfile.name);
+      toast.success('Task accepted and is now in progress');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to accept task');
+    }
+  };
+
+  const handleRejectTask = async (task: Task) => {
+    const reason = window.prompt('Please enter the reason for rejecting this task:');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error('Rejection reason is required');
+      return;
+    }
+    if (!currentUser || !userProfile) return;
+    try {
+      await updateTaskStatus(task.id, 'rejected', currentUser.uid, userProfile.name, reason.trim());
+      toast.success('Task rejected successfully');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reject task');
+    }
+  };
+
+  const handleCompleteTask = async (task: Task) => {
+    const summary = window.prompt('Please enter a summary of the completed work:');
+    if (summary === null) return;
+    if (!summary.trim()) {
+      toast.error('Completion summary is required');
+      return;
+    }
+    if (!currentUser || !userProfile) return;
+    try {
+      await updateTaskStatus(task.id, 'completed', currentUser.uid, userProfile.name, undefined, summary.trim());
+      toast.success('Task marked completed. Awaiting creator verification.');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to complete task');
+    }
+  };
+
+  const handleReassignTask = async (task: Task) => {
+    const activeStaff = agents.filter(u => u.id !== currentUser?.uid);
+    if (activeStaff.length === 0) {
+      toast.error('No other staff members available to reassign to');
+      return;
+    }
+    const staffListStr = activeStaff.map((u, i) => `${i + 1}. ${u.name} (${u.role})`).join('\n');
+    const choice = window.prompt(`Select a user to reassign to (enter the number):\n${staffListStr}`);
+    if (choice === null) return;
+    const idx = parseInt(choice.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= activeStaff.length) {
+      toast.error('Invalid choice');
+      return;
+    }
+    const targetUser = activeStaff[idx];
+    const reason = window.prompt(`Enter reason for reassignment to ${targetUser.name}:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error('Reassignment reason is required');
+      return;
+    }
+    if (!currentUser || !userProfile) return;
+    try {
+      await reassignTaskRequest(
+        task.id,
+        targetUser.id,
+        targetUser.name,
+        reason.trim(),
+        currentUser.uid,
+        userProfile.name
+      );
+      toast.success('Reassignment request sent to task creator');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to request reassignment');
+    }
+  };
+
+  const handleApproveReassignment = async (task: Task) => {
+    if (!currentUser || !userProfile) return;
+    try {
+      await approveReassignment(task.id, currentUser.uid, userProfile.name);
+      toast.success('Reassignment approved. Awaiting acceptance from new assignee');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to approve reassignment');
+    }
+  };
+
+  const handleRejectReassignment = async (task: Task) => {
+    const reason = window.prompt('Enter rejection reason:');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error('Rejection reason is required');
+      return;
+    }
+    if (!currentUser || !userProfile) return;
+    try {
+      await rejectReassignment(task.id, currentUser.uid, userProfile.name, reason.trim());
+      toast.success('Reassignment request rejected');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reject reassignment');
+    }
+  };
+
+  const handleVerifyTask = async (task: Task) => {
+    if (!currentUser || !userProfile) return;
+    try {
+      await updateTaskStatus(task.id, 'verified', currentUser.uid, userProfile.name);
+      toast.success('Task verified & closed');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to verify task');
+    }
+  };
+
+  const handleRejectCompletion = async (task: Task) => {
+    const reason = window.prompt('Enter explanation/reason for rejecting completion:');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error('Rejection reason is required');
+      return;
+    }
+    const statusOption = window.confirm('Send back as "In Progress" (OK) or "Pending Acceptance" (Cancel)?');
+    const nextStatus = statusOption ? 'accepted' : 'pending_acceptance';
+    if (!currentUser || !userProfile) return;
+    try {
+      await rejectTaskCompletion(task.id, currentUser.uid, userProfile.name, reason.trim(), nextStatus);
+      toast.success('Completion report rejected. Task returned to agent.');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reject completion');
+    }
+  };
+
+  const handleDirectReassign = async (task: Task) => {
+    const staffListStr = agents.map((u, i) => `${i + 1}. ${u.name} (${u.role})`).join('\n');
+    const choice = window.prompt(`Select user to directly reassign task to:\n${staffListStr}`);
+    if (choice === null) return;
+    const idx = parseInt(choice.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= agents.length) {
+      toast.error('Invalid choice');
+      return;
+    }
+    const targetUser = agents[idx];
+    const statusOption = window.confirm('Set reassigned task as "In Progress" (OK) or "Pending Acceptance" (Cancel)?');
+    const nextStatus = statusOption ? 'accepted' : 'pending_acceptance';
+    const reason = window.prompt('Enter reason for direct reassignment (optional):') || 'Direct reassignment';
+    if (!currentUser || !userProfile) return;
+    try {
+      await directReassignTask(
+        task.id,
+        targetUser.id,
+        targetUser.name,
+        currentUser.uid,
+        userProfile.name,
+        reason,
+        nextStatus,
+        task.type || 'general'
+      );
+      toast.success('Task reassigned and reset');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reassign task');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!currentUser || !userProfile) return;
+    try {
+      await deleteTask(taskId, currentUser.uid, userProfile.name);
+      toast.success('Task deleted successfully');
+      loadClientTasks();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete task');
+    }
+  };
+
   const handleSendDirection = async () => {
-    if (!directionAssignee) {
+    const isSelf = directionSelfAssign;
+    if (!isSelf && !directionAssignee) {
       toast.error('Please select a staff member to assign');
       return;
     }
@@ -798,8 +1024,12 @@ const ClientDetailsPage: React.FC = () => {
       return;
     }
 
-    const assigneeUser = agents.find(u => u.id === directionAssignee);
-    if (!assigneeUser) {
+    const targetId = isSelf ? currentUser!.uid : directionAssignee;
+    const targetName = isSelf
+      ? (userProfile?.name || 'Admin')
+      : (agents.find(u => u.id === directionAssignee)?.name || '');
+
+    if (!targetName) {
       toast.error('Selected assignee not found');
       return;
     }
@@ -815,22 +1045,33 @@ const ClientDetailsPage: React.FC = () => {
         voiceUrl = uploadKey;
       }
 
+      const taskTitle = directionTitle.trim() || `Direction for ${client?.name || 'Lead'}`;
+
       await createTask(
-        `Direction for ${client?.name || 'Lead'}`,
+        taskTitle,
         directionText.trim() || 'Please listen to the attached voice note directions.',
-        directionAssignee,
-        assigneeUser.name,
+        targetId,
+        targetName,
         currentUser!.uid,
         userProfile?.name || 'Admin',
-        'follow_up',
+        directionType,
         client?.id,
         client?.name,
-        voiceUrl || undefined
+        voiceUrl || undefined,
+        // Self-assigned tasks bypass the acceptance workflow and start as 'accepted'
+        isSelf ? 'accepted' : undefined,
+        directionDueDate ? new Date(directionDueDate) : undefined,
+        directionReminderDateTime ? new Date(directionReminderDateTime) : undefined
       );
 
-      toast.success('Direction task sent successfully');
+      toast.success(isSelf ? 'Task created and self-assigned!' : 'Direction task sent successfully');
       setDirectionText('');
+      setDirectionTitle('');
       setDirectionAssignee('');
+      setDirectionSelfAssign(false);
+      setDirectionDueDate('');
+      setDirectionReminderDateTime('');
+      setDirectionType('follow_up');
       discardRecording();
       loadClientTasks();
     } catch (err) {
@@ -839,6 +1080,113 @@ const ClientDetailsPage: React.FC = () => {
     } finally {
       setSendingDirection(false);
     }
+  };
+
+  // ─── Admin Note Handlers ────────────────────────────────────────────────────
+  const loadAdminNotes = async () => {
+    if (!id) return;
+    try {
+      const notes = await getAdminNotesByClient(id);
+      setAdminNotes(notes);
+    } catch (err) {
+      console.error('Failed to reload admin notes:', err);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNoteText.trim() || !currentUser || !id) return;
+    setSavingNote(true);
+    try {
+      const noteId = await createAdminNote({
+        clientId: id,
+        text: newNoteText.trim(),
+        isPinned: false,
+        createdBy: currentUser.uid,
+        createdByName: userProfile?.name || 'Admin',
+      });
+      await logActivity({
+        userId: currentUser.uid,
+        userName: userProfile?.name,
+        action: 'admin_note_added',
+        entityType: 'admin_note',
+        entityId: noteId,
+        entityName: `Note on client: ${client?.name}`,
+      });
+      setNewNoteText('');
+      setShowAddNotePanel(false);
+      loadAdminNotes();
+      toast.success('Note saved');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleSaveNoteEdit = async () => {
+    if (!editingNote || !editNoteText.trim() || !currentUser) return;
+    setSavingNote(true);
+    try {
+      await updateAdminNote(editingNote.id, { text: editNoteText.trim() });
+      await logActivity({
+        userId: currentUser.uid,
+        userName: userProfile?.name,
+        action: 'admin_note_updated',
+        entityType: 'admin_note',
+        entityId: editingNote.id,
+        entityName: `Note on client: ${client?.name}`,
+      });
+      setEditingNote(null);
+      setEditNoteText('');
+      loadAdminNotes();
+      toast.success('Note updated');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!window.confirm('Delete this note?')) return;
+    try {
+      await deleteAdminNote(noteId);
+      await logActivity({
+        userId: currentUser!.uid,
+        userName: userProfile?.name,
+        action: 'admin_note_deleted',
+        entityType: 'admin_note',
+        entityId: noteId,
+        entityName: `Note on client: ${client?.name}`,
+      });
+      loadAdminNotes();
+      toast.success('Note deleted');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete note');
+    }
+  };
+
+  const handlePinNote = async (note: AdminNote) => {
+    try {
+      await pinAdminNote(note.id, !note.isPinned);
+      loadAdminNotes();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to pin note');
+    }
+  };
+
+  const handleConvertNoteToTask = (note: AdminNote) => {
+    setDirectionText(note.text);
+    setDirectionTitle(`Follow up: ${client?.name || 'Lead'}`);
+    setDirectionType('follow_up');
+    setDirectionSelfAssign(false);
+    // Scroll down to the direction panel
+    document.getElementById('direction-panel')?.scrollIntoView({ behavior: 'smooth' });
+    toast.success('Note copied to direction panel — select an assignee and send');
   };
 
   if (loading) {
@@ -1146,8 +1494,145 @@ const ClientDetailsPage: React.FC = () => {
         )}
       </div>
 
+      {/* ─── Admin Notes Panel (Admin-only) ───────────────────────────────── */}
+      {userRole === 'admin' && (
+        <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <StickyNote size={20} style={{ color: '#f59e0b' }} />
+              <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--color-text-primary)' }}>
+                Admin Notes <span style={{ fontWeight: 400, fontSize: '12px', color: 'var(--color-text-muted)' }}>— Private, not visible to agents</span>
+              </h3>
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', fontSize: '12px' }}
+              onClick={() => { setShowAddNotePanel(true); setNewNoteText(''); }}
+            >
+              <Plus size={13} /> Add Note
+            </button>
+          </div>
+
+          {/* Add Note Form */}
+          {showAddNotePanel && (
+            <div style={{ background: 'rgba(245, 158, 11, 0.06)', border: '1px dashed #f59e0b', borderRadius: 'var(--radius-lg)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <textarea
+                autoFocus
+                className="form-input text-sm"
+                rows={4}
+                placeholder="Write a private admin note for this lead..."
+                value={newNoteText}
+                onChange={e => setNewNoteText(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  disabled={savingNote || !newNoteText.trim()}
+                  onClick={handleAddNote}
+                >
+                  {savingNote ? 'Saving...' : <><CheckSquare size={13} /> Save Note</>}
+                </button>
+                <button className="btn btn-secondary btn-sm" style={{ padding: '5px 12px' }} onClick={() => setShowAddNotePanel(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Notes list */}
+          {adminNotes.length === 0 && !showAddNotePanel ? (
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>No admin notes yet. Click "Add Note" to create one.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {adminNotes.map(note => (
+                <div
+                  key={note.id}
+                  style={{
+                    background: note.isPinned ? 'rgba(245, 158, 11, 0.08)' : 'var(--color-bg-secondary)',
+                    border: note.isPinned ? '1px solid rgba(245,158,11,0.35)' : '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}
+                >
+                  {editingNote?.id === note.id ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <textarea
+                        autoFocus
+                        className="form-input text-sm"
+                        rows={3}
+                        value={editNoteText}
+                        onChange={e => setEditNoteText(e.target.value)}
+                      />
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-primary btn-sm" style={{ padding: '4px 12px' }} disabled={savingNote || !editNoteText.trim()} onClick={handleSaveNoteEdit}>
+                          {savingNote ? 'Saving...' : 'Save'}
+                        </button>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 10px' }} onClick={() => { setEditingNote(null); setEditNoteText(''); }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', flex: 1 }}>{note.text}</p>
+                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 26, height: 26, color: note.isPinned ? '#f59e0b' : 'var(--color-text-muted)' }}
+                            title={note.isPinned ? 'Unpin note' : 'Pin note'}
+                            onClick={() => handlePinNote(note)}
+                          >
+                            {note.isPinned ? <PinOff size={13} /> : <Pin size={13} />}
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 26, height: 26, color: 'var(--color-text-muted)' }}
+                            title="Convert to task"
+                            onClick={() => handleConvertNoteToTask(note)}
+                          >
+                            <ClipboardList size={13} />
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 26, height: 26, color: 'var(--color-accent)' }}
+                            title="Edit note"
+                            onClick={() => { setEditingNote(note); setEditNoteText(note.text); }}
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 26, height: 26, color: 'var(--color-danger)' }}
+                            title="Delete note"
+                            onClick={() => handleDeleteNote(note.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                        {note.isPinned && <span style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>📌 Pinned</span>}
+                        <span>By {note.createdByName || 'Admin'}</span>
+                        <span>·</span>
+                        <span>{format(note.createdAt, 'dd MMM yyyy, hh:mm a')}</span>
+                        {note.updatedAt && <span style={{ color: 'var(--color-accent)' }}>· Edited</span>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Note/Direction System (Admin View to drop instructions, Admin/Agent views to see active instructions) */}
-      <div className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)' }}>
+      <div id="direction-panel" className="card" style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', boxShadow: '0 10px 30px rgba(31, 110, 238, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
           <ClipboardList size={20} style={{ color: 'var(--color-accent)' }} />
           <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 800, color: 'var(--color-text-primary)' }}>
@@ -1155,29 +1640,101 @@ const ClientDetailsPage: React.FC = () => {
           </h3>
         </div>
 
-        {userRole === 'admin' && (
+        {(userRole === 'admin' || userRole === 'agent') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
             <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              Leave Instructions/Direction for Staff
+              Leave Instructions/Direction for Staff / Admin
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+              {/* Task Title */}
               <div className="form-group">
-                <label className="form-label required" htmlFor="direction-assignee-select" style={{ fontSize: '11px' }}>Designated Staff Member</label>
+                <label className="form-label" htmlFor="direction-title-input" style={{ fontSize: '11px' }}>Task Title (optional)</label>
+                <input
+                  id="direction-title-input"
+                  className="form-input text-sm"
+                  style={{ height: '36px', padding: '4px 8px' }}
+                  placeholder={`Direction for ${client?.name || 'Lead'}`}
+                  value={directionTitle}
+                  onChange={e => setDirectionTitle(e.target.value)}
+                />
+              </div>
+
+              {/* Assignee + Self-assign toggle */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ flex: 1, minWidth: '160px' }}>
+                  <label className="form-label required" htmlFor="direction-assignee-select" style={{ fontSize: '11px' }}>Assigned To</label>
+                  <select
+                    id="direction-assignee-select"
+                    className="form-input form-select text-sm"
+                    style={{ height: '36px', padding: '4px 8px', opacity: directionSelfAssign ? 0.45 : 1 }}
+                    value={directionAssignee}
+                    onChange={e => setDirectionAssignee(e.target.value)}
+                    disabled={directionSelfAssign}
+                  >
+                    <option value="">Select Staff...</option>
+                    {agents.map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '2px' }}>
+                  <input
+                    type="checkbox"
+                    id="self-assign-toggle"
+                    checked={directionSelfAssign}
+                    onChange={e => { setDirectionSelfAssign(e.target.checked); if (e.target.checked) setDirectionAssignee(''); }}
+                    style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="self-assign-toggle" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Assign to Myself
+                  </label>
+                </div>
+              </div>
+
+              {/* Task Type */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="direction-type-select" style={{ fontSize: '11px' }}>Task Type</label>
                 <select
-                  id="direction-assignee-select"
+                  id="direction-type-select"
                   className="form-input form-select text-sm"
                   style={{ height: '36px', padding: '4px 8px' }}
-                  value={directionAssignee}
-                  onChange={(e) => setDirectionAssignee(e.target.value)}
+                  value={directionType}
+                  onChange={e => setDirectionType(e.target.value as 'follow_up' | 'payment' | 'general')}
                 >
-                  <option value="">Select Staff...</option>
-                  {agents.map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                  ))}
+                  <option value="follow_up">Follow Up</option>
+                  <option value="payment">Payment</option>
+                  <option value="general">General</option>
                 </select>
               </div>
 
-              <div className="form-group" style={{ marginTop: '8px' }}>
+              {/* Due Date & Reminder */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ flex: 1, minWidth: '140px' }}>
+                  <label className="form-label" htmlFor="direction-due-date" style={{ fontSize: '11px' }}>Due Date (Optional)</label>
+                  <input
+                    id="direction-due-date"
+                    type="date"
+                    className="form-input text-sm"
+                    style={{ height: '36px', padding: '4px 8px' }}
+                    value={directionDueDate}
+                    onChange={e => setDirectionDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1, minWidth: '160px' }}>
+                  <label className="form-label" htmlFor="direction-reminder-time" style={{ fontSize: '11px' }}>Reminder Date/Time (Optional)</label>
+                  <input
+                    id="direction-reminder-time"
+                    type="datetime-local"
+                    className="form-input text-sm"
+                    style={{ height: '36px', padding: '4px 8px' }}
+                    value={directionReminderDateTime}
+                    onChange={e => setDirectionReminderDateTime(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '4px' }}>
                 <label className="form-label" htmlFor="direction-text-input" style={{ fontSize: '11px' }}>Instruction Note (Text)</label>
                 <textarea
                   id="direction-text-input"
@@ -1236,7 +1793,7 @@ const ClientDetailsPage: React.FC = () => {
                 disabled={sendingDirection || (!directionText.trim() && !recordedAudioBlob)}
                 onClick={handleSendDirection}
               >
-                {sendingDirection ? 'Sending...' : 'Send Direction & Create Task'}
+                {sendingDirection ? 'Sending...' : directionSelfAssign ? '✓ Create Task for Myself' : 'Send Direction & Create Task'}
               </button>
             </div>
           </div>
@@ -1272,6 +1829,16 @@ const ClientDetailsPage: React.FC = () => {
                       <p style={{ margin: '4px 0 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap' }}>
                         {task.description}
                       </p>
+                      {/* Task details (type, due date, reminder) */}
+                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--color-text-muted)', flexWrap: 'wrap', marginTop: '4px' }}>
+                        <span>Category: <strong style={{ textTransform: 'capitalize' }}>{task.type || 'general'}</strong></span>
+                        {task.dueDate && (
+                          <span style={{ color: '#ef4444', fontWeight: 600 }}>Due: {format(new Date(task.dueDate), 'dd MMM yyyy')}</span>
+                        )}
+                        {task.reminderDateTime && (
+                          <span style={{ color: '#f97316', fontWeight: 600 }}>Reminder: {format(new Date(task.reminderDateTime), 'dd MMM HH:mm')}</span>
+                        )}
+                      </div>
                     </div>
                     <span 
                       className={`badge ${STATUS_LABEL[task.status] === 'Completed' ? 'badge-success' : STATUS_LABEL[task.status] === 'In Progress' ? 'badge-primary' : 'badge-warning'}`} 
@@ -1296,11 +1863,114 @@ const ClientDetailsPage: React.FC = () => {
                     </div>
                   )}
 
-                  {task.status === 'rejected' && task.rejectReason && (
+                  {task.rejectReason && (
                     <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '4px', borderLeft: '3px solid var(--color-danger)', fontSize: '12px' }}>
                       <strong>Rejection Reason:</strong> {task.rejectReason}
                     </div>
                   )}
+
+                  {/* Action Buttons for Task */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', borderTop: '1px solid var(--color-border)', paddingTop: '8px' }}>
+                    {/* Assigned User Actions */}
+                    {task.assignedTo === currentUser?.uid && task.status === 'pending_acceptance' && (
+                      <>
+                        <button 
+                          className="btn btn-primary btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleAcceptTask(task)}
+                        >
+                          Accept
+                        </button>
+                        <button 
+                          className="btn btn-danger btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleRejectTask(task)}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+
+                    {task.assignedTo === currentUser?.uid && task.status === 'accepted' && (
+                      <>
+                        <button 
+                          className="btn btn-primary btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleCompleteTask(task)}
+                        >
+                          Complete
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleReassignTask(task)}
+                        >
+                          Reassign
+                        </button>
+                      </>
+                    )}
+
+                    {/* Creator Actions */}
+                    {(task.createdBy === currentUser?.uid || userRole === 'admin') && task.status === 'pending_reassignment' && (
+                      <>
+                        <button 
+                          className="btn btn-primary btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleApproveReassignment(task)}
+                        >
+                          Approve Reassign
+                        </button>
+                        <button 
+                          className="btn btn-danger btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleRejectReassignment(task)}
+                        >
+                          Reject Reassign
+                        </button>
+                      </>
+                    )}
+
+                    {(task.createdBy === currentUser?.uid || userRole === 'admin') && task.status === 'completed' && (
+                      <>
+                        <button 
+                          className="btn btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px', background: 'var(--color-success)', color: '#fff', border: 'none' }}
+                          onClick={() => handleVerifyTask(task)}
+                        >
+                          Verify &amp; Close
+                        </button>
+                        <button 
+                          className="btn btn-danger btn-sm" 
+                          style={{ padding: '3px 8px', fontSize: '10px' }}
+                          onClick={() => handleRejectCompletion(task)}
+                        >
+                          Not Completed
+                        </button>
+                      </>
+                    )}
+
+                    {/* Allow creator or admin to directly reassign / reset status */}
+                    {(task.createdBy === currentUser?.uid || userRole === 'admin') && task.status !== 'verified' && (
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        style={{ padding: '3px 8px', fontSize: '10px' }}
+                        onClick={() => handleDirectReassign(task)}
+                      >
+                        Direct Reassign
+                      </button>
+                    )}
+
+                    {/* Delete Task */}
+                    {(task.createdBy === currentUser?.uid || userRole === 'admin') && (
+                      <button 
+                        className="btn btn-danger btn-sm" 
+                        style={{ padding: '3px 8px', fontSize: '10px', marginLeft: 'auto' }}
+                        onClick={() => handleDeleteTask(task.id)}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

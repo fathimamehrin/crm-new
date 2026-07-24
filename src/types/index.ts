@@ -11,12 +11,19 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   createdAt: Date;
-  allowedTaskTypes?: ('payment' | 'follow_up' | 'general')[];
-  allowedModules?: string[]; // e.g. ['clients', 'tasks', 'packages', 'calendar', 'analytics']
+  allowedTaskTypes?: ('payment' | 'follow_up' | 'general' | 'salary')[];
+  allowedModules?: string[]; // e.g. ['clients', 'tasks', 'packages', 'calendar', 'analytics', 'salaries']
   allowedTags?: string[];
   allowedLeadSources?: string[];
   clientVisibilityScope?: 'all' | 'assigned_only';
   analyticsVisibilityScope?: 'all' | 'own_only' | 'none';
+  // Staff Salary & Compensation Structure
+  jobTitle?: string;                     // Developer, Sales Agent, Manager, Commission Worker, etc.
+  payStructure?: 'fixed' | 'commission' | 'hybrid';
+  baseSalary?: number;                   // Monthly fixed base rate
+  commissionRate?: number;               // Commission percentage or fixed bonus per sale
+  payoutDayOfMonth?: number;             // Payout day (1-31)
+  bankDetails?: string;
 }
 
 export interface Client {
@@ -114,9 +121,13 @@ export type ActivityAction =
   | 'status_deleted'
   | 'source_created'
   | 'source_updated'
-  | 'source_deleted';
+  | 'source_deleted'
+  | 'admin_note_added'
+  | 'admin_note_updated'
+  | 'admin_note_deleted'
+  | 'tag_message_sent';
 
-export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag' | 'task' | 'status' | 'source';
+export type EntityType = 'client' | 'summary' | 'payment' | 'user' | 'tag' | 'task' | 'status' | 'source' | 'admin_note' | 'tag_template';
 
 export interface ActivityLog {
   id: string;
@@ -243,7 +254,8 @@ export type TaskHistoryAction =
   | 'reassign_requested'
   | 'reassign_approved'
   | 'reassign_rejected'
-  | 'verified';
+  | 'verified'
+  | 'deleted';
 
 export interface TaskHistoryItem {
   timestamp: Date;
@@ -269,10 +281,12 @@ export interface Task {
   completionSummary?: string;
   createdAt: Date;
   history: TaskHistoryItem[];
-  type?: 'payment' | 'follow_up' | 'general';
+  type?: 'payment' | 'follow_up' | 'general' | 'salary';
   clientId?: string;
   clientName?: string;
   voiceUrl?: string;
+  dueDate?: Date;
+  reminderDateTime?: Date;
 }
 
 
@@ -305,6 +319,69 @@ export interface PackageService {
   createdAt: Date;
   createdBy: string;
   createdByName?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+  updatedByName?: string;
+}
+
+// ─── Salary & Commission Records ──────────────────────────────────────────────
+export type SalaryStatus = 'pending' | 'paid' | 'overdue';
+
+export interface SalaryRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  month: string;                       // e.g. "2026-07"
+  dueDate: Date;                        // Expected payout date
+  payStructure: 'fixed' | 'commission' | 'hybrid';
+  baseSalary: number;
+  commissionEarned: number;
+  totalAmount: number;
+  status: SalaryStatus;
+  paidAt?: Date;                        // Actual payment date (prompted if delayed)
+  paidBy?: string;
+  paidByName?: string;
+  paymentReference?: string;
+  notes?: string;
+  createdAt: Date;
+  taskId?: string;                      // Associated automated salary task ID
+}
+
+// ─── Admin Notes ──────────────────────────────────────────────────────────────
+/**
+ * Admin-private sticky notes on a lead profile.
+ * Not visible to agents.
+ */
+export interface AdminNote {
+  id: string;
+  clientId: string;
+  text: string;
+  isPinned: boolean;
+  /** If this note was converted into a task, the task ID is stored here */
+  linkedTaskId?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+// ─── Tag Messaging Templates ──────────────────────────────────────────────────
+/**
+ * A messaging template associated with a tag.
+ * `variations` are alternate phrasings — one is picked at random on each send
+ * to reduce spam flag risk.
+ */
+export interface TagTemplate {
+  id: string;
+  tagId: string;
+  tagName: string;
+  /** Primary message text (used when no variation is selected) */
+  templateText: string;
+  /** Alternate phrasings for rotation */
+  variations: string[];
+  createdBy: string;
+  createdByName?: string;
+  createdAt: Date;
   updatedAt?: Date;
   updatedBy?: string;
   updatedByName?: string;

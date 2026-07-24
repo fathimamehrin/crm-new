@@ -8,6 +8,8 @@ import { useInactivity } from '../../hooks/useInactivity';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import toast from 'react-hot-toast';
+import { taskFromDoc } from '../../lib/firestore';
+import type { Task } from '../../types';
 
 const AppLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,6 +17,8 @@ const AppLayout: React.FC = () => {
   const [showSessionWarning, setShowSessionWarning] = useState(false);
   const { logout, currentUser, userProfile, userRole, networkError } = useAuth();
   const prevTasksRef = useRef<Record<string, string>>({});
+  const alertedTasksRef = useRef<Set<string>>(new Set());
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     if (!currentUser || !db) return;
@@ -23,20 +27,22 @@ const AppLayout: React.FC = () => {
     const unsub = onSnapshot(q, (snapshot) => {
       const currentMap: Record<string, string> = {};
       const prevMap = prevTasksRef.current;
+      const mappedTasks: Task[] = [];
 
       snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        const id = doc.id;
-        const status = data.status;
-        const title = data.title;
-        const createdBy = data.createdBy;
-        const assignedTo = data.assignedTo;
+        const task = taskFromDoc(doc);
+        mappedTasks.push(task);
+        const id = task.id;
+        const status = task.status;
+        const title = task.title;
+        const createdBy = task.createdBy;
+        const assignedTo = task.assignedTo;
 
         currentMap[id] = status;
 
         const oldStatus = prevMap[id];
         
-        const isRecent = data.createdAt ? (Date.now() - new Date(data.createdAt).getTime() < 15000) : false;
+        const isRecent = task.createdAt ? (Date.now() - new Date(task.createdAt).getTime() < 15000) : false;
 
         if (oldStatus !== status) {
           if (oldStatus !== undefined || isRecent) {
@@ -89,10 +95,49 @@ const AppLayout: React.FC = () => {
       });
 
       prevTasksRef.current = currentMap;
+      setTasks(mappedTasks);
     });
 
     return () => unsub();
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const checkReminders = () => {
+      const now = new Date();
+      tasks.forEach((task) => {
+        if (
+          task.reminderDateTime &&
+          task.status !== 'verified' &&
+          task.status !== 'completed' &&
+          task.assignedTo === currentUser.uid
+        ) {
+          const reminderTime = new Date(task.reminderDateTime);
+          if (now >= reminderTime && !alertedTasksRef.current.has(task.id)) {
+            alertedTasksRef.current.add(task.id);
+            toast.custom(
+              (t) => (
+                <div className={`toast-custom toast-warning ${t.visible ? 'animate-enter' : 'animate-leave'}`} style={{
+                  padding: '12px 16px', background: '#1e293b', border: '1px solid #f59e0b',
+                  borderRadius: '8px', color: '#fff', display: 'flex', flexDirection: 'column', gap: '4px',
+                  boxShadow: 'var(--shadow-lg)', zIndex: 9999
+                }}>
+                  <strong style={{ color: '#f59e0b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>⏰ Task Reminder!</strong>
+                  <span style={{ fontSize: '12px', fontWeight: 600 }}>"{task.title}" is due now!</span>
+                  {task.description && <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>{task.description}</span>}
+                </div>
+              ),
+              { id: `reminder-${task.id}`, duration: 8000 }
+            );
+          }
+        }
+      });
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 15000);
+    return () => clearInterval(interval);
+  }, [tasks, currentUser]);
 
   const handleMenuClick = () => {
     setSidebarOpen((prev) => !prev);

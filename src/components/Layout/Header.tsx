@@ -22,20 +22,37 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, pageTitle }) => {
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
 
 
-  // Listen to pending tasks for agents
+  // Listen to pending tasks for agents (combining assigned pending and created completed)
   useEffect(() => {
     if (!db || !currentUser || userRole !== 'agent') return;
-    const q = query(
+    const qAssigned = query(
       collection(db, 'tasks'),
       where('assignedTo', '==', currentUser.uid),
       where('status', 'in', ['pending_acceptance', 'accepted', 'pending_reassignment'])
     );
+    const qCreatedCompleted = query(
+      collection(db, 'tasks'),
+      where('createdBy', '==', currentUser.uid),
+      where('status', '==', 'completed')
+    );
 
-    const unsub = onSnapshot(q, (snap) => {
-      setPendingTasksCount(snap.size);
+    let countAssigned = 0;
+    let countCreated = 0;
+
+    const unsubAssigned = onSnapshot(qAssigned, (snap) => {
+      countAssigned = snap.size;
+      setPendingTasksCount(countAssigned + countCreated);
     });
 
-    return () => unsub();
+    const unsubCreated = onSnapshot(qCreatedCompleted, (snap) => {
+      countCreated = snap.size;
+      setPendingTasksCount(countAssigned + countCreated);
+    });
+
+    return () => {
+      unsubAssigned();
+      unsubCreated();
+    };
   }, [currentUser, userRole]);
 
   useEffect(() => {

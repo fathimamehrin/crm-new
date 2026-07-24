@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, Edit3, Search, Tag as TagIcon, Trash2, GripVertical } from 'lucide-react';
+import { Plus, X, Edit3, Search, Tag as TagIcon, Trash2, GripVertical, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
-import { getTags, createTag, updateTag, deleteTag, logActivity } from '../../lib/firestore';
+import { getTags, createTag, updateTag, deleteTag, logActivity, getTagTemplateByTagId, createTagTemplate, updateTagTemplate, deleteTagTemplate } from '../../lib/firestore';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Tag } from '../../types';
+import type { Tag, TagTemplate } from '../../types';
 import toast from 'react-hot-toast';
 
 const PRESET_COLORS = [
@@ -25,6 +25,13 @@ const AdminTagsPage: React.FC = () => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Tag template state: keyed by tagId
+  const [templates, setTemplates] = useState<Record<string, TagTemplate | null>>({});
+  const [expandedTemplateTagId, setExpandedTemplateTagId] = useState<string | null>(null);
+  const [templateText, setTemplateText] = useState('');
+  const [templateVariations, setTemplateVariations] = useState<string[]>(['']);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Drag and drop / Touch longpress states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -150,6 +157,105 @@ const AdminTagsPage: React.FC = () => {
   useEffect(() => {
     loadTags();
   }, []);
+
+  // Load template for a specific tag into the editor form
+  const handleExpandTemplate = async (tag: Tag) => {
+    if (expandedTemplateTagId === tag.id) {
+      setExpandedTemplateTagId(null);
+      return;
+    }
+    setExpandedTemplateTagId(tag.id);
+    // Fetch existing template if not already loaded
+    if (!(tag.id in templates)) {
+      try {
+        const tmpl = await getTagTemplateByTagId(tag.id);
+        setTemplates(prev => ({ ...prev, [tag.id]: tmpl }));
+        if (tmpl) {
+          setTemplateText(tmpl.templateText);
+          setTemplateVariations(tmpl.variations.length > 0 ? tmpl.variations : ['']);
+        } else {
+          setTemplateText('');
+          setTemplateVariations(['']);
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to load template');
+      }
+    } else {
+      const tmpl = templates[tag.id];
+      if (tmpl) {
+        setTemplateText(tmpl.templateText);
+        setTemplateVariations(tmpl.variations.length > 0 ? tmpl.variations : ['']);
+      } else {
+        setTemplateText('');
+        setTemplateVariations(['']);
+      }
+    }
+  };
+
+  const handleSaveTemplate = async (tag: Tag) => {
+    if (!templateText.trim()) {
+      toast.error('Template text is required');
+      return;
+    }
+    setSavingTemplate(true);
+    try {
+      const existing = templates[tag.id];
+      const cleanVariations = templateVariations.map(v => v.trim()).filter(Boolean);
+      if (existing) {
+        await updateTagTemplate(existing.id, {
+          templateText: templateText.trim(),
+          variations: cleanVariations,
+          tagName: tag.name,
+          updatedBy: currentUser!.uid,
+          updatedByName: userProfile?.name,
+        });
+        setTemplates(prev => ({ ...prev, [tag.id]: { ...existing, templateText: templateText.trim(), variations: cleanVariations } }));
+      } else {
+        const newId = await createTagTemplate({
+          tagId: tag.id,
+          tagName: tag.name,
+          templateText: templateText.trim(),
+          variations: cleanVariations,
+          createdBy: currentUser!.uid,
+          createdByName: userProfile?.name,
+        });
+        const newTmpl: TagTemplate = {
+          id: newId,
+          tagId: tag.id,
+          tagName: tag.name,
+          templateText: templateText.trim(),
+          variations: cleanVariations,
+          createdBy: currentUser!.uid,
+          createdByName: userProfile?.name,
+          createdAt: new Date(),
+        };
+        setTemplates(prev => ({ ...prev, [tag.id]: newTmpl }));
+      }
+      toast.success('Template saved');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (tag: Tag) => {
+    const existing = templates[tag.id];
+    if (!existing) return;
+    if (!window.confirm('Delete this tag template?')) return;
+    try {
+      await deleteTagTemplate(existing.id);
+      setTemplates(prev => ({ ...prev, [tag.id]: null }));
+      setTemplateText('');
+      setTemplateVariations(['']);
+      toast.success('Template deleted');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete template');
+    }
+  };
 
   const handleCreateTag = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,6 +507,16 @@ const AdminTagsPage: React.FC = () => {
                         <td className="text-sm text-muted">{format(tag.createdAt, 'dd MMM yyyy')}</td>
                         <td>
                           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ display: 'flex', alignItems: 'center', gap: '4px', color: templates[tag.id] ? '#10b981' : 'var(--color-text-muted)' }}
+                              onClick={() => handleExpandTemplate(tag)}
+                              title="Manage messaging template"
+                            >
+                              <MessageSquare size={13} />
+                              <span style={{ fontSize: '11px' }}>{templates[tag.id] ? 'Template ✓' : 'Template'}</span>
+                              {expandedTemplateTagId === tag.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                            </button>
                             <button className="btn btn-ghost btn-sm" onClick={() => startEdit(tag)} aria-label="Edit Tag">
                               <Edit3 size={14} /> <span style={{ marginLeft: 4 }}>Edit</span>
                             </button>
@@ -412,6 +528,81 @@ const AdminTagsPage: React.FC = () => {
                               <Trash2 size={14} /> <span style={{ marginLeft: 4 }}>Delete</span>
                             </button>
                           </div>
+                          {/* Inline template editor */}
+                          {expandedTemplateTagId === tag.id && (
+                            <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(99,102,241,0.05)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                                  📱 Messaging Template — <span style={{ color: tag.color }}>{tag.name}</span>
+                                </span>
+                                {templates[tag.id] && (
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', color: 'var(--color-danger)', padding: '3px 8px' }} onClick={() => handleDeleteTemplate(tag)}>
+                                    <Trash2 size={11} /> Delete Template
+                                  </button>
+                                )}
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '5px' }}>
+                                  Primary Message Text <span style={{ color: 'var(--color-danger)' }}>*</span>
+                                </label>
+                                <textarea
+                                  className="form-input text-sm"
+                                  rows={4}
+                                  placeholder={`Hi {name}, we wanted to follow up regarding your enquiry about...`}
+                                  value={templateText}
+                                  onChange={e => setTemplateText(e.target.value)}
+                                  style={{ resize: 'vertical' }}
+                                />
+                                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Use <code>{'{name}'}</code> for client name auto-substitution</span>
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '5px' }}>
+                                  Alternate Phrasings (Variations) — Rotated randomly to avoid spam flags
+                                </label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  {templateVariations.map((v, idx) => (
+                                    <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                      <textarea
+                                        className="form-input text-sm"
+                                        rows={3}
+                                        placeholder={`Alternate version ${idx + 1}...`}
+                                        value={v}
+                                        onChange={e => {
+                                          const updated = [...templateVariations];
+                                          updated[idx] = e.target.value;
+                                          setTemplateVariations(updated);
+                                        }}
+                                        style={{ flex: 1, resize: 'vertical' }}
+                                      />
+                                      <button
+                                        className="btn btn-ghost btn-icon"
+                                        style={{ color: 'var(--color-danger)', marginTop: '2px', padding: 4 }}
+                                        onClick={() => setTemplateVariations(prev => prev.filter((_, i) => i !== idx))}
+                                        title="Remove variation"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}
+                                    onClick={() => setTemplateVariations(prev => [...prev, ''])}
+                                  >
+                                    <Plus size={11} /> Add Variation
+                                  </button>
+                                </div>
+                              </div>
+                              <button
+                                className="btn btn-primary btn-sm"
+                                style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 16px' }}
+                                disabled={savingTemplate || !templateText.trim()}
+                                onClick={() => handleSaveTemplate(tag)}
+                              >
+                                {savingTemplate ? 'Saving...' : '💾 Save Template'}
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

@@ -20,15 +20,16 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction, PackageService } from '../types';
+import type { User, Client, Summary, Payment, ActivityLog, EditRequest, ClientEditRequest, Tag, CustomStatus, Task, TaskHistoryItem, LeadSource, TaskHistoryAction, ActivityAction, PackageService, SalaryRecord, AdminNote, TagTemplate } from '../types';
+import { computeSalary } from './commission';
 
 // ─── Lazy Collection References ───────────────────────────────────────────────
 // Use functions to avoid crash when db is null (Firebase not yet configured)
-const usersColRef    = () => collection(db, 'users');
-const clientsColRef  = () => collection(db, 'clients');
-const summariesColRef= () => collection(db, 'summaries');
+const usersColRef = () => collection(db, 'users');
+const clientsColRef = () => collection(db, 'clients');
+const summariesColRef = () => collection(db, 'summaries');
 const paymentsColRef = () => collection(db, 'payments');
-const logsColRef     = () => collection(db, 'activityLogs');
+const logsColRef = () => collection(db, 'activityLogs');
 const editRequestsColRef = () => collection(db, 'editRequests');
 const clientEditRequestsColRef = () => collection(db, 'clientEditRequests');
 const tagsColRef = () => collection(db, 'tags');
@@ -36,6 +37,9 @@ const clientStatusesColRef = () => collection(db, 'clientStatuses');
 const tasksColRef = () => collection(db, 'tasks');
 const leadSourcesColRef = () => collection(db, 'leadSources');
 const packagesColRef = () => collection(db, 'packages');
+const salaryRecordsColRef = () => collection(db, 'salaryRecords');
+const adminNotesColRef = () => collection(db, 'adminNotes');
+const tagTemplatesColRef = () => collection(db, 'tagTemplates');
 
 // Named exports kept for AddSummaryPage (uses addDoc(paymentsCol, ...))
 // These are proxy objects; actual collection() call is deferred to function-call time
@@ -116,12 +120,30 @@ export const taskFromDoc = (snap: AnySnap): Task => {
     id: snap.id,
     ...data,
     createdAt: toDate(data.createdAt),
+    dueDate: data.dueDate ? toDate(data.dueDate) : undefined,
+    reminderDateTime: data.reminderDateTime ? toDate(data.reminderDateTime) : undefined,
     history: (data.history || []).map((h: any) => ({
       ...h,
       timestamp: toDate(h.timestamp),
     })),
   } as Task;
 };
+
+export const adminNoteFromDoc = (snap: AnySnap): AdminNote => ({
+  id: snap.id,
+  ...snap.data(),
+  isPinned: snap.data().isPinned ?? false,
+  createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
+} as AdminNote);
+
+export const tagTemplateFromDoc = (snap: AnySnap): TagTemplate => ({
+  id: snap.id,
+  ...snap.data(),
+  variations: snap.data().variations || [],
+  createdAt: toDate(snap.data().createdAt),
+  updatedAt: snap.data().updatedAt ? toDate(snap.data().updatedAt) : undefined,
+} as TagTemplate);
 
 // Helper to recursively strip undefined properties so Firestore doesn't reject them
 const cleanObject = (obj: any): any => {
@@ -318,7 +340,7 @@ export const createClientStatus = async (name: string, color: string): Promise<s
 };
 
 export const updateClientStatus = async (
-  id: string, 
+  id: string,
   data: { name: string; color: string; status: 'active' | 'disabled' },
   oldName?: string
 ): Promise<void> => {
@@ -427,7 +449,7 @@ export const deleteLeadSource = async (id: string, name: string): Promise<void> 
 export const deleteTag = async (id: string): Promise<void> => {
   // Delete the tag document
   await deleteDoc(doc(db, 'tags', id));
-  
+
   // Find and update all clients with this tag
   const q = query(clientsColRef(), where('tags', 'array-contains', id));
   const snap = await getDocs(q);
@@ -606,18 +628,22 @@ export const createTask = async (
   assignedToName: string,
   createdBy: string,
   createdByName: string,
-  taskType: 'payment' | 'follow_up' | 'general' = 'general',
+  taskType: 'payment' | 'follow_up' | 'general' | 'salary' = 'general',
   clientId?: string,
   clientName?: string,
-  voiceUrl?: string
+  voiceUrl?: string,
+  initialStatus?: Task['status'],
+  dueDate?: Date,
+  reminderDateTime?: Date
 ): Promise<string> => {
+  const status = initialStatus || 'pending_acceptance';
   const history: TaskHistoryItem[] = [
     {
       timestamp: new Date(),
       action: 'created',
       performedBy: createdBy,
       performedByName: createdByName,
-      details: `Assigned to ${assignedToName} (Type: ${taskType})`,
+      details: `Assigned to ${assignedToName} (Type: ${taskType})${initialStatus === 'accepted' ? ' — Self-assigned, auto-accepted' : ''}`,
     },
   ];
 
@@ -628,13 +654,15 @@ export const createTask = async (
     createdByName,
     assignedTo,
     assignedToName,
-    status: 'pending_acceptance',
+    status,
     createdAt: new Date(),
     history,
     type: taskType,
     clientId,
     clientName,
     voiceUrl,
+    dueDate,
+    reminderDateTime,
   };
 
   const ref = await addDoc(tasksColRef(), cleanObject(taskData));
@@ -651,6 +679,25 @@ export const createTask = async (
 
   return ref.id;
 };
+
+export const deleteTask = async (taskId: string, userId: string, userName: string): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) throw new Error('Task not found');
+  const task = taskFromDoc(snap as AnySnap);
+
+  await deleteDoc(taskRef);
+
+  await logActivity({
+    userId,
+    userName,
+    action: 'status_deleted', // using existing action union or we can map to status_deleted
+    entityType: 'task',
+    entityId: taskId,
+    entityName: `Task deleted: ${task.title}`,
+  });
+};
+
 
 export const updateTaskStatus = async (
   taskId: string,
@@ -1006,6 +1053,275 @@ export const isPackageOverdueForReview = (pkg: PackageService): boolean => {
   if (!pkg.lastReviewedAt) return true;
   const quarterStart = getQuarterStart(new Date());
   return pkg.lastReviewedAt < quarterStart;
+};
+
+// ─── Salary & Commission Records ──────────────────────────────────────────────
+export const salaryRecordFromDoc = (snap: AnySnap): SalaryRecord => ({
+  id: snap.id,
+  ...snap.data(),
+  dueDate: toDate(snap.data().dueDate),
+  paidAt: snap.data().paidAt ? toDate(snap.data().paidAt) : undefined,
+  createdAt: toDate(snap.data().createdAt),
+} as SalaryRecord);
+
+export const getSalaryRecords = async (month?: string): Promise<SalaryRecord[]> => {
+  const constraints: QueryConstraint[] = [];
+  if (month) constraints.push(where('month', '==', month));
+  const snap = await getDocs(query(salaryRecordsColRef(), ...constraints));
+  const list = snap.docs.map(salaryRecordFromDoc);
+  return list.sort((a, b) => b.dueDate.getTime() - a.dueDate.getTime());
+};
+
+export const createSalaryRecord = async (
+  data: Omit<SalaryRecord, 'id' | 'createdAt'>
+): Promise<string> => {
+  const ref = await addDoc(salaryRecordsColRef(), cleanObject({
+    ...data,
+    createdAt: serverTimestamp(),
+  }));
+  return ref.id;
+};
+
+export const updateSalaryRecord = async (
+  id: string,
+  data: Partial<SalaryRecord>
+): Promise<void> => {
+  const payload: any = { ...data };
+  if (data.paidAt) {
+    payload.paidAt = Timestamp.fromDate(data.paidAt);
+  }
+  await updateDoc(doc(db, 'salaryRecords', id), cleanObject(payload));
+};
+
+export const markSalaryAsPaid = async (
+  id: string,
+  paidAtDate: Date,
+  adminUid: string,
+  adminName: string,
+  reference?: string,
+  notes?: string
+): Promise<void> => {
+  const snap = await getDoc(doc(db, 'salaryRecords', id));
+  if (!snap.exists()) throw new Error('Salary record not found');
+  const record = salaryRecordFromDoc(snap as AnySnap);
+
+  await updateDoc(doc(db, 'salaryRecords', id), cleanObject({
+    status: 'paid',
+    paidAt: Timestamp.fromDate(paidAtDate),
+    paidBy: adminUid,
+    paidByName: adminName,
+    paymentReference: reference || '',
+    notes: notes || '',
+  }));
+
+  // If there's an associated task, mark it as completed & verified
+  if (record.taskId) {
+    try {
+      const taskRef = doc(db, 'tasks', record.taskId);
+      const taskSnap = await getDoc(taskRef);
+      if (taskSnap.exists()) {
+        await updateDoc(taskRef, cleanObject({
+          status: 'verified',
+          completionSummary: `Salary paid on ${paidAtDate.toISOString().slice(0, 10)}. Ref: ${reference || 'N/A'}`,
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to update associated salary task:', e);
+    }
+  }
+
+  await logActivity({
+    userId: adminUid,
+    userName: adminName,
+    action: 'payment_updated',
+    entityType: 'payment',
+    entityId: id,
+    entityName: `Salary Payout: ${record.userName} (${record.month})`,
+  });
+};
+
+/**
+ * Checks for current month salary records for all active users.
+ * Automatically generates a salary record + task on payout day or if overdue.
+ */
+/**
+ * Checks for target month salary records for all active users.
+ * Idempotent: generates missing records, updates existing unpaid records if staff settings changed,
+ * and removes duplicate records for the same user in the target month.
+ */
+export const checkAndGenerateSalaryTasks = async (adminUid: string, adminName: string, targetMonthStr?: string): Promise<number> => {
+  const now = new Date();
+  const currentMonthStr = targetMonthStr || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [yearStr, monthNumStr] = currentMonthStr.split('-');
+  const year = parseInt(yearStr, 10);
+  const monthIdx = parseInt(monthNumStr, 10) - 1;
+
+  // 1. Fetch all users from users collection
+  const usersSnap = await getDocs(usersColRef());
+  const users = usersSnap.docs.map(userFromDoc);
+
+  // 2. Fetch existing salary records for target month
+  const existingRecords = await getSalaryRecords(currentMonthStr);
+  
+  // Group existing records by userId to detect duplicates
+  const userRecordMap = new Map<string, SalaryRecord[]>();
+  for (const r of existingRecords) {
+    const list = userRecordMap.get(r.userId) || [];
+    list.push(r);
+    userRecordMap.set(r.userId, list);
+  }
+
+  let generatedCount = 0;
+
+  for (const user of users) {
+    const userRecords = userRecordMap.get(user.id) || [];
+    const payoutDay = Math.min(Math.max(user.payoutDayOfMonth || 1, 1), 28);
+    const dueDate = new Date(year, monthIdx, payoutDay, 10, 0, 0);
+    const isOverdue = now > dueDate && (now.getMonth() > monthIdx || (now.getMonth() === monthIdx && now.getDate() > payoutDay));
+    const payStructure = user.payStructure || 'fixed';
+
+    // ── Commission engine: compute real salary values for this user & month ──
+    const salaryResult = await computeSalary({ user, month: currentMonthStr });
+    const { baseSalary, commissionEarned, totalAmount } = salaryResult;
+
+    if (userRecords.length === 0) {
+      // Create fresh salary record & task for user
+      const taskTitle = `💰 Salary Payout: ${user.name} (${currentMonthStr})`;
+      const taskDesc = `Monthly salary payout for ${user.name}. Pay Structure: ${payStructure.toUpperCase()}, Base: ₹${baseSalary}, Commission: ₹${commissionEarned}, Total: ₹${totalAmount}. Due: ${dueDate.toISOString().slice(0, 10)}.`;
+
+      const taskId = await addDoc(tasksColRef(), cleanObject({
+        title: taskTitle,
+        description: taskDesc,
+        createdBy: adminUid,
+        createdByName: adminName,
+        assignedTo: adminUid,
+        assignedToName: adminName,
+        status: 'accepted',
+        type: 'salary',
+        createdAt: serverTimestamp(),
+        history: [{
+          timestamp: new Date(),
+          action: 'created',
+          performedBy: adminUid,
+          performedByName: adminName,
+          details: 'Automated salary payout task generated by system.',
+        }],
+      }));
+
+      await createSalaryRecord({
+        userId: user.id,
+        userName: user.name,
+        month: currentMonthStr,
+        dueDate,
+        payStructure,
+        baseSalary,
+        commissionEarned,
+        totalAmount,
+        status: isOverdue ? 'overdue' : 'pending',
+        taskId: taskId.id,
+      });
+
+      generatedCount++;
+    } else {
+      // User already has record(s).
+      // Keep the primary record (prefer paid record if available, otherwise first)
+      const primaryRecord = userRecords.find(r => r.status === 'paid') || userRecords[0];
+
+      // Delete any duplicate records for this user in the same month
+      for (const dup of userRecords) {
+        if (dup.id !== primaryRecord.id && dup.status !== 'paid') {
+          try {
+            await deleteDoc(doc(db, 'salaryRecords', dup.id));
+            if (dup.taskId) {
+              await deleteDoc(doc(db, 'tasks', dup.taskId));
+            }
+          } catch (err) {
+            console.error('Failed to remove duplicate salary record:', err);
+          }
+        }
+      }
+
+      // If primary record is not paid yet, recompute commission & sync latest staff settings
+      if (primaryRecord.status !== 'paid') {
+        const newStatus = isOverdue ? 'overdue' : 'pending';
+
+        await updateDoc(doc(db, 'salaryRecords', primaryRecord.id), cleanObject({
+          userName: user.name,
+          baseSalary,
+          commissionEarned,
+          totalAmount,
+          payStructure,
+          dueDate: Timestamp.fromDate(dueDate),
+          status: newStatus,
+        }));
+      }
+    }
+  }
+
+  return generatedCount;
+};
+
+// ─── Admin Notes ──────────────────────────────────────────────────────────────
+
+export const getAdminNotesByClient = async (clientId: string): Promise<AdminNote[]> => {
+  const snap = await getDocs(
+    query(adminNotesColRef(), where('clientId', '==', clientId))
+  );
+  const notes = snap.docs.map(adminNoteFromDoc);
+  // Pinned notes first, then by newest
+  return notes.sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+};
+
+export const createAdminNote = async (
+  data: Omit<AdminNote, 'id' | 'createdAt'>
+): Promise<string> => {
+  const ref = await addDoc(adminNotesColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
+  return ref.id;
+};
+
+export const updateAdminNote = async (id: string, data: Partial<AdminNote>): Promise<void> => {
+  await updateDoc(doc(db, 'adminNotes', id), cleanObject({ ...data, updatedAt: serverTimestamp() }));
+};
+
+export const deleteAdminNote = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, 'adminNotes', id));
+};
+
+export const pinAdminNote = async (id: string, isPinned: boolean): Promise<void> => {
+  await updateDoc(doc(db, 'adminNotes', id), { isPinned, updatedAt: serverTimestamp() });
+};
+
+// ─── Tag Messaging Templates ──────────────────────────────────────────────────
+
+export const getTagTemplates = async (): Promise<TagTemplate[]> => {
+  const snap = await getDocs(tagTemplatesColRef());
+  return snap.docs.map(tagTemplateFromDoc);
+};
+
+export const getTagTemplateByTagId = async (tagId: string): Promise<TagTemplate | null> => {
+  const snap = await getDocs(
+    query(tagTemplatesColRef(), where('tagId', '==', tagId))
+  );
+  if (snap.empty) return null;
+  return tagTemplateFromDoc(snap.docs[0]);
+};
+
+export const createTagTemplate = async (
+  data: Omit<TagTemplate, 'id' | 'createdAt'>
+): Promise<string> => {
+  const ref = await addDoc(tagTemplatesColRef(), cleanObject({ ...data, createdAt: serverTimestamp() }));
+  return ref.id;
+};
+
+export const updateTagTemplate = async (id: string, data: Partial<TagTemplate>): Promise<void> => {
+  await updateDoc(doc(db, 'tagTemplates', id), cleanObject({ ...data, updatedAt: serverTimestamp() }));
+};
+
+export const deleteTagTemplate = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, 'tagTemplates', id));
 };
 
 // ─── Re-exports for convenience ───────────────────────────────────────────────
